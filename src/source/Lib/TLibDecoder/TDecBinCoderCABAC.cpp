@@ -198,3 +198,103 @@ Void TDecBinCABAC::decodeBinEP( UInt& ruiBin )
 
   m_uiValue += m_uiValue;
 
+  if ( ++m_bitsNeeded >= 0 )
+  {
+    m_bitsNeeded = -8;
+    m_uiValue += m_pcTComBitstream->readByte();
+  }
+
+  ruiBin = 0;
+  UInt scaledRange = m_uiRange << 7;
+  if ( m_uiValue >= scaledRange )
+  {
+    ruiBin = 1;
+    m_uiValue -= scaledRange;
+  }
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(whichStat, 1, Int(ruiBin));
+#endif
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecBinCABAC::decodeBinsEP( UInt& ruiBin, Int numBins, const TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecBinCABAC::decodeBinsEP( UInt& ruiBin, Int numBins )
+#endif
+{
+  if (m_uiRange == 256)
+  {
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    decodeAlignedBinsEP(ruiBin, numBins, whichStat);
+#else
+    decodeAlignedBinsEP(ruiBin, numBins);
+#endif
+    return;
+  }
+
+  UInt bins = 0;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  Int origNumBins=numBins;
+#endif
+  while ( numBins > 8 )
+  {
+    m_uiValue = ( m_uiValue << 8 ) + ( m_pcTComBitstream->readByte() << ( 8 + m_bitsNeeded ) );
+
+    UInt scaledRange = m_uiRange << 15;
+    for ( Int i = 0; i < 8; i++ )
+    {
+      bins += bins;
+      scaledRange >>= 1;
+      if ( m_uiValue >= scaledRange )
+      {
+        bins++;
+        m_uiValue -= scaledRange;
+      }
+    }
+    numBins -= 8;
+  }
+
+  m_bitsNeeded += numBins;
+  m_uiValue <<= numBins;
+
+  if ( m_bitsNeeded >= 0 )
+  {
+    m_uiValue += m_pcTComBitstream->readByte() << m_bitsNeeded;
+    m_bitsNeeded -= 8;
+  }
+
+  UInt scaledRange = m_uiRange << ( numBins + 7 );
+  for ( Int i = 0; i < numBins; i++ )
+  {
+    bins += bins;
+    scaledRange >>= 1;
+    if ( m_uiValue >= scaledRange )
+    {
+      bins++;
+      m_uiValue -= scaledRange;
+    }
+  }
+
+  ruiBin = bins;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(whichStat, origNumBins, Int(ruiBin));
+#endif
+}
+
+Void TDecBinCABAC::align()
+{
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::UpdateCABACStat(STATS__CABAC_EP_BIT_ALIGNMENT, m_uiRange, 256, 0);
+#endif
+  m_uiRange = 256;
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecBinCABAC::decodeAlignedBinsEP( UInt& ruiBins, Int numBins, const class TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecBinCABAC::decodeAlignedBinsEP( UInt& ruiBins, Int numBins )
+#endif
+{
+  Int binsRemaining = numBins;
+  ruiBins = 0;
+
