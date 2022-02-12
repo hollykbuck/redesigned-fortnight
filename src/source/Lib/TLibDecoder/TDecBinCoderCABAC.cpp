@@ -298,3 +298,86 @@ Void TDecBinCABAC::decodeAlignedBinsEP( UInt& ruiBins, Int numBins )
   Int binsRemaining = numBins;
   ruiBins = 0;
 
+  assert(m_uiRange == 256); //aligned decode only works when range = 256
+
+  while (binsRemaining > 0)
+  {
+    const UInt binsToRead = std::min<UInt>(binsRemaining, 8); //read bytes if able to take advantage of the system's byte-read function
+    const UInt binMask    = (1 << binsToRead) - 1;
+
+    //The MSB of m_uiValue is known to be 0 because range is 256. Therefore:
+    // > The comparison against the symbol range of 128 is simply a test on the next-most-significant bit
+    // > "Subtracting" the symbol range if the decoded bin is 1 simply involves clearing that bit.
+    //
+    //As a result, the required bins are simply the <binsToRead> next-most-significant bits of m_uiValue
+    //(m_uiValue is stored MSB-aligned in a 16-bit buffer - hence the shift of 15)
+    //
+    //   m_uiValue = |0|V|V|V|V|V|V|V|V|B|B|B|B|B|B|B|        (V = usable bit, B = potential buffered bit (buffer refills when m_bitsNeeded >= 0))
+    //
+    const UInt newBins = (m_uiValue >> (15 - binsToRead)) & binMask;
+
+    ruiBins   = (ruiBins   << binsToRead) | newBins;
+    m_uiValue = (m_uiValue << binsToRead) & 0x7FFF;
+
+    binsRemaining -= binsToRead;
+    m_bitsNeeded  += binsToRead;
+
+    if (m_bitsNeeded >= 0)
+    {
+      m_uiValue    |= m_pcTComBitstream->readByte() << m_bitsNeeded;
+      m_bitsNeeded -= 8;
+    }
+  }
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(whichStat, numBins, Int(ruiBins));
+#endif
+}
+
+Void
+TDecBinCABAC::decodeBinTrm( UInt& ruiBin )
+{
+  m_uiRange -= 2;
+  UInt scaledRange = m_uiRange << 7;
+  if( m_uiValue >= scaledRange )
+  {
+    ruiBin = 1;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    TComCodingStatistics::UpdateCABACStat(STATS__CABAC_TRM_BITS, m_uiRange+2, 2, ruiBin);
+    TComCodingStatistics::IncrementStatisticEP(STATS__BYTE_ALIGNMENT_BITS, -m_bitsNeeded, 0);
+#endif
+  }
+  else
+  {
+    ruiBin = 0;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    TComCodingStatistics::UpdateCABACStat(STATS__CABAC_TRM_BITS, m_uiRange+2, m_uiRange, ruiBin);
+#endif
+    if ( scaledRange < ( 256 << 7 ) )
+    {
+      m_uiRange = scaledRange >> 6;
+      m_uiValue += m_uiValue;
+
+      if ( ++m_bitsNeeded == 0 )
+      {
+        m_bitsNeeded = -8;
+        m_uiValue += m_pcTComBitstream->readByte();
+      }
+    }
+  }
+}
+
+/** Read a PCM code.
+ * \param uiLength code bit-depth
+ * \param ruiCode pointer to PCM code value
+ * \returns Void
+ */
+Void  TDecBinCABAC::xReadPCMCode(UInt uiLength, UInt& ruiCode)
+{
+  assert ( uiLength > 0 );
+  m_pcTComBitstream->read (uiLength, ruiCode);
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(STATS__CABAC_PCM_CODE_BITS, uiLength, ruiCode);
+#endif
+}
+//! \}
