@@ -98,3 +98,103 @@ Void TComLoopFilter::create( UInt uiMaxCUDepth )
   destroy();
   m_uiNumPartitions = 1 << ( uiMaxCUDepth<<1 );
   for( Int edgeDir = 0; edgeDir < NUM_EDGE_DIR; edgeDir++ )
+  {
+    m_aapucBS       [edgeDir] = new UChar[m_uiNumPartitions];
+    m_aapbEdgeFilter[edgeDir] = new Bool [m_uiNumPartitions];
+  }
+}
+
+Void TComLoopFilter::destroy()
+{
+  for( Int edgeDir = 0; edgeDir < NUM_EDGE_DIR; edgeDir++ )
+  {
+    if (m_aapucBS[edgeDir] != NULL)
+    {
+      delete [] m_aapucBS[edgeDir];
+      m_aapucBS[edgeDir] = NULL;
+    }
+
+    if (m_aapbEdgeFilter[edgeDir])
+    {
+      delete [] m_aapbEdgeFilter[edgeDir];
+      m_aapbEdgeFilter[edgeDir] = NULL;
+    }
+  }
+}
+
+/**
+ - call deblocking function for every CU
+ .
+ \param  pcPic   picture class (TComPic) pointer
+ */
+Void TComLoopFilter::loopFilterPic( TComPic* pcPic )
+{
+  // Horizontal filtering
+  for ( UInt ctuRsAddr = 0; ctuRsAddr < pcPic->getNumberOfCtusInFrame(); ctuRsAddr++ )
+  {
+    TComDataCU* pCtu = pcPic->getCtu( ctuRsAddr );
+
+    ::memset( m_aapucBS       [EDGE_VER], 0, sizeof( UChar ) * m_uiNumPartitions );
+    ::memset( m_aapbEdgeFilter[EDGE_VER], 0, sizeof( Bool  ) * m_uiNumPartitions );
+
+    // CU-based deblocking
+    xDeblockCU( pCtu, 0, 0, EDGE_VER );
+  }
+
+  // Vertical filtering
+  for ( UInt ctuRsAddr = 0; ctuRsAddr < pcPic->getNumberOfCtusInFrame(); ctuRsAddr++ )
+  {
+    TComDataCU* pCtu = pcPic->getCtu( ctuRsAddr );
+
+    ::memset( m_aapucBS       [EDGE_HOR], 0, sizeof( UChar ) * m_uiNumPartitions );
+    ::memset( m_aapbEdgeFilter[EDGE_HOR], 0, sizeof( Bool  ) * m_uiNumPartitions );
+
+    // CU-based deblocking
+    xDeblockCU( pCtu, 0, 0, EDGE_HOR );
+  }
+}
+
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+/**
+ Deblocking filter process in CU-based (the same function as conventional's)
+
+ \param pcCU             Pointer to CTU/CU structure
+ \param uiAbsZorderIdx   Position in CU
+ \param uiDepth          Depth in CU
+ \param edgeDir          the direction of the edge in block boundary (horizontal/vertical), which is added newly
+*/
+Void TComLoopFilter::xDeblockCU( TComDataCU* pcCU, UInt uiAbsZorderIdx, UInt uiDepth, DeblockEdgeDir edgeDir )
+{
+  if(pcCU->getPic()==0||pcCU->getPartitionSize(uiAbsZorderIdx)==NUMBER_OF_PART_SIZES)
+  {
+    return;
+  }
+  TComPic* pcPic     = pcCU->getPic();
+  UInt uiCurNumParts = pcPic->getNumPartitionsInCtu() >> (uiDepth<<1);
+  UInt uiQNumParts   = uiCurNumParts>>2;
+  const TComSPS &sps = *(pcCU->getSlice()->getSPS());
+
+  if( pcCU->getDepth(uiAbsZorderIdx) > uiDepth )
+  {
+    for ( UInt uiPartIdx = 0; uiPartIdx < 4; uiPartIdx++, uiAbsZorderIdx+=uiQNumParts )
+    {
+      UInt uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsZorderIdx] ];
+      UInt uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsZorderIdx] ];
+      if( ( uiLPelX < sps.getPicWidthInLumaSamples() ) && ( uiTPelY < sps.getPicHeightInLumaSamples() ) )
+      {
+        xDeblockCU( pcCU, uiAbsZorderIdx, uiDepth+1, edgeDir );
+      }
+    }
+    return;
+  }
+
+  xSetLoopfilterParam( pcCU, uiAbsZorderIdx );
+  TComTURecurse tuRecurse(pcCU, uiAbsZorderIdx);
+  xSetEdgefilterTU   ( tuRecurse );
+  xSetEdgefilterPU   ( pcCU, uiAbsZorderIdx );
+
+  const UInt uiPelsInPart = sps.getMaxCUWidth() >> sps.getMaxTotalCUDepth();
