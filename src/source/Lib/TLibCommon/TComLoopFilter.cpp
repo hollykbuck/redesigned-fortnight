@@ -198,3 +198,103 @@ Void TComLoopFilter::xDeblockCU( TComDataCU* pcCU, UInt uiAbsZorderIdx, UInt uiD
   xSetEdgefilterPU   ( pcCU, uiAbsZorderIdx );
 
   const UInt uiPelsInPart = sps.getMaxCUWidth() >> sps.getMaxTotalCUDepth();
+
+  for( UInt uiPartIdx = uiAbsZorderIdx; uiPartIdx < uiAbsZorderIdx + uiCurNumParts; uiPartIdx++ )
+  {
+    UInt uiBSCheck;
+    if( uiPelsInPart == 4 )
+    {
+      uiBSCheck = (edgeDir == EDGE_VER && uiPartIdx%2 == 0) || (edgeDir == EDGE_HOR && (uiPartIdx-((uiPartIdx>>2)<<2))/2 == 0);
+    }
+    else
+    {
+      uiBSCheck = 1;
+    }
+
+    if ( m_aapbEdgeFilter[edgeDir][uiPartIdx] && uiBSCheck )
+    {
+      xGetBoundaryStrengthSingle ( pcCU, edgeDir, uiPartIdx );
+    }
+  }
+
+  UInt PartIdxIncr = DEBLOCK_SMALLEST_BLOCK / uiPelsInPart ? DEBLOCK_SMALLEST_BLOCK / uiPelsInPart : 1 ;
+
+  UInt uiSizeInPU = pcPic->getNumPartInCtuWidth()>>(uiDepth);
+  const ChromaFormat chFmt=pcPic->getChromaFormat();
+  const UInt shiftFactor  = edgeDir == EDGE_VER ? pcPic->getComponentScaleX(COMPONENT_Cb) : pcPic->getComponentScaleY(COMPONENT_Cb);
+  const Bool bAlwaysDoChroma=chFmt==CHROMA_444;
+
+  for ( Int iEdge = 0; iEdge < uiSizeInPU ; iEdge+=PartIdxIncr)
+  {
+    xEdgeFilterLuma     ( pcCU, uiAbsZorderIdx, uiDepth, edgeDir, iEdge );
+    if ( chFmt!=CHROMA_400 && (bAlwaysDoChroma ||
+                               (uiPelsInPart>DEBLOCK_SMALLEST_BLOCK) ||
+                               (iEdge % ( (DEBLOCK_SMALLEST_BLOCK<<shiftFactor)/uiPelsInPart ) ) == 0
+                              )
+       )
+    {
+      xEdgeFilterChroma   ( pcCU, uiAbsZorderIdx, uiDepth, edgeDir, iEdge );
+    }
+  }
+}
+
+Void TComLoopFilter::xSetEdgefilterMultiple( TComDataCU*    pcCU,
+                                             UInt           uiAbsZorderIdx,
+                                             UInt           uiDepth,
+                                             DeblockEdgeDir edgeDir,
+                                             Int            iEdgeIdx,
+                                             Bool           bValue,
+                                             UInt           uiWidthInBaseUnits,
+                                             UInt           uiHeightInBaseUnits,
+                                             const TComRectangle *rect)
+{
+  if ( uiWidthInBaseUnits == 0 )
+  {
+    uiWidthInBaseUnits  = pcCU->getPic()->getNumPartInCtuWidth () >> uiDepth;
+  }
+  if ( uiHeightInBaseUnits == 0 )
+  {
+    uiHeightInBaseUnits = pcCU->getPic()->getNumPartInCtuHeight() >> uiDepth;
+  }
+  const UInt uiNumElem = edgeDir == EDGE_VER ? uiHeightInBaseUnits : uiWidthInBaseUnits;
+  assert( uiNumElem > 0 );
+  assert( uiWidthInBaseUnits > 0 );
+  assert( uiHeightInBaseUnits > 0 );
+  for( UInt ui = 0; ui < uiNumElem; ui++ )
+  {
+    const UInt uiBsIdx = xCalcBsIdx( pcCU, uiAbsZorderIdx, edgeDir, iEdgeIdx, ui, rect );
+    m_aapbEdgeFilter[edgeDir][uiBsIdx] = bValue;
+    if (iEdgeIdx == 0)
+    {
+      m_aapucBS[edgeDir][uiBsIdx] = bValue;
+    }
+  }
+}
+
+Void TComLoopFilter::xSetEdgefilterTU(  TComTU &rTu )
+{
+  TComDataCU* pcCU  = rTu.getCU();
+  UInt uiTransDepthTotal = rTu.GetTransformDepthTotal();
+
+  if( pcCU->getTransformIdx( rTu.GetAbsPartIdxTU() ) + pcCU->getDepth( rTu.GetAbsPartIdxTU()) > uiTransDepthTotal )
+  {
+    TComTURecurse tuChild(rTu, false);
+    do
+    {
+      xSetEdgefilterTU( tuChild );
+    } while (tuChild.nextSection(rTu));
+    return;
+  }
+
+  const TComRectangle &rect = rTu.getRect(COMPONENT_Y);
+  const TComSPS &sps=*(pcCU->getSlice()->getSPS());
+
+  const UInt uiWidthInBaseUnits  = rect.width  / (sps.getMaxCUWidth()  >> sps.getMaxTotalCUDepth());
+  const UInt uiHeightInBaseUnits = rect.height / (sps.getMaxCUHeight() >> sps.getMaxTotalCUDepth());
+
+  xSetEdgefilterMultiple( pcCU, rTu.GetAbsPartIdxCU(), uiTransDepthTotal, EDGE_VER, 0, m_stLFCUParam.bInternalEdge, uiWidthInBaseUnits, uiHeightInBaseUnits, &rect );
+  xSetEdgefilterMultiple( pcCU, rTu.GetAbsPartIdxCU(), uiTransDepthTotal, EDGE_HOR, 0, m_stLFCUParam.bInternalEdge, uiWidthInBaseUnits, uiHeightInBaseUnits, &rect );
+}
+
+Void TComLoopFilter::xSetEdgefilterPU( TComDataCU* pcCU, UInt uiAbsZorderIdx )
+{
