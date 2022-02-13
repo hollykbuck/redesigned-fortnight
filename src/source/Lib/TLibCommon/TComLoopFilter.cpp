@@ -298,3 +298,103 @@ Void TComLoopFilter::xSetEdgefilterTU(  TComTU &rTu )
 
 Void TComLoopFilter::xSetEdgefilterPU( TComDataCU* pcCU, UInt uiAbsZorderIdx )
 {
+  const UInt uiDepth = pcCU->getDepth( uiAbsZorderIdx );
+  const UInt uiWidthInBaseUnits  = pcCU->getPic()->getNumPartInCtuWidth () >> uiDepth;
+  const UInt uiHeightInBaseUnits = pcCU->getPic()->getNumPartInCtuHeight() >> uiDepth;
+  const UInt uiHWidthInBaseUnits  = uiWidthInBaseUnits  >> 1;
+  const UInt uiHHeightInBaseUnits = uiHeightInBaseUnits >> 1;
+  const UInt uiQWidthInBaseUnits  = uiWidthInBaseUnits  >> 2;
+  const UInt uiQHeightInBaseUnits = uiHeightInBaseUnits >> 2;
+
+  xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_VER, 0, m_stLFCUParam.bLeftEdge );
+  xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_HOR, 0, m_stLFCUParam.bTopEdge );
+
+  switch ( pcCU->getPartitionSize( uiAbsZorderIdx ) )
+  {
+    case SIZE_2Nx2N:
+    {
+      break;
+    }
+    case SIZE_2NxN:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_HOR, uiHHeightInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_Nx2N:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_VER, uiHWidthInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_NxN:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_VER, uiHWidthInBaseUnits, m_stLFCUParam.bInternalEdge );
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_HOR, uiHHeightInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_2NxnU:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_HOR, uiQHeightInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_2NxnD:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_HOR, uiHeightInBaseUnits - uiQHeightInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_nLx2N:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_VER, uiQWidthInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    case SIZE_nRx2N:
+    {
+      xSetEdgefilterMultiple( pcCU, uiAbsZorderIdx, uiDepth, EDGE_VER, uiWidthInBaseUnits - uiQWidthInBaseUnits, m_stLFCUParam.bInternalEdge );
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+}
+
+
+Void TComLoopFilter::xSetLoopfilterParam( TComDataCU* pcCU, UInt uiAbsZorderIdx )
+{
+  UInt uiX           = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[ uiAbsZorderIdx ] ];
+  UInt uiY           = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[ uiAbsZorderIdx ] ];
+
+  UInt        uiTempPartIdx;
+
+  m_stLFCUParam.bInternalEdge = ! pcCU->getSlice()->getDeblockingFilterDisable();
+
+  if ( (uiX == 0) || pcCU->getSlice()->getDeblockingFilterDisable() )
+  {
+    m_stLFCUParam.bLeftEdge = false;
+  }
+  else
+  {
+    m_stLFCUParam.bLeftEdge = true;
+  }
+  if ( m_stLFCUParam.bLeftEdge )
+  {
+    const TComDataCU* pcTempCU = pcCU->getPULeft( uiTempPartIdx, uiAbsZorderIdx, !pcCU->getSlice()->getLFCrossSliceBoundaryFlag(), !m_bLFCrossTileBoundary);
+
+    if ( pcTempCU != NULL )
+    {
+      m_stLFCUParam.bLeftEdge = true;
+    }
+    else
+    {
+      m_stLFCUParam.bLeftEdge = false;
+    }
+  }
+
+  if ( (uiY == 0 ) || pcCU->getSlice()->getDeblockingFilterDisable() )
+  {
+    m_stLFCUParam.bTopEdge = false;
+  }
+  else
+  {
+    m_stLFCUParam.bTopEdge = true;
+  }
