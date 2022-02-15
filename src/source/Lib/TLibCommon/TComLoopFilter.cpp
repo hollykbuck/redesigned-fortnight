@@ -498,3 +498,103 @@ Void TComLoopFilter::xGetBoundaryStrengthSingle ( TComDataCU* pCtu, DeblockEdgeD
                        (abs(pcMvQ0.getVer() - pcMvP0.getVer()) >= 4) ||
                        (abs(pcMvQ1.getHor() - pcMvP1.getHor()) >= 4) ||
                        (abs(pcMvQ1.getVer() - pcMvP1.getVer()) >= 4)) ? 1 : 0;
+            }
+            else
+            {
+              uiBs  = ((abs(pcMvQ1.getHor() - pcMvP0.getHor()) >= 4) ||
+                       (abs(pcMvQ1.getVer() - pcMvP0.getVer()) >= 4) ||
+                       (abs(pcMvQ0.getHor() - pcMvP1.getHor()) >= 4) ||
+                       (abs(pcMvQ0.getVer() - pcMvP1.getVer()) >= 4)) ? 1 : 0;
+            }
+          }
+          else    // Same L0 & L1
+          {
+            uiBs  = ((abs(pcMvQ0.getHor() - pcMvP0.getHor()) >= 4) ||
+                     (abs(pcMvQ0.getVer() - pcMvP0.getVer()) >= 4) ||
+                     (abs(pcMvQ1.getHor() - pcMvP1.getHor()) >= 4) ||
+                     (abs(pcMvQ1.getVer() - pcMvP1.getVer()) >= 4)) &&
+                    ((abs(pcMvQ1.getHor() - pcMvP0.getHor()) >= 4) ||
+                     (abs(pcMvQ1.getVer() - pcMvP0.getVer()) >= 4) ||
+                     (abs(pcMvQ0.getHor() - pcMvP1.getHor()) >= 4) ||
+                     (abs(pcMvQ0.getVer() - pcMvP1.getVer()) >= 4)) ? 1 : 0;
+          }
+        }
+        else // for all different Ref_Idx
+        {
+          uiBs = 1;
+        }
+      }
+      else  // pcSlice->isInterP()
+      {
+        Int iRefIdx;
+        iRefIdx = pcCUP->getCUMvField(REF_PIC_LIST_0)->getRefIdx(uiPartP);
+        const TComPic *piRefP0 = (iRefIdx < 0) ? NULL : pcCUP->getSlice()->getRefPic(REF_PIC_LIST_0, iRefIdx);
+        iRefIdx = pcCUQ->getCUMvField(REF_PIC_LIST_0)->getRefIdx(uiPartQ);
+        const TComPic *piRefQ0 = (iRefIdx < 0) ? NULL : pcSlice->getRefPic(REF_PIC_LIST_0, iRefIdx);
+        TComMv pcMvP0 = pcCUP->getCUMvField(REF_PIC_LIST_0)->getMv(uiPartP);
+        TComMv pcMvQ0 = pcCUQ->getCUMvField(REF_PIC_LIST_0)->getMv(uiPartQ);
+
+        if (piRefP0 == NULL)
+        {
+          pcMvP0.setZero();
+        }
+        if (piRefQ0 == NULL)
+        {
+          pcMvQ0.setZero();
+        }
+
+        uiBs  = ((piRefP0 != piRefQ0) ||
+                 (abs(pcMvQ0.getHor() - pcMvP0.getHor()) >= 4) ||
+                 (abs(pcMvQ0.getVer() - pcMvP0.getVer()) >= 4)) ? 1 : 0;
+      }
+    }   // enf of "if( one of BCBP == 0 )"
+  }   // enf of "if( not Intra )"
+
+  m_aapucBS[edgeDir][uiAbsPartIdx4x4BlockWithinCtu] = uiBs;
+}
+
+
+Void TComLoopFilter::xEdgeFilterLuma( TComDataCU* const pcCU, const UInt uiAbsZorderIdx, const UInt uiDepth, const DeblockEdgeDir edgeDir, const Int iEdge  )
+{
+        TComPicYuv *pcPicYuvRec                    = pcCU->getPic()->getPicYuvRec();
+        Pel        *piSrc                          = pcPicYuvRec->getAddr(COMPONENT_Y, pcCU->getCtuRsAddr(), uiAbsZorderIdx );
+        Pel        *piTmpSrc                       = piSrc;
+  const TComSPS    &sps                            = *(pcCU->getSlice()->getSPS());
+  const Bool        ppsTransquantBypassEnabledFlag = pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag();
+  const Int         bitDepthLuma                   = sps.getBitDepth(CHANNEL_TYPE_LUMA);
+  const Bool        lfCrossSliceBoundaryFlag       = pcCU->getSlice()->getLFCrossSliceBoundaryFlag();
+
+  Int  iStride = pcPicYuvRec->getStride(COMPONENT_Y);
+  Int iQP = 0;
+  Int iQP_P = 0;
+  Int iQP_Q = 0;
+  UInt uiNumParts = pcCU->getPic()->getNumPartInCtuWidth()>>uiDepth;
+
+  UInt  uiPelsInPart = sps.getMaxCUWidth() >> sps.getMaxTotalCUDepth();
+  UInt  uiBsAbsIdx = 0, uiBs = 0;
+  Int   iOffset, iSrcStep;
+
+  Bool  bPCMFilter = (sps.getUsePCM() && sps.getPCMFilterDisableFlag())? true : false;
+  Bool  bPartPNoFilter = false;
+  Bool  bPartQNoFilter = false;
+  UInt  uiPartPIdx = 0;
+  UInt  uiPartQIdx = 0;
+  const TComDataCU* pcCUP = pcCU;
+  TComDataCU* pcCUQ = pcCU;
+  Int  betaOffsetDiv2 = pcCUQ->getSlice()->getDeblockingFilterBetaOffsetDiv2();
+  Int  tcOffsetDiv2 = pcCUQ->getSlice()->getDeblockingFilterTcOffsetDiv2();
+
+  if (edgeDir == EDGE_VER)
+  {
+    iOffset = 1;
+    iSrcStep = iStride;
+    piTmpSrc += iEdge*uiPelsInPart;
+  }
+  else  // (edgeDir == EDGE_HOR)
+  {
+    iOffset = iStride;
+    iSrcStep = 1;
+    piTmpSrc += iEdge*uiPelsInPart*iStride;
+  }
+
+  const Int iBitdepthScale = 1 << (bitDepthLuma-8);
