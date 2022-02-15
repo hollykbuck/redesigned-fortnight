@@ -598,3 +598,103 @@ Void TComLoopFilter::xEdgeFilterLuma( TComDataCU* const pcCU, const UInt uiAbsZo
   }
 
   const Int iBitdepthScale = 1 << (bitDepthLuma-8);
+
+  for ( UInt iIdx = 0; iIdx < uiNumParts; iIdx++ )
+  {
+    uiBsAbsIdx = xCalcBsIdx( pcCU, uiAbsZorderIdx, edgeDir, iEdge, iIdx);
+    uiBs = m_aapucBS[edgeDir][uiBsAbsIdx];
+    if ( uiBs )
+    {
+      iQP_Q = pcCU->getQP( uiBsAbsIdx );
+      uiPartQIdx = uiBsAbsIdx;
+      // Derive neighboring PU index
+      if (edgeDir == EDGE_VER)
+      {
+        pcCUP = pcCUQ->getPULeft (uiPartPIdx, uiPartQIdx,!lfCrossSliceBoundaryFlag, !m_bLFCrossTileBoundary);
+      }
+      else  // (iDir == EDGE_HOR)
+      {
+        pcCUP = pcCUQ->getPUAbove(uiPartPIdx, uiPartQIdx,!lfCrossSliceBoundaryFlag, false, !m_bLFCrossTileBoundary);
+      }
+
+      iQP_P = pcCUP->getQP(uiPartPIdx);
+      iQP = (iQP_P + iQP_Q + 1) >> 1;
+
+      Int iIndexTC = Clip3(0, MAX_QP+DEFAULT_INTRA_TC_OFFSET, Int(iQP + DEFAULT_INTRA_TC_OFFSET*(uiBs-1) + (tcOffsetDiv2 << 1)));
+      Int iIndexB = Clip3(0, MAX_QP, iQP + (betaOffsetDiv2 << 1));
+
+      Int iTc =  sm_tcTable[iIndexTC]*iBitdepthScale;
+      Int iBeta = sm_betaTable[iIndexB]*iBitdepthScale;
+      Int iSideThreshold = (iBeta+(iBeta>>1))>>3;
+      Int iThrCut = iTc*10;
+
+
+      UInt  uiBlocksInPart = uiPelsInPart / 4 ? uiPelsInPart / 4 : 1;
+      for (UInt iBlkIdx = 0; iBlkIdx<uiBlocksInPart; iBlkIdx ++)
+      {
+        Int dp0 = xCalcDP( piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+0), iOffset);
+        Int dq0 = xCalcDQ( piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+0), iOffset);
+        Int dp3 = xCalcDP( piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+3), iOffset);
+        Int dq3 = xCalcDQ( piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+3), iOffset);
+        Int d0 = dp0 + dq0;
+        Int d3 = dp3 + dq3;
+
+        Int dp = dp0 + dp3;
+        Int dq = dq0 + dq3;
+        Int d =  d0 + d3;
+
+        if (bPCMFilter || ppsTransquantBypassEnabledFlag)
+        {
+          // Check if each of PUs is I_PCM with LF disabling
+          bPartPNoFilter = (bPCMFilter && pcCUP->getIPCMFlag(uiPartPIdx));
+          bPartQNoFilter = (bPCMFilter && pcCUQ->getIPCMFlag(uiPartQIdx));
+
+          // check if each of PUs is lossless coded
+          bPartPNoFilter = bPartPNoFilter || (pcCUP->isLosslessCoded(uiPartPIdx) );
+          bPartQNoFilter = bPartQNoFilter || (pcCUQ->isLosslessCoded(uiPartQIdx) );
+        }
+
+        if (d < iBeta)
+        {
+          Bool bFilterP = (dp < iSideThreshold);
+          Bool bFilterQ = (dq < iSideThreshold);
+
+          Bool sw =  xUseStrongFiltering( iOffset, 2*d0, iBeta, iTc, piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+0))
+          && xUseStrongFiltering( iOffset, 2*d3, iBeta, iTc, piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+3));
+
+          for ( Int i = 0; i < DEBLOCK_SMALLEST_BLOCK/2; i++)
+          {
+            xPelFilterLuma( piTmpSrc+iSrcStep*(iIdx*uiPelsInPart+iBlkIdx*4+i), iOffset, iTc, sw, bPartPNoFilter, bPartQNoFilter, iThrCut, bFilterP, bFilterQ, bitDepthLuma);
+          }
+        }
+      }
+    }
+  }
+}
+
+
+Void TComLoopFilter::xEdgeFilterChroma( TComDataCU* const pcCU, const UInt uiAbsZorderIdx, const UInt uiDepth, const DeblockEdgeDir edgeDir, const Int iEdge )
+{
+        TComPicYuv *pcPicYuvRec    = pcCU->getPic()->getPicYuvRec();
+        Int         iStride        = pcPicYuvRec->getStride(COMPONENT_Cb);
+        Pel        *piSrcCb        = pcPicYuvRec->getAddr( COMPONENT_Cb, pcCU->getCtuRsAddr(), uiAbsZorderIdx );
+        Pel        *piSrcCr        = pcPicYuvRec->getAddr( COMPONENT_Cr, pcCU->getCtuRsAddr(), uiAbsZorderIdx );
+  const TComSPS    &sps            = *(pcCU->getSlice()->getSPS());
+  const Int         bitDepthChroma = sps.getBitDepth(CHANNEL_TYPE_CHROMA);
+
+  const UInt  uiPelsInPartChromaH = sps.getMaxCUWidth() >> (sps.getMaxTotalCUDepth()+pcPicYuvRec->getComponentScaleX(COMPONENT_Cb));
+  const UInt  uiPelsInPartChromaV = sps.getMaxCUHeight() >> (sps.getMaxTotalCUDepth()+pcPicYuvRec->getComponentScaleY(COMPONENT_Cb));
+
+  Int iQP = 0;
+  Int iQP_P = 0;
+  Int iQP_Q = 0;
+
+  Int   iOffset, iSrcStep;
+  UInt  uiLoopLength;
+
+  const UInt uiCtuWidthInBaseUnits = pcCU->getPic()->getNumPartInCtuWidth();
+
+  Bool  bPCMFilter = (pcCU->getSlice()->getSPS()->getUsePCM() && pcCU->getSlice()->getSPS()->getPCMFilterDisableFlag())? true : false;
+  Bool  bPartPNoFilter = false;
+  Bool  bPartQNoFilter = false;
+  TComDataCU* pcCUQ = pcCU;
