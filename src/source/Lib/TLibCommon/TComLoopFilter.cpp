@@ -698,3 +698,103 @@ Void TComLoopFilter::xEdgeFilterChroma( TComDataCU* const pcCU, const UInt uiAbs
   Bool  bPartPNoFilter = false;
   Bool  bPartQNoFilter = false;
   TComDataCU* pcCUQ = pcCU;
+  Int tcOffsetDiv2 = pcCU->getSlice()->getDeblockingFilterTcOffsetDiv2();
+
+  // Vertical Position
+  UInt uiEdgeNumInCtuVert = g_auiZscanToRaster[uiAbsZorderIdx]%uiCtuWidthInBaseUnits + iEdge;
+  UInt uiEdgeNumInCtuHor = g_auiZscanToRaster[uiAbsZorderIdx]/uiCtuWidthInBaseUnits + iEdge;
+
+  if ( (uiPelsInPartChromaH < DEBLOCK_SMALLEST_BLOCK) && (uiPelsInPartChromaV < DEBLOCK_SMALLEST_BLOCK) &&
+       (
+         ( (uiEdgeNumInCtuVert%(DEBLOCK_SMALLEST_BLOCK/uiPelsInPartChromaH)) && (edgeDir==EDGE_VER) ) ||
+         ( (uiEdgeNumInCtuHor %(DEBLOCK_SMALLEST_BLOCK/uiPelsInPartChromaV)) && (edgeDir==EDGE_HOR) )
+       )
+     )
+  {
+    return;
+  }
+
+
+  const Bool lfCrossSliceBoundaryFlag=pcCU->getSlice()->getLFCrossSliceBoundaryFlag();
+
+  UInt  uiNumParts = pcCU->getPic()->getNumPartInCtuWidth()>>uiDepth;
+
+  UInt  uiBsAbsIdx;
+  UChar ucBs;
+
+  Pel* piTmpSrcCb = piSrcCb;
+  Pel* piTmpSrcCr = piSrcCr;
+
+  if (edgeDir == EDGE_VER)
+  {
+    iOffset   = 1;
+    iSrcStep  = iStride;
+    piTmpSrcCb += iEdge*uiPelsInPartChromaH;
+    piTmpSrcCr += iEdge*uiPelsInPartChromaH;
+    uiLoopLength=uiPelsInPartChromaV;
+  }
+  else  // (edgeDir == EDGE_HOR)
+  {
+    iOffset   = iStride;
+    iSrcStep  = 1;
+    piTmpSrcCb += iEdge*iStride*uiPelsInPartChromaV;
+    piTmpSrcCr += iEdge*iStride*uiPelsInPartChromaV;
+    uiLoopLength=uiPelsInPartChromaH;
+  }
+
+  const Int iBitdepthScale = 1 << (pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_CHROMA)-8);
+
+  for ( UInt iIdx = 0; iIdx < uiNumParts; iIdx++ )
+  {
+    uiBsAbsIdx = xCalcBsIdx( pcCU, uiAbsZorderIdx, edgeDir, iEdge, iIdx);
+    ucBs = m_aapucBS[edgeDir][uiBsAbsIdx];
+
+    if ( ucBs > 1)
+    {
+      iQP_Q = pcCU->getQP( uiBsAbsIdx );
+      UInt  uiPartQIdx = uiBsAbsIdx;
+      // Derive neighboring PU index
+      const TComDataCU* pcCUP;
+      UInt  uiPartPIdx;
+
+      if (edgeDir == EDGE_VER)
+      {
+        pcCUP = pcCUQ->getPULeft (uiPartPIdx, uiPartQIdx,!lfCrossSliceBoundaryFlag, !m_bLFCrossTileBoundary);
+      }
+      else  // (edgeDir == EDGE_HOR)
+      {
+        pcCUP = pcCUQ->getPUAbove(uiPartPIdx, uiPartQIdx,!lfCrossSliceBoundaryFlag, false, !m_bLFCrossTileBoundary);
+      }
+
+      iQP_P = pcCUP->getQP(uiPartPIdx);
+
+      if (bPCMFilter || pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+      {
+        // Check if each of PUs is I_PCM with LF disabling
+        bPartPNoFilter = (bPCMFilter && pcCUP->getIPCMFlag(uiPartPIdx));
+        bPartQNoFilter = (bPCMFilter && pcCUQ->getIPCMFlag(uiPartQIdx));
+
+        // check if each of PUs is lossless coded
+        bPartPNoFilter = bPartPNoFilter || (pcCUP->isLosslessCoded(uiPartPIdx));
+        bPartQNoFilter = bPartQNoFilter || (pcCUQ->isLosslessCoded(uiPartQIdx));
+      }
+
+      for ( UInt chromaIdx = 0; chromaIdx < 2; chromaIdx++ )
+      {
+        Int chromaQPOffset  = pcCU->getSlice()->getPPS()->getQpOffset(ComponentID(chromaIdx + 1));
+        Pel* piTmpSrcChroma = (chromaIdx == 0) ? piTmpSrcCb : piTmpSrcCr;
+
+        iQP = ((iQP_P + iQP_Q + 1) >> 1) + chromaQPOffset;
+        if (iQP >= chromaQPMappingTableSize)
+        {
+          if (pcPicYuvRec->getChromaFormat()==CHROMA_420)
+          {
+            iQP -=6;
+          }
+          else if (iQP>51)
+          {
+            iQP=51;
+          }
+        }
+        else if (iQP >= 0 )
+        {
