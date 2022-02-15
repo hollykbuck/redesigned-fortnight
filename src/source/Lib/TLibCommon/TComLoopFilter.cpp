@@ -798,3 +798,103 @@ Void TComLoopFilter::xEdgeFilterChroma( TComDataCU* const pcCU, const UInt uiAbs
         }
         else if (iQP >= 0 )
         {
+          iQP = getScaledChromaQP(iQP, pcPicYuvRec->getChromaFormat());
+        }
+
+        Int iIndexTC = Clip3(0, MAX_QP+DEFAULT_INTRA_TC_OFFSET, iQP + DEFAULT_INTRA_TC_OFFSET*(ucBs - 1) + (tcOffsetDiv2 << 1));
+        Int iTc =  sm_tcTable[iIndexTC]*iBitdepthScale;
+
+        for ( UInt uiStep = 0; uiStep < uiLoopLength; uiStep++ )
+        {
+          xPelFilterChroma( piTmpSrcChroma + iSrcStep*(uiStep+iIdx*uiLoopLength), iOffset, iTc , bPartPNoFilter, bPartQNoFilter, bitDepthChroma);
+        }
+      }
+    }
+  }
+}
+
+/**
+ - Deblocking for the luminance component with strong or weak filter
+ .
+ \param piSrc           pointer to picture data
+ \param iOffset         offset value for picture data
+ \param tc              tc value
+ \param sw              decision strong/weak filter
+ \param bPartPNoFilter  indicator to disable filtering on partP
+ \param bPartQNoFilter  indicator to disable filtering on partQ
+ \param iThrCut         threshold value for weak filter decision
+ \param bFilterSecondP  decision weak filter/no filter for partP
+ \param bFilterSecondQ  decision weak filter/no filter for partQ
+ \param bitDepthLuma    luma bit depth
+*/
+__inline Void TComLoopFilter::xPelFilterLuma( Pel* piSrc, Int iOffset, Int tc, Bool sw, Bool bPartPNoFilter, Bool bPartQNoFilter, Int iThrCut, Bool bFilterSecondP, Bool bFilterSecondQ, const Int bitDepthLuma)
+{
+  Int delta;
+
+  Pel m4  = piSrc[0];
+  Pel m3  = piSrc[-iOffset];
+  Pel m5  = piSrc[ iOffset];
+  Pel m2  = piSrc[-iOffset*2];
+  Pel m6  = piSrc[ iOffset*2];
+  Pel m1  = piSrc[-iOffset*3];
+  Pel m7  = piSrc[ iOffset*3];
+  Pel m0  = piSrc[-iOffset*4];
+
+  if (sw)
+  {
+    piSrc[-iOffset]   = Clip3(m3-2*tc, m3+2*tc, ((m1 + 2*m2 + 2*m3 + 2*m4 + m5 + 4) >> 3));
+    piSrc[0]          = Clip3(m4-2*tc, m4+2*tc, ((m2 + 2*m3 + 2*m4 + 2*m5 + m6 + 4) >> 3));
+    piSrc[-iOffset*2] = Clip3(m2-2*tc, m2+2*tc, ((m1 + m2 + m3 + m4 + 2)>>2));
+    piSrc[ iOffset]   = Clip3(m5-2*tc, m5+2*tc, ((m3 + m4 + m5 + m6 + 2)>>2));
+    piSrc[-iOffset*3] = Clip3(m1-2*tc, m1+2*tc, ((2*m0 + 3*m1 + m2 + m3 + m4 + 4 )>>3));
+    piSrc[ iOffset*2] = Clip3(m6-2*tc, m6+2*tc, ((m3 + m4 + m5 + 3*m6 + 2*m7 +4 )>>3));
+  }
+  else
+  {
+    /* Weak filter */
+    delta = (9*(m4-m3) -3*(m5-m2) + 8)>>4 ;
+
+    if ( abs(delta) < iThrCut )
+    {
+      delta = Clip3(-tc, tc, delta);
+      piSrc[-iOffset] = ClipBD((m3+delta), bitDepthLuma);
+      piSrc[0] = ClipBD((m4-delta), bitDepthLuma);
+
+      Int tc2 = tc>>1;
+      if(bFilterSecondP)
+      {
+        Int delta1 = Clip3(-tc2, tc2, (( ((m1+m3+1)>>1)- m2+delta)>>1));
+        piSrc[-iOffset*2] = ClipBD((m2+delta1), bitDepthLuma);
+      }
+      if(bFilterSecondQ)
+      {
+        Int delta2 = Clip3(-tc2, tc2, (( ((m6+m4+1)>>1)- m5-delta)>>1));
+        piSrc[ iOffset] = ClipBD((m5+delta2), bitDepthLuma);
+      }
+    }
+  }
+
+  if(bPartPNoFilter)
+  {
+    piSrc[-iOffset] = m3;
+    piSrc[-iOffset*2] = m2;
+    piSrc[-iOffset*3] = m1;
+  }
+  if(bPartQNoFilter)
+  {
+    piSrc[0] = m4;
+    piSrc[ iOffset] = m5;
+    piSrc[ iOffset*2] = m6;
+  }
+}
+
+/**
+ - Deblocking of one line/column for the chrominance component
+ .
+ \param piSrc           pointer to picture data
+ \param iOffset         offset value for picture data
+ \param tc              tc value
+ \param bPartPNoFilter  indicator to disable filtering on partP
+ \param bPartQNoFilter  indicator to disable filtering on partQ
+ \param bitDepthChroma  chroma bit depth
+ */
