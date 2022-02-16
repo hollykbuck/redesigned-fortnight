@@ -898,3 +898,57 @@ __inline Void TComLoopFilter::xPelFilterLuma( Pel* piSrc, Int iOffset, Int tc, B
  \param bPartQNoFilter  indicator to disable filtering on partQ
  \param bitDepthChroma  chroma bit depth
  */
+__inline Void TComLoopFilter::xPelFilterChroma( Pel* piSrc, Int iOffset, Int tc, Bool bPartPNoFilter, Bool bPartQNoFilter, const Int bitDepthChroma)
+{
+  Int delta;
+
+  Pel m4  = piSrc[0];
+  Pel m3  = piSrc[-iOffset];
+  Pel m5  = piSrc[ iOffset];
+  Pel m2  = piSrc[-iOffset*2];
+
+  delta = Clip3(-tc,tc, (((( m4 - m3 ) << 2 ) + m2 - m5 + 4 ) >> 3) );
+  piSrc[-iOffset] = ClipBD((m3+delta), bitDepthChroma);
+  piSrc[0] = ClipBD((m4-delta), bitDepthChroma);
+
+  if(bPartPNoFilter)
+  {
+    piSrc[-iOffset] = m3;
+  }
+  if(bPartQNoFilter)
+  {
+    piSrc[0] = m4;
+  }
+}
+
+/**
+ - Decision between strong and weak filter
+ .
+ \param offset         offset value for picture data
+ \param d               d value
+ \param beta            beta value
+ \param tc              tc value
+ \param piSrc           pointer to picture data
+ */
+__inline Bool TComLoopFilter::xUseStrongFiltering( Int offset, Int d, Int beta, Int tc, Pel* piSrc)
+{
+  Pel m4  = piSrc[0];
+  Pel m3  = piSrc[-offset];
+  Pel m7  = piSrc[ offset*3];
+  Pel m0  = piSrc[-offset*4];
+
+  Int d_strong = abs(m0-m3) + abs(m7-m4);
+
+  return ( (d_strong < (beta>>3)) && (d<(beta>>2)) && ( abs(m3-m4) < ((tc*5+1)>>1)) );
+}
+
+__inline Int TComLoopFilter::xCalcDP( Pel* piSrc, Int iOffset)
+{
+  return abs( piSrc[-iOffset*3] - 2*piSrc[-iOffset*2] + piSrc[-iOffset] ) ;
+}
+
+__inline Int TComLoopFilter::xCalcDQ( Pel* piSrc, Int iOffset)
+{
+  return abs( piSrc[0] - 2*piSrc[iOffset] + piSrc[iOffset*2] );
+}
+//! \}
