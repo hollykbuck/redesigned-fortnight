@@ -98,3 +98,103 @@ static const LevelTierFeatures mainLevelTierInfo[] =
 {
     { Level::LEVEL1  ,    36864, {      350,        0 },       16,        1,        1,     552960ULL, {     128,        0 }, { 2, 2} },
     { Level::LEVEL2  ,   122880, {     1500,        0 },       16,        1,        1,    3686400ULL, {    1500,        0 }, { 2, 2} },
+    { Level::LEVEL2_1,   245760, {     3000,        0 },       20,        1,        1,    7372800ULL, {    3000,        0 }, { 2, 2} },
+    { Level::LEVEL3  ,   552960, {     6000,        0 },       30,        2,        2,   16588800ULL, {    6000,        0 }, { 2, 2} },
+    { Level::LEVEL3_1,   983040, {    10000,        0 },       40,        3,        3,   33177600ULL, {   10000,        0 }, { 2, 2} },
+    { Level::LEVEL4  ,  2228224, {    12000,    30000 },       75,        5,        5,   66846720ULL, {   12000,    30000 }, { 4, 4} },
+    { Level::LEVEL4_1,  2228224, {    20000,    50000 },       75,        5,        5,  133693440ULL, {   20000,    50000 }, { 4, 4} },
+    { Level::LEVEL5  ,  8912896, {    25000,   100000 },      200,       11,       10,  267386880ULL, {   25000,   100000 }, { 6, 4} },
+    { Level::LEVEL5_1,  8912896, {    40000,   160000 },      200,       11,       10,  534773760ULL, {   40000,   160000 }, { 8, 4} },
+    { Level::LEVEL5_2,  8912896, {    60000,   240000 },      200,       11,       10, 1069547520ULL, {   60000,   240000 }, { 8, 4} },
+    { Level::LEVEL6  , 35651584, {    60000,   240000 },      600,       22,       20, 1069547520ULL, {   60000,   240000 }, { 8, 4} },
+    { Level::LEVEL6_1, 35651584, {   120000,   480000 },      600,       22,       20, 2139095040ULL, {  120000,   480000 }, { 8, 4} },
+    { Level::LEVEL6_2, 35651584, {   240000,   800000 },      600,       22,       20, 4278190080ULL, {  240000,   800000 }, { 6, 4} },
+    { Level::LEVEL8_5, MAX_UINT, { MAX_UINT, MAX_UINT }, MAX_UINT, MAX_UINT, MAX_UINT, MAX_CNFUINT64, {MAX_UINT, MAX_UINT }, { 0, 0} },
+    { Level::NONE                   }
+};
+
+static const ProfileFeatures validProfiles[] =
+{   //  profile,                   pNameString,             maxBitDepth, maxChrFmt, intra, 1pic,   lowerBR, RExtTools, ExtPrec , ChrmQPOf, align,    HBRFactor,   , wve+t,  tiles,, lvl8.5, cpbvcl, cpbnal, fcf*1000, mincr*10
+    { Profile::MAIN,               "Main",                            8, CHROMA_420, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1        , false, 256, 64, false,   1000,   1100,     1500,   10    , mainLevelTierInfo },
+    { Profile::MAIN10,             "Main10",                         10, CHROMA_420, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1        , false, 256, 64, false,   1000,   1100,     1875,   10    , mainLevelTierInfo },
+    { Profile::MAIN10,             "Main10 Still Picture",           10, CHROMA_420, false,  true, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1        , false, 256, 64, true ,   1000,   1100,     1875,   10    , mainLevelTierInfo },
+    { Profile::MAINSTILLPICTURE,   "Main Still Picture",              8, CHROMA_420, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1        , false, 256, 64, true ,   1000,   1100,     1500,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Monochrome",                      8, CHROMA_400, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,    667,    733,     1000,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Monochrome 12",                  12, CHROMA_400, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1000,   1100,     1500,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Monochrome 16",                  16, CHROMA_400, false, false, ENABLED , OPTIONAL, OPTIONAL, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1333,   1467,     2000,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 12",                        12, CHROMA_420, false, false, ENABLED , DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1500,   1650,     2250,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:2:2 10",                  10, CHROMA_422, false, false, ENABLED , DISABLED, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1667,   1833,     2500,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:2:2 12",                  12, CHROMA_422, false, false, ENABLED , DISABLED, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4",                      8, CHROMA_444, false, false, ENABLED , OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 10",                  10, CHROMA_444, false, false, ENABLED , OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2500,   2750,     3750,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 12",                  12, CHROMA_444, false, false, ENABLED , OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   3000,   3300,     4500,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main Intra",                      8, CHROMA_420, true , false, OPTIONAL, DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1000,   1100,     1500,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 10 Intra",                  10, CHROMA_420, true , false, OPTIONAL, DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1000,   1100,     1875,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 12 Intra",                  12, CHROMA_420, true , false, OPTIONAL, DISABLED, DISABLED, DISABLED, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1500,   1650,     2250,   10    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:2:2 10 Intra",            10, CHROMA_422, true , false, OPTIONAL, DISABLED, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1667,   1833,     2500,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:2:2 12 Intra",            12, CHROMA_422, true , false, OPTIONAL, DISABLED, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 Intra",                8, CHROMA_444, true , false, OPTIONAL, OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 10 Intra",            10, CHROMA_444, true , false, OPTIONAL, OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2500,   2750,     3750,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 12 Intra",            12, CHROMA_444, true , false, OPTIONAL, OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   3000,   3300,     4500,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 16 Intra",            16, CHROMA_444, true , false, OPTIONAL, OPTIONAL, OPTIONAL, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, false,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 Still Picture",        8, CHROMA_444, true , true , OPTIONAL, OPTIONAL, DISABLED, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, true ,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 16 Still Picture",    16, CHROMA_444, true , true , OPTIONAL, OPTIONAL, OPTIONAL, OPTIONAL, DISABLED, HBR_1_OR_2   , false, 256, 64, true ,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::HIGHTHROUGHPUTREXT, "High Throughput 4:4:4 16 Intra", 16, CHROMA_444, true , false, OPTIONAL, OPTIONAL, OPTIONAL, OPTIONAL, ENABLED , HBR_12_OR_24 , true , 256, 64, false,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::NONE, 0 }
+};
+#endif
+
+
+
+
+static Void
+checkSPS(const TComSPS &sps,
+         const ProfileLevelTierFeatures &features)
+{
+  // sps_max_sub_layers_minus1 shall be less than or equal to vsp_max_sub_layers_minus1
+
+  // TODO - check conformance of sps_max_dec_pic_buffering_minus1, sps_max_num_reorder_pics, sps_max_latency_increase_plus1
+  //        needs VPS, which can only be done on activation.
+
+  const UInt minCbSizeY = 1<<(sps.getLog2MinCodingBlockSize());
+
+  if (sps.getPicWidthInLumaSamples() % minCbSizeY != 0 )
+  {
+    TDecConformanceCheck::getStream() << "picture width (" << sps.getPicWidthInLumaSamples() << ") must be a multiple of minCbSizeY (=" << minCbSizeY << ")\n";
+    TDecConformanceCheck::finishWarningReport();
+  }
+
+  if (sps.getPicHeightInLumaSamples() % minCbSizeY != 0 )
+  {
+    TDecConformanceCheck::getStream() << "picture height (" << sps.getPicHeightInLumaSamples() << ") must be a multiple of minCbSizeY (=" << minCbSizeY << ")\n";
+    TDecConformanceCheck::finishWarningReport();
+  }
+
+
+  if (sps.getPicWidthInLumaSamples() > features.getLevelTierFeatures()->getMaxPicWidthInLumaSamples())
+  {
+    TDecConformanceCheck::getStream() << "picture width (" << sps.getPicWidthInLumaSamples() << ") exceeds the maximum allowed by the level (" << features.getLevelTierFeatures()->getMaxPicWidthInLumaSamples() << ")\n";
+    TDecConformanceCheck::finishWarningReport();
+  }
+
+  if (sps.getPicHeightInLumaSamples() > features.getLevelTierFeatures()->getMaxPicHeightInLumaSamples())
+  {
+    TDecConformanceCheck::getStream() << "picture height (" << sps.getPicHeightInLumaSamples() << ") exceeds the maximum allowed by the level (" << features.getLevelTierFeatures()->getMaxPicHeightInLumaSamples() << ")\n";
+    TDecConformanceCheck::finishWarningReport();
+  }
+
+  if (sps.getPicWidthInLumaSamples() * sps.getPicHeightInLumaSamples() > features.getLevelTierFeatures()->maxLumaPs)
+  {
+    TDecConformanceCheck::getStream() << "picture samples (" << sps.getPicWidthInLumaSamples() << " * " << sps.getPicHeightInLumaSamples() << ") exceeds the maximum allowed by the level (" << features.getLevelTierFeatures()->maxLumaPs << ")\n";
+    TDecConformanceCheck::finishWarningReport();
+  }
+}
+
+
+static Void
+checkTiles(const TComSPS &sps,
+           const TComPPS &pps,
+           const TComPic &pic,
+           const ProfileLevelTierFeatures &features)
+{
+  if (pps.getTilesEnabledFlag())
