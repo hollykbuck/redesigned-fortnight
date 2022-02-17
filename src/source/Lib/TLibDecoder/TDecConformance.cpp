@@ -198,3 +198,103 @@ checkTiles(const TComSPS &sps,
            const ProfileLevelTierFeatures &features)
 {
   if (pps.getTilesEnabledFlag())
+  {
+    // Tile size check
+    const Int minWidthInCtus  = features.getProfileFeatures()->minTileColumnWidthInLumaSamples/ sps.getMaxCUWidth();
+    const Int minHeightInCtus = features.getProfileFeatures()->minTileRowHeightInLumaSamples  / sps.getMaxCUHeight();
+
+    const Int numCols = pps.getNumTileColumnsMinus1() + 1;
+    const Int numRows = pps.getNumTileRowsMinus1() + 1;
+    if (numCols > features.getLevelTierFeatures()->maxTileCols)
+    {
+      TDecConformanceCheck::getStream() << "number of tile columns (" << numCols << ") exceeds the maximum allowed by the level (" << features.getLevelTierFeatures()->maxTileCols << ")\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+    if (numRows > features.getLevelTierFeatures()->maxTileRows)
+    {
+      TDecConformanceCheck::getStream() << "number of tile rows (" << numRows << ") exceeds the maximum allowed by the level (" << features.getLevelTierFeatures()->maxTileRows << ")\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+
+    for(Int row=0; row < numRows; row++)
+    {
+      for(Int col=0; col < numCols; col++)
+      {
+        const Int tileIdx = row * numCols + col;
+        const TComTile &tile = *(pic.getPicSym()->getTComTile(tileIdx));
+        if (tile.getTileWidthInCtus() < minWidthInCtus)
+        {
+          TDecConformanceCheck::getStream() << "width of tile (" << col << ", " << row << ") is too narrow for the profile - read " << tile.getTileWidthInCtus()*sps.getMaxCUWidth() << "must be " << minWidthInCtus*sps.getMaxCUWidth() << "\n";
+          TDecConformanceCheck::finishWarningReport();
+        }
+        if (tile.getTileHeightInCtus() < minHeightInCtus)
+        {
+          TDecConformanceCheck::getStream() << "height of tile (" << col << ", " << row << ") is too thin for the profile - read " << tile.getTileHeightInCtus()*sps.getMaxCUHeight() << " must be " << minHeightInCtus*sps.getMaxCUHeight() << "\n";
+          TDecConformanceCheck::finishWarningReport();
+        }
+      }
+    }
+
+    if (pps.getEntropyCodingSyncEnabledFlag() && !features.getProfileFeatures()->bWavefrontsAndTilesCanBeUsedSimultaneously)
+    {
+      TDecConformanceCheck::getStream() << "profile does not permit entropy coding sync and tiles to be simultaneously enabled\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+  }
+}
+
+
+static Void
+checkPPS(const TComSPS &sps,
+         const TComPPS &pps,
+         const TComPic &pic,
+         const ProfileLevelTierFeatures &features)
+{
+  TDecConformanceCheck::checkRange<Int>(pps.getPicInitQPMinus26(), "init_qp_minus26",     -(sps.getBitDepth(CHANNEL_TYPE_LUMA)-8)*6-26, 25);
+  TDecConformanceCheck::checkRange<UInt>(pps.getMaxCuDQPDepth(), "diff_cu_qp_delta_depth", 0, sps.getLog2DiffMaxMinCodingBlockSize());
+  TDecConformanceCheck::checkRange<UInt>(pps.getLog2ParallelMergeLevelMinus2(), "log2_parallel_merge_level_minus2", 0, sps.getLog2MinCodingBlockSize() + sps.getLog2DiffMaxMinCodingBlockSize() - 2);
+
+  TDecConformanceCheck::checkRange<UInt>(pps.getPpsRangeExtension().getLog2SaoOffsetScale(CHANNEL_TYPE_LUMA), "log2_sao_offset_scale_luma", 0, std::max(sps.getBitDepth(CHANNEL_TYPE_LUMA), 10)-10);
+  TDecConformanceCheck::checkRange<UInt>(pps.getPpsRangeExtension().getLog2SaoOffsetScale(CHANNEL_TYPE_CHROMA), "log2_sao_offset_scale_chroma", 0, std::max(sps.getBitDepth(CHANNEL_TYPE_CHROMA), 10)-10);
+
+  checkTiles(sps, pps, pic, features);
+}
+
+#if !DPB_ENCODER_USAGE_CHECK
+Void
+ProfileLevelTierFeatures::activate(const TComSPS &sps)
+{
+  const ProfileTierLevel &ptl = *(sps.getPTL()->getGeneralPTL());
+
+  m_tier = ptl.getTierFlag();
+
+  for(Int i=0; validProfiles[i].profile != Profile::NONE; i++)
+  {
+    if (ptl.getProfileIdc() == validProfiles[i].profile &&
+        ptl.getBitDepthConstraint() == validProfiles[i].maxBitDepth &&
+        ptl.getChromaFormatConstraint() == validProfiles[i].maxChromaFormat &&
+        ptl.getIntraConstraintFlag() == validProfiles[i].generalIntraConstraintFlag &&
+        ptl.getOnePictureOnlyConstraintFlag() == validProfiles[i].generalOnePictureOnlyConstraintFlag )
+    {
+      m_pProfile = &(validProfiles[i]);
+      break;
+    }
+  }
+
+  if (m_pProfile != 0)
+  {
+    // Now identify the level:
+    const LevelTierFeatures *pLTF = m_pProfile->pLevelTiersListInfo;
+    const Level::Name spsLevelName = sps.getPTL()->getGeneralPTL()->getLevelIdc();
+    if (spsLevelName!=Level::LEVEL8_5 || m_pProfile->bCanUseLevel8p5)
+    {
+      for(Int i=0; pLTF[i].level!=Level::NONE; i++)
+      {
+        if (pLTF[i].level == spsLevelName)
+        {
+          m_pLevelTier = &(pLTF[i]);
+        }
+      }
+    }
+  }
+
