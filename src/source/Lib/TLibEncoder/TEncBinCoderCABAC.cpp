@@ -98,3 +98,103 @@ Void TEncBinCABAC::finish()
     {
       m_pcTComBitIf->write( m_bufferedByte, 8 );
     }
+    while ( m_numBufferedBytes > 1 )
+    {
+      m_pcTComBitIf->write( 0xff, 8 );
+      m_numBufferedBytes--;
+    }
+  }
+  m_pcTComBitIf->write( m_uiLow >> 8, 24 - m_bitsLeft );
+}
+
+Void TEncBinCABAC::flush()
+{
+  encodeBinTrm(1);
+  finish();
+  m_pcTComBitIf->write(1, 1);
+  m_pcTComBitIf->writeAlignZero();
+
+  start();
+}
+
+/** Reset BAC register and counter values.
+ * \returns Void
+ */
+Void TEncBinCABAC::resetBac()
+{
+  start();
+}
+
+/** Encode PCM alignment zero bits.
+ * \returns Void
+ */
+Void TEncBinCABAC::encodePCMAlignBits()
+{
+  finish();
+  m_pcTComBitIf->write(1, 1);
+  m_pcTComBitIf->writeAlignZero(); // pcm align zero
+}
+
+/** Write a PCM code.
+ * \param uiCode code value
+ * \param uiLength code bit-depth
+ * \returns Void
+ */
+Void TEncBinCABAC::xWritePCMCode(UInt uiCode, UInt uiLength)
+{
+  m_pcTComBitIf->write(uiCode, uiLength);
+}
+
+Void TEncBinCABAC::copyState( const TEncBinIf* pcTEncBinIf )
+{
+  const TEncBinCABAC* pcTEncBinCABAC = pcTEncBinIf->getTEncBinCABAC();
+  m_uiLow           = pcTEncBinCABAC->m_uiLow;
+  m_uiRange         = pcTEncBinCABAC->m_uiRange;
+  m_bitsLeft        = pcTEncBinCABAC->m_bitsLeft;
+  m_bufferedByte    = pcTEncBinCABAC->m_bufferedByte;
+  m_numBufferedBytes = pcTEncBinCABAC->m_numBufferedBytes;
+#if FAST_BIT_EST
+  m_fracBits = pcTEncBinCABAC->m_fracBits;
+#endif
+}
+
+Void TEncBinCABAC::resetBits()
+{
+  m_uiLow            = 0;
+  m_bitsLeft         = 23;
+  m_numBufferedBytes = 0;
+  m_bufferedByte     = 0xff;
+  if ( m_binCountIncrement )
+  {
+    m_uiBinsCoded = 0;
+  }
+#if FAST_BIT_EST
+  m_fracBits &= 32767;
+#endif
+}
+
+UInt TEncBinCABAC::getNumWrittenBits()
+{
+  return m_pcTComBitIf->getNumberOfWrittenBits() + 8 * m_numBufferedBytes + 23 - m_bitsLeft;
+}
+
+/**
+ * \brief Encode bin
+ *
+ * \param binValue   bin value
+ * \param rcCtxModel context model
+ */
+Void TEncBinCABAC::encodeBin( UInt binValue, ContextModel &rcCtxModel )
+{
+  //{
+  //  DTRACE_CABAC_VL( g_nSymbolCounter++ )
+  //  DTRACE_CABAC_T( "\tstate=" )
+  //  DTRACE_CABAC_V( ( rcCtxModel.getState() << 1 ) + rcCtxModel.getMps() )
+  //  DTRACE_CABAC_T( "\tsymbol=" )
+  //  DTRACE_CABAC_V( binValue )
+  //  DTRACE_CABAC_T( "\n" )
+  //}
+
+#if DEBUG_CABAC_BINS
+  const UInt startingRange = m_uiRange;
+#endif
