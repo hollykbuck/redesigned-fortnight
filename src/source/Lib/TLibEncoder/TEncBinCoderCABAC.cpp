@@ -398,3 +398,49 @@ Void TEncBinCABAC::encodeBinTrm( UInt binValue )
   testAndWriteOut();
 }
 
+Void TEncBinCABAC::testAndWriteOut()
+{
+  if ( m_bitsLeft < 12 )
+  {
+    writeOut();
+  }
+}
+
+/**
+ * \brief Move bits from register into bitstream
+ */
+Void TEncBinCABAC::writeOut()
+{
+  UInt leadByte = m_uiLow >> (24 - m_bitsLeft);
+  m_bitsLeft += 8;
+  m_uiLow &= 0xffffffffu >> m_bitsLeft;
+
+  if ( leadByte == 0xff )
+  {
+    m_numBufferedBytes++;
+  }
+  else
+  {
+    if ( m_numBufferedBytes > 0 )
+    {
+      UInt carry = leadByte >> 8;
+      UInt byte = m_bufferedByte + carry;
+      m_bufferedByte = leadByte & 0xff;
+      m_pcTComBitIf->write( byte, 8 );
+
+      byte = ( 0xff + carry ) & 0xff;
+      while ( m_numBufferedBytes > 1 )
+      {
+        m_pcTComBitIf->write( byte, 8 );
+        m_numBufferedBytes--;
+      }
+    }
+    else
+    {
+      m_numBufferedBytes = 1;
+      m_bufferedByte = leadByte;
+    }
+  }
+}
+
+//! \}
