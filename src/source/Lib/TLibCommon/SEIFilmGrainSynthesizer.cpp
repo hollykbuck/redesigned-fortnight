@@ -298,3 +298,103 @@ void SEIFilmGrainSynthesizer::grainSynthesizeAndBlend(TComPicYuv* pGrainBuf, Boo
     widthComp[1]  = (m_width >> 1);
     widthComp[2]  = (m_width >> 1);
     heightComp[1] = (m_height >> 1);
+    heightComp[2] = (m_height >> 1);
+  }
+  else if (CHROMA_422 == m_chromaFormat)
+  {
+    widthComp[1]  = (m_width >> 1);
+    widthComp[2]  = (m_width >> 1);
+    heightComp[1] = m_height;
+    heightComp[2] = m_height;
+  }
+  else if (CHROMA_400 == m_chromaFormat)
+  {
+    numComp = 1;
+  }
+
+  /*Allocate memory for offsets assuming 16x16 block size,
+  32x32 will need lesser than this*/
+  uint32_t maxNumBlocks = ((m_width >> 4) + 1) * ((m_height >> 4) + 1);
+
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    offsetsArr[compCtr] = new uint32_t[maxNumBlocks];
+  }
+
+  decComp[0] = pGrainBuf->getAddr(COMPONENT_Y);
+  decComp[1] = pGrainBuf->getAddr(COMPONENT_Cb);
+  decComp[2] = pGrainBuf->getAddr(COMPONENT_Cr);
+
+  /* component strides */
+  strideComp[0] = pGrainBuf->getStride(COMPONENT_Y);
+  strideComp[1] = 0;
+  strideComp[2] = 0;
+
+  if (CHROMA_400 != m_chromaFormat)
+  {
+    strideComp[1] = pGrainBuf->getStride(COMPONENT_Cb);
+    strideComp[2] = pGrainBuf->getStride(COMPONENT_Cr);
+  }
+
+  int32_t numBlks_x[MAX_NUM_COMPONENT];
+  int32_t numBlks_y[MAX_NUM_COMPONENT];
+
+  picOffset = m_poc;
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    if (FG_BLK_32 == m_fgsBlkSize)
+    {
+      numBlks_x[compCtr]         = (widthComp[compCtr] >> 5) + ((widthComp[compCtr] & 0x1F) ? 1 : 0);
+      numBlks_y[compCtr]         = (heightComp[compCtr] >> 5) + ((heightComp[compCtr] & 0x1F) ? 1 : 0);
+    }
+    else
+    {
+      numBlks_x[compCtr]         = (widthComp[compCtr] >> 4) + ((widthComp[compCtr] & 0xF) ? 1 : 0);
+      numBlks_y[compCtr]         = (heightComp[compCtr] >> 4) + ((heightComp[compCtr] & 0xF) ? 1 : 0);
+    }
+  }
+
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    if (1 == m_fgcParameters->m_compModel[compCtr].bPresentFlag)
+    {
+      uint32_t *tmp = offsetsArr[compCtr];
+      int       i, j;
+
+      /* Seed initialization for current picture*/
+      pseudoRandValEc = seedLUT[((picOffset + color_offset[compCtr]) & 0xFF)];
+
+      for (i = 0; i < numBlks_y[compCtr]; i++)
+      {
+        for (j = 0; j < numBlks_x[compCtr]; j++)
+        {
+          *tmp            = pseudoRandValEc;
+          pseudoRandValEc = prng(pseudoRandValEc);
+          tmp++;
+        }
+      }
+    }
+  }
+
+  m_fgsArgs.numComp = numComp;
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    if (1 == m_fgcParameters->m_compModel[compCtr].bPresentFlag)
+    {
+      m_fgsArgs.decComp[compCtr]    = decComp[compCtr];
+      m_fgsArgs.widthComp[compCtr]  = widthComp[compCtr];
+      m_fgsArgs.strideComp[compCtr] = strideComp[compCtr];
+      m_fgsArgs.fgsOffsets[compCtr] = offsetsArr[compCtr];
+
+      if (FG_BLK_32 == m_fgsBlkSize)
+      {
+        m_fgsArgs.heightComp[compCtr] = numBlks_y[compCtr] * FG_BLK_32;
+      }
+      else
+      {
+        m_fgsArgs.heightComp[compCtr] = numBlks_y[compCtr] * FG_BLK_16;
+      }
+    }
+  }
+  m_fgsArgs.pFgcParameters = m_fgcParameters;
+  m_fgsArgs.blkSize = m_fgsBlkSize;
