@@ -498,3 +498,103 @@ uint8_t SEIFilmGrainSynthesizer::grainValidateParams()
 
         if (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalLowerBound >
             m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalUpperBound)
+        {
+          return FGS_INVALID_INTENSITY_BOUNDARY_VALUES; /* Not supported  */
+        }
+
+        for (multiGrainCtr = m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalLowerBound;
+             multiGrainCtr <= m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalUpperBound; multiGrainCtr++)
+        {
+          m_grainSynt->intensityInterval[compCtr][multiGrainCtr] = intensityCtr;
+          if (multiGrainCheck[compCtr][multiGrainCtr]) /* Non over lap */
+          {
+            return FGS_INVALID_INTENSITY_BOUNDARY_VALUES; /* Not supported  */
+          }
+          else
+          {
+            multiGrainCheck[compCtr][multiGrainCtr] = 1;
+          }
+        }
+
+        m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue.resize(FG_MAX_NUM_MODEL_VALUES);
+        /* default initialization for cut off frequencies */
+        if (1 == m_fgcParameters->m_compModel[compCtr].numModelValues)
+        {
+          m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] = DEFAULT_HORZ_CUT_OFF_FREQUENCY;
+          m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] = m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1];
+        }
+        else if (2 == m_fgcParameters->m_compModel[compCtr].numModelValues)
+        {
+          m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] = m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1];
+        }
+
+        /* Error check on model component value */
+        if (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[0] > (FG_MAX_STANDARD_DEVIATION << (m_bitDepth - FG_BIT_DEPTH_8)))
+        {
+          return FGS_INVALID_STANDARD_DEVIATION; /* Not supported  */
+        }
+        else if ((m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] < MIN_CUT_OFF_FREQUENCY) ||
+                 (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] > MAX_CUT_OFF_FREQUENCY))
+        {
+          return FGS_INVALID_CUT_OFF_FREQUENCIES; /* Not supported  */
+        }
+        else if ((m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] < MIN_CUT_OFF_FREQUENCY) ||
+                 (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] > MAX_CUT_OFF_FREQUENCY))
+        {
+          return FGS_INVALID_CUT_OFF_FREQUENCIES; /* Not supported  */
+        }
+
+        /* conversion of component model values for 4:2:0 and 4:4:4 */
+        if (CHROMA_444 != m_chromaFormat && (compCtr > 0))
+        {
+          if (CHROMA_420 == m_chromaFormat) /* 4:2:0 */
+          {
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[0] >>= 1;
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] =
+              CLIP3(MIN_CUT_OFF_FREQUENCY, MAX_CUT_OFF_FREQUENCY,
+              (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] << 1));
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] =
+              CLIP3(MIN_CUT_OFF_FREQUENCY, MAX_CUT_OFF_FREQUENCY,
+              (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2] << 1));
+
+          }
+          else if (CHROMA_422 == m_chromaFormat)/* 4:2:2 */
+          {
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[0] =
+              (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[0] * SCALE_DOWN_422) >> Q_FORMAT_SCALING;
+
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] =
+              CLIP3(MIN_CUT_OFF_FREQUENCY, MAX_CUT_OFF_FREQUENCY,
+              (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1] << 1));
+          }
+        }
+
+        compPairMatch = 0;
+        for (limitCompModelCtr = 0; limitCompModelCtr <= num_comp_model_pairs; limitCompModelCtr++)
+        {
+          if ((limitCompModelVal1[limitCompModelCtr] ==
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1]) &&
+            (limitCompModelVal2[limitCompModelCtr] ==
+              m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2]))
+          {
+            compPairMatch = 1;
+          }
+        }
+
+        if (0 == compPairMatch)
+        {
+          num_comp_model_pairs++;
+          /* max allowed pairs are 10 as per SMPTE -RDD5*/
+          if (num_comp_model_pairs > FG_MAX_ALLOWED_COMP_MODEL_PAIRS)
+          {
+            return FGS_INVALID_NUM_CUT_OFF_FREQ_PAIRS; /* Not supported  */
+          }
+          limitCompModelVal1[num_comp_model_pairs - 1] =
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[1];
+          limitCompModelVal2[num_comp_model_pairs - 1] =
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].compModelValue[2];
+        }
+      }
+    }
+  }
+  return FGS_SUCCESS; /* Success */
