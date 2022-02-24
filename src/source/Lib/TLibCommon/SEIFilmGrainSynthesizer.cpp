@@ -398,3 +398,103 @@ void SEIFilmGrainSynthesizer::grainSynthesizeAndBlend(TComPicYuv* pGrainBuf, Boo
   }
   m_fgsArgs.pFgcParameters = m_fgcParameters;
   m_fgsArgs.blkSize = m_fgsBlkSize;
+  m_fgsArgs.bitDepth = m_bitDepth;
+  m_fgsArgs.pGrainSynt = m_grainSynt;
+
+  fgsProcess(m_fgsArgs);
+
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    delete offsetsArr[compCtr];
+  }
+  return;
+}
+
+/* Function validates film grain parameters and returns 0 for valid parameters of SMPTE-RDD5 else 1*/
+/* Also down converts the chroma model values for 4:2:0 and 4:2:2 chroma_formats */
+uint8_t SEIFilmGrainSynthesizer::grainValidateParams()
+{
+  uint8_t   numComp = MAX_NUM_COMPONENT; /* number of color components */
+  uint8_t   compCtr, intensityCtr, multiGrainCheck[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES] = { 0 };
+  uint16_t  multiGrainCtr;
+  uint8_t   limitCompModelVal1[10] = { 0 }, limitCompModelVal2[10] = { 0 };
+  uint8_t   num_comp_model_pairs = 0, limitCompModelCtr, compPairMatch;
+
+  memset(m_grainSynt->intensityInterval, INTENSITY_INTERVAL_MATCH_FAIL, sizeof(m_grainSynt->intensityInterval));
+
+  if ((m_width < FG_MIN_WIDTH) || (m_width > FG_MAX_WIDTH) || (m_width % 4))
+  {
+    return FGS_INVALID_WIDTH; /* Width not supported */
+  }
+  if ((m_height < FG_MIN_HEIGHT) || (m_height > FG_MAX_HEIGHT) || (m_height % 4))
+  {
+    return FGS_INVALID_HEIGHT; /* Height not  supported */
+  }
+  if ((m_chromaFormat < MIN_CHROMA_FORMAT_IDC) || (m_chromaFormat > MAX_CHROMA_FORMAT_IDC))
+  {
+    return FGS_INVALID_CHROMA_FORMAT; /* Chroma format not supported */
+  }
+  if (m_chromaFormat == MIN_CHROMA_FORMAT_IDC) /* Mono Chrome */
+  {
+    numComp = 1;
+  }
+
+  if ((m_bitDepth < MIN_BIT_DEPTH) || (m_bitDepth > MAX_BIT_DEPTH))
+  {
+    return FGS_INVALID_BIT_DEPTH; /* Bit depth not supported */
+  }
+
+  if ((0 != m_fgcParameters->m_filmGrainCharacteristicsCancelFlag) &&
+      (1 != m_fgcParameters->m_filmGrainCharacteristicsCancelFlag))
+  {
+    return FGS_INVALID_FGC_CANCEL_FLAG; /* Film grain synthesis disabled */
+  }
+
+  if (FILM_GRAIN_MODEL_ID_VALUE != m_fgcParameters->m_filmGrainModelId)
+  {
+    return FGS_INVALID_GRAIN_MODEL_ID; /* Not supported */
+  }
+
+  if (0 != m_fgcParameters->m_separateColourDescriptionPresentFlag)
+  {
+    return FGS_INVALID_SEP_COL_DES_FLAG; /* Not supported */
+  }
+
+  if (BLENDING_MODE_VALUE != m_fgcParameters->m_blendingModeId)
+  {
+    return FGS_INVALID_BLEND_MODE; /* Not supported */
+  }
+
+  if (m_fgcParameters->m_compModel[0].bPresentFlag || m_fgcParameters->m_compModel[1].bPresentFlag || m_fgcParameters->m_compModel[2].bPresentFlag) {
+    if ((m_fgcParameters->m_log2ScaleFactor < MIN_LOG2SCALE_VALUE) ||
+      (m_fgcParameters->m_log2ScaleFactor > MAX_LOG2SCALE_VALUE))
+    {
+      return FGS_INVALID_LOG2_SCALE_FACTOR; /* Not supported  */
+    }
+  }
+
+  /* validation of component model present flag */
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    if ((m_fgcParameters->m_compModel[compCtr].bPresentFlag != true) &&
+        (m_fgcParameters->m_compModel[compCtr].bPresentFlag != false))
+    {
+      return FGS_INVALID_COMP_MODEL_PRESENT_FLAG; /* Not supported  */
+    }
+    if (m_fgcParameters->m_compModel[compCtr].bPresentFlag &&
+       (m_fgcParameters->m_compModel[compCtr].numModelValues > FG_MAX_ALLOWED_MODEL_VALUES))
+    {
+      return FGS_INVALID_NUM_MODEL_VALUES; /* Not supported  */
+    }
+  }
+
+  /* validation of intensity intervals and  */
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    if (m_fgcParameters->m_compModel[compCtr].bPresentFlag)
+    {
+      for (intensityCtr = 0; intensityCtr < m_fgcParameters->m_compModel[compCtr].intensityValues.size(); intensityCtr++)
+      {
+
+        if (m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalLowerBound >
+            m_fgcParameters->m_compModel[compCtr].intensityValues[intensityCtr].intensityIntervalUpperBound)
