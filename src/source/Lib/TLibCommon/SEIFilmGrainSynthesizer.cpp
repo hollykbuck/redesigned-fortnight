@@ -598,3 +598,103 @@ uint8_t SEIFilmGrainSynthesizer::grainValidateParams()
     }
   }
   return FGS_SUCCESS; /* Success */
+}
+
+void SEIFilmGrainSynthesizer::deriveFGSBlkSize()
+{
+  uint32_t picSizeInLumaSamples = m_height * m_width;
+  if (picSizeInLumaSamples <= (1920 * 1080))
+  {
+    m_fgsBlkSize = FG_BLK_8;
+  }
+  else if (picSizeInLumaSamples <= (3840 * 2160))
+  {
+    m_fgsBlkSize = FG_BLK_16;
+  }
+  else
+  {
+    m_fgsBlkSize = FG_BLK_32;
+  }
+}
+void SEIFilmGrainSynthesizer::dataBaseGen()
+{
+  uint32_t      pseudoRandValEhv;
+  uint8_t       h, v; /* Horizaontal and vertical cut off frequencies (+2)*/
+  uint32_t      ScaleCutOffFh, ScaleCutOffFv, l, r, i, j, k;
+  int32_t       B[FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE], IDCT[FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE];
+  int32_t       Grain[FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE];
+
+  const TMatrixCoeff *Tmp = g_aiT64[TRANSFORM_FORWARD][0];
+  const int transform_scale = 9;                      // upscaling of original transform as specified in VVC (for 64x64 block)
+  const int add_1st = 1 << (transform_scale - 1);
+
+  TMatrixCoeff T[FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE];     // Original
+  TMatrixCoeff TT[FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE];    // Transpose
+  for (int x = 0; x < FG_DATA_BASE_SIZE; x++)
+  {
+    for (int y = 0; y < FG_DATA_BASE_SIZE; y++)
+    {
+      T[x][y] = Tmp[x * 64 + y]; /* Matrix Original */
+      TT[y][x] = Tmp[x * 64 + y]; /* Matrix Transpose */
+    }
+  }
+
+  for (h = 0; h < NUM_CUT_OFF_FREQ; h++)
+  {
+    for (v = 0; v < NUM_CUT_OFF_FREQ; v++)
+    {
+      memset(&B, 0, FG_DATA_BASE_SIZE*FG_DATA_BASE_SIZE * sizeof(int32_t));
+      memset(&IDCT, 0, FG_DATA_BASE_SIZE*FG_DATA_BASE_SIZE * sizeof(int32_t));
+      memset(&Grain, 0, FG_DATA_BASE_SIZE*FG_DATA_BASE_SIZE * sizeof(int32_t));
+      ScaleCutOffFh = ((h + 3) << 2) - 1;
+      ScaleCutOffFv = ((v + 3) << 2) - 1;
+
+      /* ehv : seed to be used for the psudo random generator for a given h and v */
+      pseudoRandValEhv = seedLUT[h + v * 13];
+
+      for (l = 0, r = 0; l <= ScaleCutOffFv; l++)
+      {
+        for (k = 0; k <= ScaleCutOffFh; k += 4)
+        {
+          B[k][l] = gaussianLUT[pseudoRandValEhv % 2048];
+          B[k + 1][l] = gaussianLUT[(pseudoRandValEhv + 1) % 2048];
+          B[k + 2][l] = gaussianLUT[(pseudoRandValEhv + 2) % 2048];
+          B[k + 3][l] = gaussianLUT[(pseudoRandValEhv + 3) % 2048];
+          r++;
+          pseudoRandValEhv = prng(pseudoRandValEhv);
+        }
+      }
+      B[0][0] = 0;
+
+      for (i = 0; i < FG_DATA_BASE_SIZE; i++)
+      {
+        for (j = 0; j < FG_DATA_BASE_SIZE; j++)
+        {
+          for (k = 0; k < FG_DATA_BASE_SIZE; k++)
+          {
+            IDCT[i][j] += TT[i][k] * B[k][j];
+          }
+          IDCT[i][j] += add_1st;
+          IDCT[i][j] = IDCT[i][j] >> transform_scale;
+        }
+      }
+
+      for (i = 0; i < FG_DATA_BASE_SIZE; i++)
+      {
+        for (j = 0; j < FG_DATA_BASE_SIZE; j++)
+        {
+          for (k = 0; k < FG_DATA_BASE_SIZE; k++)
+          {
+            Grain[i][j] += IDCT[i][k] * T[k][j];
+          }
+          Grain[i][j] += add_1st;
+          Grain[i][j] = Grain[i][j] >> transform_scale;
+          m_grainSynt->dataBase[h][v][j][i] = CLIP3(-127, 127, Grain[i][j]);
+        }
+      }
+
+      /* De-blocking at horizontal block edges */
+      for (l = 0; l < FG_DATA_BASE_SIZE; l += m_fgsBlkSize)
+      {
+        for (k = 0; k < FG_DATA_BASE_SIZE; k++)
+        {
