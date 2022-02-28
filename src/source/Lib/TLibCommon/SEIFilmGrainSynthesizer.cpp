@@ -998,3 +998,103 @@ uint32_t SEIFilmGrainSynthesizer::fgsSimulationBlending_8x8(fgsProcessArgs *inAr
         uint32_t *offset_tmp = inArgs->fgsOffsets[compCtr];
         grainStripeWidth = ((widthComp[compCtr] - 1) | 0xF) + 1;   // Make next muliptle of 16
 
+        /* Loop of 16x16 blocks */
+        for (y = 0; y < heightComp[compCtr]; y += FG_BLK_16)
+        {
+          /* Initialization of grain stripe of 16xwidth size */
+          memset(grainStripe, 0, (grainStripeWidth * FG_BLK_16 * sizeof(Pel)));
+          for (x = 0; x < widthComp[compCtr]; x += FG_BLK_16)
+          {
+            /* start position offset of decoded sample in x direction */
+            grainStripeOffset = x;
+
+            decSampleHbdBlk16 = decSampleHbdOffsetY + x;
+
+            kOffset_const = (MSB16(*offset_tmp) % 52);
+            kOffset_const &= 0xFFFC;
+
+            lOffset_const = (LSB16(*offset_tmp) % 56);
+            lOffset_const &= 0xFFF8;
+            scaleFactor_const = 1 - 2 * BIT0(*offset_tmp);
+            for (blkId = 0; blkId < NUM_8x8_BLKS_16x16; blkId++)
+            {
+              yOffset8x8   = (blkId >> 1) * FG_BLK_8;
+              xOffset8x8   = (blkId & 0x1) * FG_BLK_8;
+              offsetBlk8x8 = xOffset8x8 + (yOffset8x8 * strideComp[compCtr]);
+
+              grainStripeOffsetBlk8 = grainStripeOffset + (xOffset8x8 + (yOffset8x8 * grainStripeWidth));
+
+              decSampleHbdBlk8 = decSampleHbdBlk16 + offsetBlk8x8;
+              blockAvg = blockAverage_8x8(decSampleHbdBlk8, strideComp[compCtr], &numSamples, FG_BLK_8, FG_BLK_8, bitDepth);
+
+              /* Selection of the component model */
+              intensityInt = inArgs->pGrainSynt->intensityInterval[compCtr][blockAvg];
+
+              if (INTENSITY_INTERVAL_MATCH_FAIL != intensityInt)
+              {
+                /* 8x8 grain block offset using co-ordinates of decoded 8x8 block in the frame */
+                // kOffset = kOffset_const;
+                kOffset = kOffset_const + xOffset8x8;
+
+                lOffset = lOffset_const + yOffset8x8;
+
+                scaleFactor =
+                  scaleFactor_const
+                  * inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[0];
+                h = inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[1] - 2;
+                v = inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[2] - 2;
+
+                /* 8x8 block grain simulation */
+                simulateGrainBlk8x8(grainStripe, grainStripeOffsetBlk8, inArgs->pGrainSynt, grainStripeWidth,
+                                    log2ScaleFactor, scaleFactor, kOffset, lOffset, h, v, FG_BLK_8);
+              } /* only if average falls in any interval */
+              //  }/* includes corner case handling */
+            } /* 8x8 level block processing */
+
+            /* uppdate the PRNG once per 16x16 block of samples */
+            offset_tmp++;
+          } /* End of 16xwidth grain simulation */
+
+          /* deblocking at the vertical edges of 8x8 at 16xwidth*/
+          deblockGrainStripe(grainStripe, widthComp[compCtr], FG_BLK_16, grainStripeWidth, FG_BLK_8);
+
+          /* Blending of size 16xwidth*/
+
+          blendStripe(decSampleHbdOffsetY, grainStripe, widthComp[compCtr], strideComp[compCtr], grainStripeWidth,
+                      FG_BLK_16, bitDepth);
+          decSampleHbdOffsetY += FG_BLK_16 * strideComp[compCtr];
+
+        } /* end of component loop */
+      }
+    }
+  }
+
+  delete grainStripe;
+  return FGS_SUCCESS;
+}
+
+uint32_t SEIFilmGrainSynthesizer::fgsSimulationBlending_16x16(fgsProcessArgs *inArgs)
+{
+  uint8_t  numComp, compCtr; /* number of color components */
+  uint8_t  log2ScaleFactor, h, v;
+  uint8_t  bitDepth; /*grain bit depth and decoded bit depth are assumed to be same */
+  uint32_t widthComp[MAX_NUM_COMPONENT], heightComp[MAX_NUM_COMPONENT], strideComp[MAX_NUM_COMPONENT];
+  Pel *    decSampleHbdBlk16, *decSampleHbdOffsetY;
+  Pel *    decHbdComp[MAX_NUM_COMPONENT];
+  uint16_t numSamples;
+  int16_t  scaleFactor;
+  uint32_t kOffset, lOffset, grainStripeOffset;
+  Pel *    grainStripe; /* worth a row of 16x16 : Max size : 16xw;*/
+  uint32_t x, y;
+  uint32_t blockAvg, intensityInt; /* ec : seed to be used for the psudo random generator for a given color component */
+  uint32_t grainStripeWidth;
+  uint32_t wdPadded;
+
+  bitDepth        = inArgs->bitDepth;
+  numComp         = inArgs->numComp;
+  log2ScaleFactor = inArgs->pFgcParameters->m_log2ScaleFactor;
+
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    decHbdComp[compCtr] = inArgs->decComp[compCtr];
+    strideComp[compCtr] = inArgs->strideComp[compCtr];
