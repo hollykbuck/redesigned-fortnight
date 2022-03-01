@@ -1198,3 +1198,73 @@ uint32_t SEIFilmGrainSynthesizer::fgsSimulationBlending_32x32(fgsProcessArgs *in
   {
     decComp[compCtr]    = inArgs->decComp[compCtr];
     strideComp[compCtr] = inArgs->strideComp[compCtr];
+    heightComp[compCtr] = inArgs->heightComp[compCtr];
+    widthComp[compCtr]  = inArgs->widthComp[compCtr];
+  }
+
+  wdPadded = ((inArgs->widthComp[0] - 1) | 0x1F) + 1;
+  grainStripe = new Pel[wdPadded * FG_BLK_32];
+
+  if (0 == inArgs->pFgcParameters->m_filmGrainCharacteristicsCancelFlag)
+  {
+    for (compCtr = 0; compCtr < numComp; compCtr++)
+    {
+      if (1 == inArgs->pFgcParameters->m_compModel[compCtr].bPresentFlag)
+      {
+        uint32_t *offset_tmp = inArgs->fgsOffsets[compCtr];
+        decSampleOffsetY     = decComp[compCtr];
+        grainStripeWidth = ((widthComp[compCtr] - 1) | 0x1F) + 1;   // Make next muliptle of 32
+
+        /* Loop of 32x32 blocks */
+        for (y = 0; y < heightComp[compCtr]; y += FG_BLK_32)
+        {
+          /* Initialization of grain stripe of 32xwidth size */
+          memset(grainStripe, 0, (grainStripeWidth * FG_BLK_32 * sizeof(Pel)));
+          for (x = 0; x < widthComp[compCtr]; x += FG_BLK_32)
+          {
+            /* start position offset of decoded sample in x direction */
+            grainStripeOffset = x;
+            decSampleBlk32    = decSampleOffsetY + x;
+            blockAvg = blockAverage_32x32(decSampleBlk32, strideComp[compCtr], bitDepth);
+
+            /* Selection of the component model */
+            intensityInt = inArgs->pGrainSynt->intensityInterval[compCtr][blockAvg];
+
+            if (INTENSITY_INTERVAL_MATCH_FAIL != intensityInt)
+            {
+              kOffset = (MSB16(*offset_tmp) % 36);
+              kOffset &= 0xFFFC;
+
+              lOffset = (LSB16(*offset_tmp) % 40);
+              lOffset &= 0xFFF8;
+              scaleFactor = 1 - 2 * BIT0(*offset_tmp);
+
+              scaleFactor *= inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[0];
+              h = inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[1] - 2;
+              v = inArgs->pFgcParameters->m_compModel[compCtr].intensityValues[intensityInt].compModelValue[2] - 2;
+
+              /* 32x32 block grain simulation */
+              simulateGrainBlk32x32(grainStripe, grainStripeOffset, inArgs->pGrainSynt, grainStripeWidth,
+                                    log2ScaleFactor, scaleFactor, kOffset, lOffset, h, v);
+
+            } /* only if average falls in any interval */
+
+            /* uppdate the PRNG once per 16x16 block of samples */
+            offset_tmp++;
+          } /* End of 32xwidth grain simulation */
+
+          /* deblocking at the vertical edges of 8x8 at 16xwidth*/
+          deblockGrainStripe(grainStripe, widthComp[compCtr], FG_BLK_32, grainStripeWidth, FG_BLK_32);
+
+          blendStripe_32x32(decSampleOffsetY, grainStripe, widthComp[compCtr], strideComp[compCtr], grainStripeWidth, FG_BLK_32, bitDepth);
+          decSampleOffsetY += FG_BLK_32 * strideComp[compCtr];
+        } /* end of component loop */
+      }
+    }
+  }
+
+  delete grainStripe;
+  return FGS_SUCCESS;
+}
+
+#endif
