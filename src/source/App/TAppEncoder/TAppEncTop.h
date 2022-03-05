@@ -98,3 +98,9 @@ public:
   Void        encode      ();                               ///< main encoding function
   TEncTop&    getTEncTop  ()   { return  m_cTEncTop; }      ///< return encoder class pointer reference
 
+};// END CLASS DEFINITION TAppEncTop
+
+//! \}
+
+#endif // __TAPPENCTOP__
+
