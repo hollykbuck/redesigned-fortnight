@@ -498,3 +498,103 @@ Void TEncCavlc::codeHrdParameters( const TComHRD *hrd, Bool commonInfPresentFlag
 }
 
 Void TEncCavlc::codeSPS( const TComSPS* pcSPS )
+{
+
+  const ChromaFormat format                = pcSPS->getChromaFormatIdc();
+  const Bool         chromaEnabled         = isChromaEnabled(format);
+
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTraceSPSHeaderEnc();
+#else
+  xTraceSPSHeader();
+#endif
+#endif
+  WRITE_CODE( pcSPS->getVPSId (),          4,       "sps_video_parameter_set_id" );
+  WRITE_CODE( pcSPS->getMaxTLayers() - 1,  3,       "sps_max_sub_layers_minus1" );
+  WRITE_FLAG( pcSPS->getTemporalIdNestingFlag() ? 1 : 0, "sps_temporal_id_nesting_flag" );
+  codePTL(pcSPS->getPTL(), 1, pcSPS->getMaxTLayers() - 1);
+  WRITE_UVLC( pcSPS->getSPSId (),                   "sps_seq_parameter_set_id" );
+  WRITE_UVLC( Int(pcSPS->getChromaFormatIdc ()),    "chroma_format_idc" );
+  if( format == CHROMA_444 )
+  {
+    WRITE_FLAG( 0,                                  "separate_colour_plane_flag");
+  }
+
+  WRITE_UVLC( pcSPS->getPicWidthInLumaSamples (),   "pic_width_in_luma_samples" );
+  WRITE_UVLC( pcSPS->getPicHeightInLumaSamples(),   "pic_height_in_luma_samples" );
+  Window conf = pcSPS->getConformanceWindow();
+
+  WRITE_FLAG( conf.getWindowEnabledFlag(),          "conformance_window_flag" );
+  if (conf.getWindowEnabledFlag())
+  {
+    WRITE_UVLC( conf.getWindowLeftOffset()   / TComSPS::getWinUnitX(pcSPS->getChromaFormatIdc() ), "conf_win_left_offset" );
+    WRITE_UVLC( conf.getWindowRightOffset()  / TComSPS::getWinUnitX(pcSPS->getChromaFormatIdc() ), "conf_win_right_offset" );
+    WRITE_UVLC( conf.getWindowTopOffset()    / TComSPS::getWinUnitY(pcSPS->getChromaFormatIdc() ), "conf_win_top_offset" );
+    WRITE_UVLC( conf.getWindowBottomOffset() / TComSPS::getWinUnitY(pcSPS->getChromaFormatIdc() ), "conf_win_bottom_offset" );
+  }
+
+  WRITE_UVLC( pcSPS->getBitDepth(CHANNEL_TYPE_LUMA) - 8,                      "bit_depth_luma_minus8" );
+
+  WRITE_UVLC( chromaEnabled ? (pcSPS->getBitDepth(CHANNEL_TYPE_CHROMA) - 8):0,  "bit_depth_chroma_minus8" );
+
+  WRITE_UVLC( pcSPS->getBitsForPOC()-4,                 "log2_max_pic_order_cnt_lsb_minus4" );
+
+  const Bool subLayerOrderingInfoPresentFlag = 1;
+  WRITE_FLAG(subLayerOrderingInfoPresentFlag,       "sps_sub_layer_ordering_info_present_flag");
+  for(UInt i=0; i <= pcSPS->getMaxTLayers()-1; i++)
+  {
+    WRITE_UVLC( pcSPS->getMaxDecPicBuffering(i) - 1,       "sps_max_dec_pic_buffering_minus1[i]" );
+    WRITE_UVLC( pcSPS->getNumReorderPics(i),               "sps_max_num_reorder_pics[i]" );
+    WRITE_UVLC( pcSPS->getMaxLatencyIncreasePlus1(i),      "sps_max_latency_increase_plus1[i]" );
+    if (!subLayerOrderingInfoPresentFlag)
+    {
+      break;
+    }
+  }
+  assert( pcSPS->getMaxCUWidth() == pcSPS->getMaxCUHeight() );
+  WRITE_UVLC( pcSPS->getLog2MinCodingBlockSize() - 3,                                "log2_min_luma_coding_block_size_minus3" );
+  WRITE_UVLC( pcSPS->getLog2DiffMaxMinCodingBlockSize(),                             "log2_diff_max_min_luma_coding_block_size" );
+  WRITE_UVLC( pcSPS->getQuadtreeTULog2MinSize() - 2,                                 "log2_min_luma_transform_block_size_minus2" );
+  WRITE_UVLC( pcSPS->getQuadtreeTULog2MaxSize() - pcSPS->getQuadtreeTULog2MinSize(), "log2_diff_max_min_luma_transform_block_size" );
+  WRITE_UVLC( pcSPS->getQuadtreeTUMaxDepthInter() - 1,                               "max_transform_hierarchy_depth_inter" );
+  WRITE_UVLC( pcSPS->getQuadtreeTUMaxDepthIntra() - 1,                               "max_transform_hierarchy_depth_intra" );
+  WRITE_FLAG( pcSPS->getScalingListFlag() ? 1 : 0,                                   "scaling_list_enabled_flag" );
+  if(pcSPS->getScalingListFlag())
+  {
+    WRITE_FLAG( pcSPS->getScalingListPresentFlag() ? 1 : 0,                          "sps_scaling_list_data_present_flag" );
+    if(pcSPS->getScalingListPresentFlag())
+    {
+      codeScalingList( pcSPS->getScalingList() );
+    }
+  }
+  WRITE_FLAG( pcSPS->getUseAMP() ? 1 : 0,                                            "amp_enabled_flag" );
+  WRITE_FLAG( pcSPS->getUseSAO() ? 1 : 0,                                            "sample_adaptive_offset_enabled_flag");
+
+  WRITE_FLAG( pcSPS->getUsePCM() ? 1 : 0,                                            "pcm_enabled_flag");
+  if( pcSPS->getUsePCM() )
+  {
+    WRITE_CODE( pcSPS->getPCMBitDepth(CHANNEL_TYPE_LUMA) - 1, 4,                            "pcm_sample_bit_depth_luma_minus1" );
+    WRITE_CODE( chromaEnabled ? (pcSPS->getPCMBitDepth(CHANNEL_TYPE_CHROMA) - 1) : 0, 4,    "pcm_sample_bit_depth_chroma_minus1" );
+    WRITE_UVLC( pcSPS->getPCMLog2MinSize() - 3,                                      "log2_min_pcm_luma_coding_block_size_minus3" );
+    WRITE_UVLC( pcSPS->getPCMLog2MaxSize() - pcSPS->getPCMLog2MinSize(),             "log2_diff_max_min_pcm_luma_coding_block_size" );
+    WRITE_FLAG( pcSPS->getPCMFilterDisableFlag()?1 : 0,                              "pcm_loop_filter_disable_flag");
+  }
+
+  assert( pcSPS->getMaxTLayers() > 0 );
+
+  const TComRPSList* rpsList = pcSPS->getRPSList();
+
+  WRITE_UVLC(rpsList->getNumberOfReferencePictureSets(), "num_short_term_ref_pic_sets" );
+  for(Int i=0; i < rpsList->getNumberOfReferencePictureSets(); i++)
+  {
+    const TComReferencePictureSet*rps = rpsList->getReferencePictureSet(i);
+    codeShortTermRefPicSet( rps,false, i);
+  }
+  WRITE_FLAG( pcSPS->getLongTermRefsPresent() ? 1 : 0,         "long_term_ref_pics_present_flag" );
+  if (pcSPS->getLongTermRefsPresent())
+  {
+    WRITE_UVLC(pcSPS->getNumLongTermRefPicSPS(), "num_long_term_ref_pics_sps" );
+    for (UInt k = 0; k < pcSPS->getNumLongTermRefPicSPS(); k++)
+    {
+      WRITE_CODE( pcSPS->getLtRefPicPocLsbSps(k), pcSPS->getBitsForPOC(), "lt_ref_pic_poc_lsb_sps");
