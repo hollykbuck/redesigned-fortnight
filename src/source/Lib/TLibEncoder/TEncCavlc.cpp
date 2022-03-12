@@ -698,3 +698,103 @@ Void TEncCavlc::codeVPS( const TComVPS* pcVPS )
   {
     WRITE_UVLC( pcVPS->getMaxDecPicBuffering(i) - 1,       "vps_max_dec_pic_buffering_minus1[i]" );
     WRITE_UVLC( pcVPS->getNumReorderPics(i),               "vps_max_num_reorder_pics[i]" );
+    WRITE_UVLC( pcVPS->getMaxLatencyIncrease(i),           "vps_max_latency_increase_plus1[i]" );
+    if (!subLayerOrderingInfoPresentFlag)
+    {
+      break;
+    }
+  }
+
+  assert( pcVPS->getNumHrdParameters() <= MAX_VPS_NUM_HRD_PARAMETERS );
+  assert( pcVPS->getMaxNuhReservedZeroLayerId() < MAX_VPS_NUH_RESERVED_ZERO_LAYER_ID_PLUS1 );
+  WRITE_CODE( pcVPS->getMaxNuhReservedZeroLayerId(), 6,     "vps_max_layer_id" );
+  WRITE_UVLC( pcVPS->getMaxOpSets() - 1,                    "vps_num_layer_sets_minus1" );
+  for( UInt opsIdx = 1; opsIdx <= ( pcVPS->getMaxOpSets() - 1 ); opsIdx ++ )
+  {
+    // Operation point set
+    for( UInt i = 0; i <= pcVPS->getMaxNuhReservedZeroLayerId(); i ++ )
+    {
+      // Only applicable for version 1
+      // pcVPS->setLayerIdIncludedFlag( true, opsIdx, i );
+      WRITE_FLAG( pcVPS->getLayerIdIncludedFlag( opsIdx, i ) ? 1 : 0, "layer_id_included_flag[opsIdx][i]" );
+    }
+  }
+  const TimingInfo *timingInfo = pcVPS->getTimingInfo();
+  WRITE_FLAG(timingInfo->getTimingInfoPresentFlag(),          "vps_timing_info_present_flag");
+  if(timingInfo->getTimingInfoPresentFlag())
+  {
+    WRITE_CODE(timingInfo->getNumUnitsInTick(), 32,           "vps_num_units_in_tick");
+    WRITE_CODE(timingInfo->getTimeScale(),      32,           "vps_time_scale");
+    WRITE_FLAG(timingInfo->getPocProportionalToTimingFlag(),  "vps_poc_proportional_to_timing_flag");
+    if(timingInfo->getPocProportionalToTimingFlag())
+    {
+      WRITE_UVLC(timingInfo->getNumTicksPocDiffOneMinus1(),   "vps_num_ticks_poc_diff_one_minus1");
+    }
+    WRITE_UVLC( pcVPS->getNumHrdParameters(),                 "vps_num_hrd_parameters" );
+
+    if( pcVPS->getNumHrdParameters() > 0 )
+    {
+      for( UInt i = 0; i < pcVPS->getNumHrdParameters(); i ++ )
+      {
+        // Only applicable for version 1
+        WRITE_UVLC( pcVPS->getHrdOpSetIdx( i ),                "hrd_layer_set_idx" );
+        if( i > 0 )
+        {
+          WRITE_FLAG( pcVPS->getCprmsPresentFlag( i ) ? 1 : 0, "cprms_present_flag[i]" );
+        }
+        codeHrdParameters(pcVPS->getHrdParameters(i), pcVPS->getCprmsPresentFlag( i ), pcVPS->getMaxTLayers() - 1);
+      }
+    }
+  }
+  WRITE_FLAG( 0,                     "vps_extension_flag" );
+
+  //future extensions here..
+  xWriteRbspTrailingBits();
+}
+
+Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
+{
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTraceSliceHeaderEnc();
+#else
+  xTraceSliceHeader();
+#endif
+#endif
+
+  const ChromaFormat format                = pcSlice->getSPS()->getChromaFormatIdc();
+  const UInt         numberValidComponents = getNumberValidComponents(format);
+  const Bool         chromaEnabled         = isChromaEnabled(format);
+
+  //calculate number of bits required for slice address
+  Int maxSliceSegmentAddress = pcSlice->getPic()->getNumberOfCtusInFrame();
+  Int bitsSliceSegmentAddress = 0;
+  while(maxSliceSegmentAddress>(1<<bitsSliceSegmentAddress))
+  {
+    bitsSliceSegmentAddress++;
+  }
+  const Int ctuTsAddress = pcSlice->getSliceSegmentCurStartCtuTsAddr();
+
+  //write slice address
+  const Int sliceSegmentRsAddress = pcSlice->getPic()->getPicSym()->getCtuTsToRsAddrMap(ctuTsAddress);
+
+  WRITE_FLAG( sliceSegmentRsAddress==0, "first_slice_segment_in_pic_flag" );
+  if ( pcSlice->getRapPicFlag() )
+  {
+    WRITE_FLAG( pcSlice->getNoOutputPriorPicsFlag() ? 1 : 0, "no_output_of_prior_pics_flag" );
+  }
+  WRITE_UVLC( pcSlice->getPPS()->getPPSId(), "slice_pic_parameter_set_id" );
+  if ( pcSlice->getPPS()->getDependentSliceSegmentsEnabledFlag() && (sliceSegmentRsAddress!=0) )
+  {
+    WRITE_FLAG( pcSlice->getDependentSliceSegmentFlag() ? 1 : 0, "dependent_slice_segment_flag" );
+  }
+  if(sliceSegmentRsAddress>0)
+  {
+    WRITE_CODE( sliceSegmentRsAddress, bitsSliceSegmentAddress, "slice_segment_address" );
+  }
+  if ( !pcSlice->getDependentSliceSegmentFlag() )
+  {
+    for (Int i = 0; i < pcSlice->getPPS()->getNumExtraSliceHeaderBits(); i++)
+    {
+      WRITE_FLAG(0, "slice_reserved_flag[]");
+    }
