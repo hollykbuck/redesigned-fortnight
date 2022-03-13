@@ -798,3 +798,103 @@ Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
     {
       WRITE_FLAG(0, "slice_reserved_flag[]");
     }
+
+    WRITE_UVLC( pcSlice->getSliceType(),       "slice_type" );
+
+    if( pcSlice->getPPS()->getOutputFlagPresentFlag() )
+    {
+      WRITE_FLAG( pcSlice->getPicOutputFlag() ? 1 : 0, "pic_output_flag" );
+    }
+
+    if( !pcSlice->getIdrPicFlag() )
+    {
+      Int picOrderCntLSB = (pcSlice->getPOC()-pcSlice->getLastIDR()+(1<<pcSlice->getSPS()->getBitsForPOC())) & ((1<<pcSlice->getSPS()->getBitsForPOC())-1);
+      WRITE_CODE( picOrderCntLSB, pcSlice->getSPS()->getBitsForPOC(), "slice_pic_order_cnt_lsb");
+      const TComReferencePictureSet* rps = pcSlice->getRPS();
+
+      // check for bitstream restriction stating that:
+      // If the current picture is a BLA or CRA picture, the value of NumPocTotalCurr shall be equal to 0.
+      // Ideally this process should not be repeated for each slice in a picture
+      if (pcSlice->isIRAP())
+      {
+        for (Int picIdx = 0; picIdx < rps->getNumberOfPictures(); picIdx++)
+        {
+          assert (!rps->getUsed(picIdx));
+        }
+      }
+
+      if(pcSlice->getRPSidx() < 0)
+      {
+        WRITE_FLAG( 0, "short_term_ref_pic_set_sps_flag");
+        codeShortTermRefPicSet( rps, true, pcSlice->getSPS()->getRPSList()->getNumberOfReferencePictureSets());
+      }
+      else
+      {
+        WRITE_FLAG( 1, "short_term_ref_pic_set_sps_flag");
+        Int numBits = 0;
+        while ((1 << numBits) < pcSlice->getSPS()->getRPSList()->getNumberOfReferencePictureSets())
+        {
+          numBits++;
+        }
+        if (numBits > 0)
+        {
+          WRITE_CODE( pcSlice->getRPSidx(), numBits, "short_term_ref_pic_set_idx" );
+        }
+      }
+      if(pcSlice->getSPS()->getLongTermRefsPresent())
+      {
+        Int numLtrpInSH = rps->getNumberOfLongtermPictures();
+        Int ltrpInSPS[MAX_NUM_REF_PICS];
+        Int numLtrpInSPS = 0;
+        UInt ltrpIndex;
+        Int counter = 0;
+        // WARNING: The following code only works only if a matching long-term RPS is 
+        //          found in the SPS for ALL long-term pictures
+        //          The problem is that the SPS coded long-term pictures are moved to the
+        //          beginning of the list which causes a mismatch when no reference picture
+        //          list reordering is used
+        //          NB: Long-term coding is currently not supported in general by the HM encoder
+        for(Int k = rps->getNumberOfPictures()-1; k > rps->getNumberOfPictures()-rps->getNumberOfLongtermPictures()-1; k--)
+        {
+          if (findMatchingLTRP(pcSlice, &ltrpIndex, rps->getPOC(k), rps->getUsed(k)))
+          {
+            ltrpInSPS[numLtrpInSPS] = ltrpIndex;
+            numLtrpInSPS++;
+          }
+          else
+          {
+            counter++;
+          }
+        }
+        numLtrpInSH -= numLtrpInSPS;
+        // check that either all long-term pictures are coded in SPS or in slice header (no mixing)
+        assert (numLtrpInSH==0 || numLtrpInSPS==0); 
+
+        Int bitsForLtrpInSPS = 0;
+        while (pcSlice->getSPS()->getNumLongTermRefPicSPS() > (1 << bitsForLtrpInSPS))
+        {
+          bitsForLtrpInSPS++;
+        }
+        if (pcSlice->getSPS()->getNumLongTermRefPicSPS() > 0)
+        {
+          WRITE_UVLC( numLtrpInSPS, "num_long_term_sps");
+        }
+        WRITE_UVLC( numLtrpInSH, "num_long_term_pics");
+        // Note that the LSBs of the LT ref. pic. POCs must be sorted before.
+        // Not sorted here because LT ref indices will be used in setRefPicList()
+        Int prevDeltaMSB = 0, prevLSB = 0;
+        Int offset = rps->getNumberOfNegativePictures() + rps->getNumberOfPositivePictures();
+        counter = 0;
+        // Warning: If some pictures are moved to ltrpInSPS, i is referring to a wrong index 
+        //          (mapping would be required)
+        for(Int i=rps->getNumberOfPictures()-1 ; i > offset-1; i--, counter++)
+        {
+          if (counter < numLtrpInSPS)
+          {
+            if (bitsForLtrpInSPS > 0)
+            {
+              WRITE_CODE( ltrpInSPS[counter], bitsForLtrpInSPS, "lt_idx_sps[i]");
+            }
+          }
+          else
+          {
