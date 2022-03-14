@@ -898,3 +898,103 @@ Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
           }
           else
           {
+            WRITE_CODE( rps->getPocLSBLT(i), pcSlice->getSPS()->getBitsForPOC(), "poc_lsb_lt");
+            WRITE_FLAG( rps->getUsed(i), "used_by_curr_pic_lt_flag");
+          }
+          WRITE_FLAG( rps->getDeltaPocMSBPresentFlag(i), "delta_poc_msb_present_flag");
+
+          if(rps->getDeltaPocMSBPresentFlag(i))
+          {
+            Bool deltaFlag = false;
+            //  First LTRP from SPS                 ||  First LTRP from SH                              || curr LSB            != prev LSB
+            if( (i == rps->getNumberOfPictures()-1) || (i == rps->getNumberOfPictures()-1-numLtrpInSPS) || (rps->getPocLSBLT(i) != prevLSB) )
+            {
+              deltaFlag = true;
+            }
+            if(deltaFlag)
+            {
+              WRITE_UVLC( rps->getDeltaPocMSBCycleLT(i), "delta_poc_msb_cycle_lt[i]" );
+            }
+            else
+            {
+              Int differenceInDeltaMSB = rps->getDeltaPocMSBCycleLT(i) - prevDeltaMSB;
+              assert(differenceInDeltaMSB >= 0);
+              WRITE_UVLC( differenceInDeltaMSB, "delta_poc_msb_cycle_lt[i]" );
+            }
+            prevLSB = rps->getPocLSBLT(i);
+            prevDeltaMSB = rps->getDeltaPocMSBCycleLT(i);
+          }
+        }
+      }
+      if (pcSlice->getSPS()->getSPSTemporalMVPEnabledFlag())
+      {
+        WRITE_FLAG( pcSlice->getEnableTMVPFlag() ? 1 : 0, "slice_temporal_mvp_enabled_flag" );
+      }
+    }
+    if(pcSlice->getSPS()->getUseSAO())
+    {
+       WRITE_FLAG( pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_LUMA), "slice_sao_luma_flag" );
+       if (chromaEnabled)
+       {
+         WRITE_FLAG( pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_CHROMA), "slice_sao_chroma_flag" );
+       }
+    }
+
+    //check if numrefidxes match the defaults. If not, override
+
+    if (!pcSlice->isIntra())
+    {
+      Bool overrideFlag = (pcSlice->getNumRefIdx( REF_PIC_LIST_0 )!=pcSlice->getPPS()->getNumRefIdxL0DefaultActive()||(pcSlice->isInterB()&&pcSlice->getNumRefIdx( REF_PIC_LIST_1 )!=pcSlice->getPPS()->getNumRefIdxL1DefaultActive()));
+      WRITE_FLAG( overrideFlag ? 1 : 0,                               "num_ref_idx_active_override_flag");
+      if (overrideFlag)
+      {
+        WRITE_UVLC( pcSlice->getNumRefIdx( REF_PIC_LIST_0 ) - 1,      "num_ref_idx_l0_active_minus1" );
+        if (pcSlice->isInterB())
+        {
+          WRITE_UVLC( pcSlice->getNumRefIdx( REF_PIC_LIST_1 ) - 1,    "num_ref_idx_l1_active_minus1" );
+        }
+        else
+        {
+          pcSlice->setNumRefIdx(REF_PIC_LIST_1, 0);
+        }
+      }
+    }
+    else
+    {
+      pcSlice->setNumRefIdx(REF_PIC_LIST_0, 0);
+      pcSlice->setNumRefIdx(REF_PIC_LIST_1, 0);
+    }
+
+    if( pcSlice->getPPS()->getListsModificationPresentFlag() && pcSlice->getNumRpsCurrTempList() > 1)
+    {
+      TComRefPicListModification* refPicListModification = pcSlice->getRefPicListModification();
+      if(!pcSlice->isIntra())
+      {
+        WRITE_FLAG(pcSlice->getRefPicListModification()->getRefPicListModificationFlagL0() ? 1 : 0,       "ref_pic_list_modification_flag_l0" );
+        if (pcSlice->getRefPicListModification()->getRefPicListModificationFlagL0())
+        {
+          Int numRpsCurrTempList0 = pcSlice->getNumRpsCurrTempList();
+          if (numRpsCurrTempList0 > 1)
+          {
+            Int length = 1;
+            numRpsCurrTempList0 --;
+            while ( numRpsCurrTempList0 >>= 1)
+            {
+              length ++;
+            }
+            for(Int i = 0; i < pcSlice->getNumRefIdx( REF_PIC_LIST_0 ); i++)
+            {
+              WRITE_CODE( refPicListModification->getRefPicSetIdxL0(i), length, "list_entry_l0");
+            }
+          }
+        }
+      }
+      if(pcSlice->isInterB())
+      {
+        WRITE_FLAG(pcSlice->getRefPicListModification()->getRefPicListModificationFlagL1() ? 1 : 0,       "ref_pic_list_modification_flag_l1" );
+        if (pcSlice->getRefPicListModification()->getRefPicListModificationFlagL1())
+        {
+          Int numRpsCurrTempList1 = pcSlice->getNumRpsCurrTempList();
+          if ( numRpsCurrTempList1 > 1 )
+          {
+            Int length = 1;
