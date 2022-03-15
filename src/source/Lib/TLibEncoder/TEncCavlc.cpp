@@ -1098,3 +1098,103 @@ Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
     Bool isDBFEnabled = (!pcSlice->getDeblockingFilterDisable());
 
     if(pcSlice->getPPS()->getLoopFilterAcrossSlicesEnabledFlag() && ( isSAOEnabled || isDBFEnabled ))
+    {
+      WRITE_FLAG(pcSlice->getLFCrossSliceBoundaryFlag()?1:0, "slice_loop_filter_across_slices_enabled_flag");
+    }
+  }
+  if(pcSlice->getPPS()->getSliceHeaderExtensionPresentFlag())
+  {
+    WRITE_UVLC(0,"slice_segment_header_extension_length");
+  }
+}
+
+Void TEncCavlc::codePTL( const TComPTL* pcPTL, Bool profilePresentFlag, Int maxNumSubLayersMinus1)
+{
+  if(profilePresentFlag)
+  {
+    codeProfileTier(pcPTL->getGeneralPTL(), false);    // general_...
+  }
+  WRITE_CODE( Int(pcPTL->getGeneralPTL()->getLevelIdc()), 8, "general_level_idc" );
+
+  for (Int i = 0; i < maxNumSubLayersMinus1; i++)
+  {
+    WRITE_FLAG( pcPTL->getSubLayerProfilePresentFlag(i), "sub_layer_profile_present_flag[i]" );
+    WRITE_FLAG( pcPTL->getSubLayerLevelPresentFlag(i),   "sub_layer_level_present_flag[i]" );
+  }
+
+  if (maxNumSubLayersMinus1 > 0)
+  {
+    for (Int i = maxNumSubLayersMinus1; i < 8; i++)
+    {
+      WRITE_CODE(0, 2, "reserved_zero_2bits");
+    }
+  }
+
+  for(Int i = 0; i < maxNumSubLayersMinus1; i++)
+  {
+    if( pcPTL->getSubLayerProfilePresentFlag(i) )
+    {
+      codeProfileTier(pcPTL->getSubLayerPTL(i), true);  // sub_layer_...
+    }
+    if( pcPTL->getSubLayerLevelPresentFlag(i) )
+    {
+      WRITE_CODE( Int(pcPTL->getSubLayerPTL(i)->getLevelIdc()), 8, "sub_layer_level_idc[i]" );
+    }
+  }
+}
+
+#if ENC_DEC_TRACE || RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TEncCavlc::codeProfileTier( const ProfileTierLevel* ptl, const Bool bIsSubLayer )
+#define PTL_TRACE_TEXT(txt) bIsSubLayer?("sub_layer_" txt) : ("general_" txt)
+#else
+Void TEncCavlc::codeProfileTier( const ProfileTierLevel* ptl, const Bool /*bIsSubLayer*/ )
+#define PTL_TRACE_TEXT(txt) txt
+#endif
+{
+  WRITE_CODE( ptl->getProfileSpace(), 2 ,      PTL_TRACE_TEXT("profile_space"                   ));
+  WRITE_FLAG( ptl->getTierFlag()==Level::HIGH, PTL_TRACE_TEXT("tier_flag"                       ));
+  WRITE_CODE( Int(ptl->getProfileIdc()), 5 ,   PTL_TRACE_TEXT("profile_idc"                     ));
+  for(Int j = 0; j < 32; j++)
+  {
+    WRITE_FLAG( ptl->getProfileCompatibilityFlag(j), PTL_TRACE_TEXT("profile_compatibility_flag[][j]" ));
+  }
+
+  WRITE_FLAG(ptl->getProgressiveSourceFlag(),   PTL_TRACE_TEXT("progressive_source_flag"         ));
+  WRITE_FLAG(ptl->getInterlacedSourceFlag(),    PTL_TRACE_TEXT("interlaced_source_flag"          ));
+  WRITE_FLAG(ptl->getNonPackedConstraintFlag(), PTL_TRACE_TEXT("non_packed_constraint_flag"      ));
+  WRITE_FLAG(ptl->getFrameOnlyConstraintFlag(), PTL_TRACE_TEXT("frame_only_constraint_flag"      ));
+
+  if (ptl->getProfileIdc() == Profile::MAINREXT || ptl->getProfileIdc() == Profile::HIGHTHROUGHPUTREXT )
+  {
+    const UInt         bitDepthConstraint=ptl->getBitDepthConstraint();
+    WRITE_FLAG(bitDepthConstraint<=12,          PTL_TRACE_TEXT("max_12bit_constraint_flag"       ));
+    WRITE_FLAG(bitDepthConstraint<=10,          PTL_TRACE_TEXT("max_10bit_constraint_flag"       ));
+    WRITE_FLAG(bitDepthConstraint<= 8,          PTL_TRACE_TEXT("max_8bit_constraint_flag"        ));
+    const ChromaFormat chromaFmtConstraint=ptl->getChromaFormatConstraint();
+    WRITE_FLAG(chromaFmtConstraint==CHROMA_422||chromaFmtConstraint==CHROMA_420||chromaFmtConstraint==CHROMA_400, PTL_TRACE_TEXT("max_422chroma_constraint_flag" ));
+    WRITE_FLAG(chromaFmtConstraint==CHROMA_420||chromaFmtConstraint==CHROMA_400,                                  PTL_TRACE_TEXT("max_420chroma_constraint_flag" ));
+    WRITE_FLAG(chromaFmtConstraint==CHROMA_400,                                                                   PTL_TRACE_TEXT("max_monochrome_constraint_flag"));
+    WRITE_FLAG(ptl->getIntraConstraintFlag(),          PTL_TRACE_TEXT("intra_constraint_flag"           ));
+    WRITE_FLAG(ptl->getOnePictureOnlyConstraintFlag(), PTL_TRACE_TEXT("one_picture_only_constraint_flag"));
+    WRITE_FLAG(ptl->getLowerBitRateConstraintFlag(),   PTL_TRACE_TEXT("lower_bit_rate_constraint_flag"  ));
+    WRITE_CODE(0 , 16, PTL_TRACE_TEXT("reserved_zero_34bits[0..15]"     ));
+    WRITE_CODE(0 , 16, PTL_TRACE_TEXT("reserved_zero_34bits[16..31]"    ));
+    WRITE_CODE(0 ,  2, PTL_TRACE_TEXT("reserved_zero_34bits[32..33]"    ));
+  }
+  else if (ptl->getProfileIdc() == Profile::MAIN10)
+  {
+    WRITE_CODE(0x00   ,  7, PTL_TRACE_TEXT("reserved_zero_7bits"     ));
+    WRITE_FLAG(ptl->getOnePictureOnlyConstraintFlag(), PTL_TRACE_TEXT("one_picture_only_constraint_flag"));
+    WRITE_CODE(0x0000 , 16, PTL_TRACE_TEXT("reserved_zero_35bits[0..15]"     ));
+    WRITE_CODE(0x0000 , 16, PTL_TRACE_TEXT("reserved_zero_35bits[16..31]"    ));
+    WRITE_CODE(0x0    ,  3, PTL_TRACE_TEXT("reserved_zero_35bits[32..34]"    ));
+  }
+  else
+  {
+    WRITE_CODE(0x0000 , 16, PTL_TRACE_TEXT("reserved_zero_43bits[0..15]"     ));
+    WRITE_CODE(0x0000 , 16, PTL_TRACE_TEXT("reserved_zero_43bits[16..31]"    ));
+    WRITE_CODE(0x000  , 11, PTL_TRACE_TEXT("reserved_zero_43bits[32..42]"    ));
+  }
+  WRITE_FLAG(false,   PTL_TRACE_TEXT("inbld_flag" ));
+#undef PTL_TRACE_TEXT
+}
