@@ -1298,3 +1298,103 @@ Void TEncCavlc::codeTransformSubdivFlag( UInt /*uiSymbol*/, UInt /*uiCtx*/ )
   assert(0);
 }
 
+Void TEncCavlc::codeQtCbf( TComTU& /*rTu*/, const ComponentID /*compID*/, const Bool /*lowestLevel*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeQtRootCbf( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeQtCbfZero( TComTU& /*rTu*/, const ChannelType /*chType*/ )
+{
+  assert(0);
+}
+Void TEncCavlc::codeQtRootCbfZero( )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeTransformSkipFlags (TComTU& /*rTu*/, ComponentID /*component*/ )
+{
+  assert(0);
+}
+
+/** Code I_PCM information.
+ * \param pcCU pointer to CU
+ * \param uiAbsPartIdx CU index
+ * \returns Void
+ */
+Void TEncCavlc::codeIPCMInfo( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeIntraDirLumaAng( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, Bool /*isMultiple*/)
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeIntraDirChroma( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeInterDir( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeRefFrmIdx( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, RefPicList /*eRefList*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeMvd( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, RefPicList /*eRefList*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeCrossComponentPrediction( TComTU& /*rTu*/, ComponentID /*compID*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeDeltaQP( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  Int iDQp  = pcCU->getQP( uiAbsPartIdx ) - pcCU->getRefQP( uiAbsPartIdx );
+
+  Int qpBdOffsetY =  pcCU->getSlice()->getSPS()->getQpBDOffset(CHANNEL_TYPE_LUMA);
+  iDQp = (iDQp + 78 + qpBdOffsetY + (qpBdOffsetY/2)) % (52 + qpBdOffsetY) - 26 - (qpBdOffsetY/2);
+
+  xWriteSvlc( iDQp );
+
+  return;
+}
+
+Void TEncCavlc::codeChromaQpAdjustment( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeCoeffNxN    ( TComTU& /*rTu*/, TCoeff* /*pcCoef*/, const ComponentID /*compID*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::estBit( estBitsSbacStruct* /*pcEstBitsCabac*/, Int /*width*/, Int /*height*/, ChannelType /*chType*/, COEFF_SCAN_TYPE /*scanType*/ )
+{
+  // printf("error : no VLC mode support in this version\n");
+  return;
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+//! Code weighted prediction tables
+Void TEncCavlc::xCodePredWeightTable( TComSlice* pcSlice )
+{
+  WPScalingParam  *wp;
