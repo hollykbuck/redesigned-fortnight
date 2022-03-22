@@ -98,3 +98,103 @@ private:
 
   SEIMessages  m_SEIs; ///< Any SEI messages that have been received.  If !NULL we own the object.
 
+public:
+  TComPic();
+  virtual ~TComPic();
+
+#if REDUCED_ENCODER_MEMORY
+  Void          create( const TComSPS &sps, const TComPPS &pps, const Bool bCreateEncoderSourcePicYuv, const Bool bCreateForImmediateReconstruction 
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                      , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                      , const Bool bCreateFilteredSourcePicYuv
+#endif
+                      );
+
+#if JVET_X0048_X0103_FILM_GRAIN
+  Void          prepareForEncoderSourcePicYuv( const Bool bCreateFilteredSourcePicYuv );
+#else
+  Void          prepareForEncoderSourcePicYuv();
+#endif
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  Void          prepareForReconstruction( const Bool bCreateForProcessedReconstruction );
+#else
+  Void          prepareForReconstruction();
+#endif
+  Void          releaseReconstructionIntermediateData();
+  Void          releaseAllReconstructionData();
+  Void          releaseEncoderSourceImageData();
+#else
+  Void          create( const TComSPS &sps, const TComPPS &pps, const Bool bIsVirtual /*= false*/
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                      , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                      , const Bool bCreateFilteredSourcePicYuv
+#endif
+                      );
+#endif
+
+  virtual Void  destroy();
+
+  UInt          getTLayer() const               { return m_uiTLayer;   }
+  Void          setTLayer( UInt uiTLayer ) { m_uiTLayer = uiTLayer; }
+
+  Bool          getUsedByCurr() const            { return m_bUsedByCurr; }
+  Void          setUsedByCurr( Bool bUsed ) { m_bUsedByCurr = bUsed; }
+  Bool          getIsLongTerm() const            { return m_bIsLongTerm; }
+  Void          setIsLongTerm( Bool lt ) { m_bIsLongTerm = lt; }
+  Void          setCheckLTMSBPresent     (Bool b ) {m_bCheckLTMSB=b;}
+  Bool          getCheckLTMSBPresent     () { return m_bCheckLTMSB;}
+
+  TComPicSym*   getPicSym()                        { return  &m_picSym;    }
+  const TComPicSym* getPicSym() const              { return  &m_picSym;    }
+  TComSlice*    getSlice(Int i)                    { return  m_picSym.getSlice(i);  }
+  const TComSlice* getSlice(Int i) const           { return  m_picSym.getSlice(i);  }
+  Int           getPOC() const                     { return  m_picSym.getSlice(m_uiCurrSliceIdx)->getPOC();  }
+  TComDataCU*   getCtu( UInt ctuRsAddr )           { return  m_picSym.getCtu( ctuRsAddr ); }
+  const TComDataCU* getCtu( UInt ctuRsAddr ) const { return  m_picSym.getCtu( ctuRsAddr ); }
+
+  TComPicYuv*   getPicYuvOrg()        { return  m_apcPicYuv[PIC_YUV_ORG]; }
+  TComPicYuv*   getPicYuvRec()        { return  m_apcPicYuv[PIC_YUV_REC]; }
+
+#if JVET_X0048_X0103_FILM_GRAIN
+  Void createGrainSynthesizer(Bool bFirstPictureInSequence, SEIFilmGrainSynthesizer* pGrainCharacteristics, TComPicYuv* pGrainBuf, const TComSPS* sps);
+  Int                      m_padValue;
+  Bool                     m_isMctfFiltered;
+  SEIFilmGrainSynthesizer *m_grainCharacteristic;
+  TComPicYuv              *m_grainBuf;
+  TComPicYuv*   getPicYuvDisp();
+#endif
+
+  TComPicYuv*   getPicYuvPred()       { return  m_pcPicYuvPred; }
+  TComPicYuv*   getPicYuvResi()       { return  m_pcPicYuvResi; }
+  Void          setPicYuvPred( TComPicYuv* pcPicYuv )       { m_pcPicYuvPred = pcPicYuv; }
+  Void          setPicYuvResi( TComPicYuv* pcPicYuv )       { m_pcPicYuvResi = pcPicYuv; }
+
+  UInt          getNumberOfCtusInFrame() const     { return m_picSym.getNumberOfCtusInFrame(); }
+  UInt          getNumPartInCtuWidth() const       { return m_picSym.getNumPartInCtuWidth();   }
+  UInt          getNumPartInCtuHeight() const      { return m_picSym.getNumPartInCtuHeight();  }
+  UInt          getNumPartitionsInCtu() const      { return m_picSym.getNumPartitionsInCtu();  }
+  UInt          getFrameWidthInCtus() const        { return m_picSym.getFrameWidthInCtus();    }
+  UInt          getFrameHeightInCtus() const       { return m_picSym.getFrameHeightInCtus();   }
+  UInt          getMinCUWidth() const              { return m_picSym.getMinCUWidth();          }
+  UInt          getMinCUHeight() const             { return m_picSym.getMinCUHeight();         }
+
+  Int           getStride(const ComponentID id) const          { return m_apcPicYuv[PIC_YUV_REC]->getStride(id); }
+  Int           getComponentScaleX(const ComponentID id) const    { return m_apcPicYuv[PIC_YUV_REC]->getComponentScaleX(id); }
+  Int           getComponentScaleY(const ComponentID id) const    { return m_apcPicYuv[PIC_YUV_REC]->getComponentScaleY(id); }
+  ChromaFormat  getChromaFormat() const                           { return m_apcPicYuv[PIC_YUV_REC]->getChromaFormat(); }
+  Int           getNumberValidComponents() const                  { return m_apcPicYuv[PIC_YUV_REC]->getNumberValidComponents(); }
+
+  Void          setReconMark (Bool b) { m_bReconstructed = b;     }
+  Bool          getReconMark () const      { return m_bReconstructed;  }
+  Void          setOutputMark (Bool b) { m_bNeededForOutput = b;     }
+  Bool          getOutputMark () const      { return m_bNeededForOutput;  }
+
+  Void          compressMotion();
+  UInt          getCurrSliceIdx() const           { return m_uiCurrSliceIdx;                }
+  Void          setCurrSliceIdx(UInt i)      { m_uiCurrSliceIdx = i;                   }
+  UInt          getNumAllocatedSlice() const      {return m_picSym.getNumAllocatedSlice();}
+  Void          allocateNewSlice()           {m_picSym.allocateNewSlice();         }
