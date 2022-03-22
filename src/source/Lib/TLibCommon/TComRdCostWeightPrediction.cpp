@@ -98,3 +98,103 @@ Distortion TComRdCostWeightPrediction::xGetSADw( DistParam* pcDtParam )
       // Lets not clip for the bipredictive case since clipping should be done after
       // combining both elements. Unfortunately the code uses the suboptimal "subtraction"
       // method, which is faster but introduces the clipping issue (therefore Bipred is suboptimal).
+      if (pcDtParam->bIsBiPred)
+      {
+        for(Int iRows = pcDtParam->iRows; iRows != 0; iRows-- )
+        {
+          for (Int n = 0; n < iCols; n++ )
+          {
+            uiSum += abs( piOrg[n] - (piCur[n] + offset) );
+          }
+          if (pcDtParam->m_maximumDistortionForEarlyExit <  ( uiSum >> distortionShift))
+          {
+            return uiSum >> distortionShift;
+          }
+
+          piOrg += iStrideOrg;
+          piCur += iStrideCur;
+        }
+      }
+      else
+      {
+        const Pel iMaxValue = (Pel) ((1 << pcDtParam->bitDepth) - 1);
+        for(Int iRows = pcDtParam->iRows; iRows != 0; iRows-- )
+        {
+          for (Int n = 0; n < iCols; n++ )
+          {
+            const Pel pred = Clip3((Pel) 0, iMaxValue, (Pel) (piCur[n] + offset)) ;
+
+            uiSum += abs( piOrg[n] - pred );
+          }
+          if (pcDtParam->m_maximumDistortionForEarlyExit <  ( uiSum >> distortionShift))
+          {
+            return uiSum >> distortionShift;
+          }
+          piOrg += iStrideOrg;
+          piCur += iStrideCur;
+        }
+      }
+    }
+  }
+  else
+  {
+    // Lets not clip for the bipredictive case since clipping should be done after
+    // combining both elements. Unfortunately the code uses the suboptimal "subtraction"
+    // method, which is faster but introduces the clipping issue (therefore Bipred is suboptimal).
+    if (pcDtParam->bIsBiPred)
+    {
+      for(Int iRows = pcDtParam->iRows; iRows != 0; iRows-- )
+      {
+        for (Int n = 0; n < iCols; n++ )
+        {
+          const Pel pred = ( (w0*piCur[n] + round) >> shift ) + offset ;
+          uiSum += abs( piOrg[n] - pred );
+        }
+        if (pcDtParam->m_maximumDistortionForEarlyExit <  ( uiSum >> distortionShift))
+        {
+          return uiSum >> distortionShift;
+        }
+
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+      }
+    }
+    else
+    {
+      const Pel iMaxValue = (Pel) ((1 << pcDtParam->bitDepth) - 1);
+
+      if (offset == 0)
+      {
+        for(Int iRows = pcDtParam->iRows; iRows != 0; iRows-- )
+        {
+          for (Int n = 0; n < iCols; n++ )
+          {
+            const Pel pred = Clip3((Pel) 0, iMaxValue, (Pel) (( (w0*piCur[n] + round) >> shift ))) ;
+
+            uiSum += abs( piOrg[n] - pred );
+          }
+          if (pcDtParam->m_maximumDistortionForEarlyExit <  ( uiSum >> distortionShift))
+          {
+            return uiSum >> distortionShift;
+          }
+          piOrg += iStrideOrg;
+          piCur += iStrideCur;
+        }
+      }
+      else
+      {
+        for(Int iRows = pcDtParam->iRows; iRows != 0; iRows-- )
+        {
+          for (Int n = 0; n < iCols; n++ )
+          {
+            const Pel pred = Clip3((Pel) 0, iMaxValue, (Pel) (( (w0*piCur[n] + round) >> shift ) + offset)) ;
+
+            uiSum += abs( piOrg[n] - pred );
+          }
+          if (pcDtParam->m_maximumDistortionForEarlyExit <  ( uiSum >> distortionShift))
+          {
+            return uiSum >> distortionShift;
+          }
+          piOrg += iStrideOrg;
+          piCur += iStrideCur;
+        }
