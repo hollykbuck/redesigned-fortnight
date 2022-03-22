@@ -198,3 +198,36 @@ public:
   Void          setCurrSliceIdx(UInt i)      { m_uiCurrSliceIdx = i;                   }
   UInt          getNumAllocatedSlice() const      {return m_picSym.getNumAllocatedSlice();}
   Void          allocateNewSlice()           {m_picSym.allocateNewSlice();         }
+  Void          clearSliceBuffer()           {m_picSym.clearSliceBuffer();         }
+
+  const Window& getConformanceWindow() const { return m_picSym.getSPS().getConformanceWindow(); }
+  Window        getDefDisplayWindow() const  { return m_picSym.getSPS().getVuiParametersPresentFlag() ? m_picSym.getSPS().getVuiParameters()->getDefaultDisplayWindow() : Window(); }
+
+  Bool          getSAOMergeAvailability(Int currAddr, Int mergeAddr);
+
+  UInt          getSubstreamForCtuAddr(const UInt ctuAddr, const Bool bAddressInRaster, TComSlice *pcSlice);
+
+  /* field coding parameters*/
+
+   Void              setTopField(Bool b)                  {m_isTop = b;}
+   Bool              isTopField()                         {return m_isTop;}
+   Void              setField(Bool b)                     {m_isField = b;}
+   Bool              isField() const                      {return m_isField;}
+
+  /** transfer ownership of seis to this picture */
+  Void setSEIs(SEIMessages& seis) { m_SEIs = seis; }
+
+  /**
+   * return the current list of SEI messages associated with this picture.
+   * Pointer is valid until this->destroy() is called */
+  SEIMessages& getSEIs() { return m_SEIs; }
+
+  /**
+   * return the current list of SEI messages associated with this picture.
+   * Pointer is valid until this->destroy() is called */
+  const SEIMessages& getSEIs() const { return m_SEIs; }
+};// END CLASS DEFINITION TComPic
+
+//! \}
+
+#endif // __TCOMPIC__
