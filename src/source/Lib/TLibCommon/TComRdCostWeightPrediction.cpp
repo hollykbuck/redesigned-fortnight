@@ -198,3 +198,103 @@ Distortion TComRdCostWeightPrediction::xGetSADw( DistParam* pcDtParam )
           piOrg += iStrideOrg;
           piCur += iStrideCur;
         }
+      }
+    }
+  }
+  //pcDtParam->compIdx = MAX_NUM_COMPONENT;  // reset for DEBUG (assert test)
+
+  return uiSum >> distortionShift;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// SSE
+// --------------------------------------------------------------------------------------------------------------------
+/** get weighted SSD cost
+ * \param pcDtParam
+ * \returns Distortion
+ */
+Distortion TComRdCostWeightPrediction::xGetSSEw( DistParam* pcDtParam )
+{
+  const Pel            *piOrg           = pcDtParam->pOrg;
+  const Pel            *piCur           = pcDtParam->pCur;
+  const Int             iCols           = pcDtParam->iCols;
+  const Int             iStrideOrg      = pcDtParam->iStrideOrg;
+  const Int             iStrideCur      = pcDtParam->iStrideCur;
+  const ComponentID     compIdx         = pcDtParam->compIdx;
+
+  assert( pcDtParam->iSubShift == 0 ); // NOTE: what is this protecting?
+
+  assert(compIdx<MAX_NUM_COMPONENT);
+  const WPScalingParam &wpCur           = pcDtParam->wpCur[compIdx];
+  const Int             w0              = wpCur.w;
+  const Int             offset          = wpCur.offset;
+  const Int             shift           = wpCur.shift;
+  const Int             round           = wpCur.round;
+  const UInt            distortionShift = DISTORTION_PRECISION_ADJUSTMENT((pcDtParam->bitDepth-8) << 1);
+
+  Distortion sum = 0;
+
+  if (pcDtParam->bIsBiPred)
+  {
+    for(Int iRows = pcDtParam->iRows ; iRows != 0; iRows-- )
+    {
+      for (Int n = 0; n < iCols; n++ )
+      {
+        const Pel pred     = ( (w0*piCur[n] + round) >> shift ) + offset ;
+        const Pel residual = piOrg[n] - pred;
+        sum += ( Distortion(residual) * Distortion(residual) ) >> distortionShift;
+      }
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+  else
+  {
+    const Pel iMaxValue = (Pel) ((1 << pcDtParam->bitDepth) - 1);
+
+    for(Int iRows = pcDtParam->iRows ; iRows != 0; iRows-- )
+    {
+      for (Int n = 0; n < iCols; n++ )
+      {
+        const Pel pred     = Clip3((Pel) 0, iMaxValue, (Pel) (( (w0*piCur[n] + round) >> shift ) + offset)) ;
+        const Pel residual = piOrg[n] - pred;
+        sum += ( Distortion(residual) * Distortion(residual) ) >> distortionShift;
+      }
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+
+  //pcDtParam->compIdx = MAX_NUM_COMPONENT; // reset for DEBUG (assert test)
+
+  return sum;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------
+// HADAMARD with step (used in fractional search)
+// --------------------------------------------------------------------------------------------------------------------
+//! get weighted Hadamard cost for 2x2 block
+Distortion xCalcHADs2x2w( const WPScalingParam &wpCur, const Pel *piOrg, const Pel *piCur, Int iStrideOrg, Int iStrideCur, Int iStep )
+{
+  const Int round  = wpCur.round;
+  const Int shift  = wpCur.shift;
+  const Int offset = wpCur.offset;
+  const Int w0     = wpCur.w;
+
+  Distortion satd  = 0;
+  TCoeff     diff[4];
+  TCoeff     m[4];
+
+  Pel   pred;
+
+  pred    = ( (w0*piCur[0*iStep             ] + round) >> shift ) + offset ;
+  diff[0] = piOrg[0             ] - pred;
+  pred    = ( (w0*piCur[1*iStep             ] + round) >> shift ) + offset ;
+  diff[1] = piOrg[1             ] - pred;
+  pred    = ( (w0*piCur[0*iStep + iStrideCur] + round) >> shift ) + offset ;
+  diff[2] = piOrg[iStrideOrg    ] - pred;
+  pred    = ( (w0*piCur[1*iStep + iStrideCur] + round) >> shift ) + offset ;
+  diff[3] = piOrg[iStrideOrg + 1] - pred;
+
