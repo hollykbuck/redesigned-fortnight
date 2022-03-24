@@ -298,3 +298,103 @@ Distortion xCalcHADs2x2w( const WPScalingParam &wpCur, const Pel *piOrg, const P
   pred    = ( (w0*piCur[1*iStep + iStrideCur] + round) >> shift ) + offset ;
   diff[3] = piOrg[iStrideOrg + 1] - pred;
 
+  m[0] = diff[0] + diff[2];
+  m[1] = diff[1] + diff[3];
+  m[2] = diff[0] - diff[2];
+  m[3] = diff[1] - diff[3];
+
+  satd += abs(m[0] + m[1]);
+  satd += abs(m[0] - m[1]);
+  satd += abs(m[2] + m[3]);
+  satd += abs(m[2] - m[3]);
+
+  return satd;
+}
+
+
+//! get weighted Hadamard cost for 4x4 block
+Distortion xCalcHADs4x4w( const WPScalingParam &wpCur, const Pel *piOrg, const Pel *piCur, Int iStrideOrg, Int iStrideCur, Int iStep )
+{
+  const Int round  = wpCur.round;
+  const Int shift  = wpCur.shift;
+  const Int offset = wpCur.offset;
+  const Int w0     = wpCur.w;
+
+  Distortion satd = 0;
+  TCoeff     diff[16];
+  TCoeff     m[16];
+  TCoeff     d[16];
+
+
+  for(Int k = 0; k < 16; k+=4 )
+  {
+    Pel pred;
+    pred      = ( (w0*piCur[0*iStep] + round) >> shift ) + offset ;
+    diff[k+0] = piOrg[0] - pred;
+    pred      = ( (w0*piCur[1*iStep] + round) >> shift ) + offset ;
+    diff[k+1] = piOrg[1] - pred;
+    pred      = ( (w0*piCur[2*iStep] + round) >> shift ) + offset ;
+    diff[k+2] = piOrg[2] - pred;
+    pred      = ( (w0*piCur[3*iStep] + round) >> shift ) + offset ;
+    diff[k+3] = piOrg[3] - pred;
+
+    piCur += iStrideCur;
+    piOrg += iStrideOrg;
+  }
+
+  /*===== hadamard transform =====*/
+  m[ 0] = diff[ 0] + diff[12];
+  m[ 1] = diff[ 1] + diff[13];
+  m[ 2] = diff[ 2] + diff[14];
+  m[ 3] = diff[ 3] + diff[15];
+  m[ 4] = diff[ 4] + diff[ 8];
+  m[ 5] = diff[ 5] + diff[ 9];
+  m[ 6] = diff[ 6] + diff[10];
+  m[ 7] = diff[ 7] + diff[11];
+  m[ 8] = diff[ 4] - diff[ 8];
+  m[ 9] = diff[ 5] - diff[ 9];
+  m[10] = diff[ 6] - diff[10];
+  m[11] = diff[ 7] - diff[11];
+  m[12] = diff[ 0] - diff[12];
+  m[13] = diff[ 1] - diff[13];
+  m[14] = diff[ 2] - diff[14];
+  m[15] = diff[ 3] - diff[15];
+
+  d[ 0] = m[ 0] + m[ 4];
+  d[ 1] = m[ 1] + m[ 5];
+  d[ 2] = m[ 2] + m[ 6];
+  d[ 3] = m[ 3] + m[ 7];
+  d[ 4] = m[ 8] + m[12];
+  d[ 5] = m[ 9] + m[13];
+  d[ 6] = m[10] + m[14];
+  d[ 7] = m[11] + m[15];
+  d[ 8] = m[ 0] - m[ 4];
+  d[ 9] = m[ 1] - m[ 5];
+  d[10] = m[ 2] - m[ 6];
+  d[11] = m[ 3] - m[ 7];
+  d[12] = m[12] - m[ 8];
+  d[13] = m[13] - m[ 9];
+  d[14] = m[14] - m[10];
+  d[15] = m[15] - m[11];
+
+  m[ 0] = d[ 0] + d[ 3];
+  m[ 1] = d[ 1] + d[ 2];
+  m[ 2] = d[ 1] - d[ 2];
+  m[ 3] = d[ 0] - d[ 3];
+  m[ 4] = d[ 4] + d[ 7];
+  m[ 5] = d[ 5] + d[ 6];
+  m[ 6] = d[ 5] - d[ 6];
+  m[ 7] = d[ 4] - d[ 7];
+  m[ 8] = d[ 8] + d[11];
+  m[ 9] = d[ 9] + d[10];
+  m[10] = d[ 9] - d[10];
+  m[11] = d[ 8] - d[11];
+  m[12] = d[12] + d[15];
+  m[13] = d[13] + d[14];
+  m[14] = d[13] - d[14];
+  m[15] = d[12] - d[15];
+
+  d[ 0] = m[ 0] + m[ 1];
+  d[ 1] = m[ 0] - m[ 1];
+  d[ 2] = m[ 2] + m[ 3];
+  d[ 3] = m[ 3] - m[ 2];
