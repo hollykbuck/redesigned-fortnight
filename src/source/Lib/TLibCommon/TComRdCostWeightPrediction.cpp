@@ -398,3 +398,103 @@ Distortion xCalcHADs4x4w( const WPScalingParam &wpCur, const Pel *piOrg, const P
   d[ 1] = m[ 0] - m[ 1];
   d[ 2] = m[ 2] + m[ 3];
   d[ 3] = m[ 3] - m[ 2];
+  d[ 4] = m[ 4] + m[ 5];
+  d[ 5] = m[ 4] - m[ 5];
+  d[ 6] = m[ 6] + m[ 7];
+  d[ 7] = m[ 7] - m[ 6];
+  d[ 8] = m[ 8] + m[ 9];
+  d[ 9] = m[ 8] - m[ 9];
+  d[10] = m[10] + m[11];
+  d[11] = m[11] - m[10];
+  d[12] = m[12] + m[13];
+  d[13] = m[12] - m[13];
+  d[14] = m[14] + m[15];
+  d[15] = m[15] - m[14];
+
+  for (Int k=0; k<16; ++k)
+  {
+    satd += abs(d[k]);
+  }
+  satd = ((satd+1)>>1);
+
+  return satd;
+}
+
+
+//! get weighted Hadamard cost for 8x8 block
+Distortion xCalcHADs8x8w( const WPScalingParam &wpCur, const Pel *piOrg, const Pel *piCur, Int iStrideOrg, Int iStrideCur, Int iStep )
+{
+  Distortion sad=0;
+  TCoeff diff[64], m1[8][8], m2[8][8], m3[8][8];
+  Int iStep2 = iStep<<1;
+  Int iStep3 = iStep2 + iStep;
+  Int iStep4 = iStep3 + iStep;
+  Int iStep5 = iStep4 + iStep;
+  Int iStep6 = iStep5 + iStep;
+  Int iStep7 = iStep6 + iStep;
+  const Int round  = wpCur.round;
+  const Int shift  = wpCur.shift;
+  const Int offset = wpCur.offset;
+  const Int w0     = wpCur.w;
+
+  Pel   pred;
+
+  for(Int k = 0; k < 64; k+=8 )
+  {
+    pred      = ( (w0*piCur[     0] + round) >> shift ) + offset ;
+    diff[k+0] = piOrg[0] - pred;
+    pred      = ( (w0*piCur[iStep ] + round) >> shift ) + offset ;
+    diff[k+1] = piOrg[1] - pred;
+    pred      = ( (w0*piCur[iStep2] + round) >> shift ) + offset ;
+    diff[k+2] = piOrg[2] - pred;
+    pred      = ( (w0*piCur[iStep3] + round) >> shift ) + offset ;
+    diff[k+3] = piOrg[3] - pred;
+    pred      = ( (w0*piCur[iStep4] + round) >> shift ) + offset ;
+    diff[k+4] = piOrg[4] - pred;
+    pred      = ( (w0*piCur[iStep5] + round) >> shift ) + offset ;
+    diff[k+5] = piOrg[5] - pred;
+    pred      = ( (w0*piCur[iStep6] + round) >> shift ) + offset ;
+    diff[k+6] = piOrg[6] - pred;
+    pred      = ( (w0*piCur[iStep7] + round) >> shift ) + offset ;
+    diff[k+7] = piOrg[7] - pred;
+
+    piCur += iStrideCur;
+    piOrg += iStrideOrg;
+  }
+
+  //horizontal
+  for (Int j=0; j < 8; j++)
+  {
+    const Int jj = j << 3;
+    m2[j][0] = diff[jj  ] + diff[jj+4];
+    m2[j][1] = diff[jj+1] + diff[jj+5];
+    m2[j][2] = diff[jj+2] + diff[jj+6];
+    m2[j][3] = diff[jj+3] + diff[jj+7];
+    m2[j][4] = diff[jj  ] - diff[jj+4];
+    m2[j][5] = diff[jj+1] - diff[jj+5];
+    m2[j][6] = diff[jj+2] - diff[jj+6];
+    m2[j][7] = diff[jj+3] - diff[jj+7];
+
+    m1[j][0] = m2[j][0] + m2[j][2];
+    m1[j][1] = m2[j][1] + m2[j][3];
+    m1[j][2] = m2[j][0] - m2[j][2];
+    m1[j][3] = m2[j][1] - m2[j][3];
+    m1[j][4] = m2[j][4] + m2[j][6];
+    m1[j][5] = m2[j][5] + m2[j][7];
+    m1[j][6] = m2[j][4] - m2[j][6];
+    m1[j][7] = m2[j][5] - m2[j][7];
+
+    m2[j][0] = m1[j][0] + m1[j][1];
+    m2[j][1] = m1[j][0] - m1[j][1];
+    m2[j][2] = m1[j][2] + m1[j][3];
+    m2[j][3] = m1[j][2] - m1[j][3];
+    m2[j][4] = m1[j][4] + m1[j][5];
+    m2[j][5] = m1[j][4] - m1[j][5];
+    m2[j][6] = m1[j][6] + m1[j][7];
+    m2[j][7] = m1[j][6] - m1[j][7];
+  }
+
+  //vertical
+  for (Int i=0; i < 8; i++)
+  {
+    m3[0][i] = m2[0][i] + m2[4][i];
