@@ -498,3 +498,103 @@ Distortion xCalcHADs8x8w( const WPScalingParam &wpCur, const Pel *piOrg, const P
   for (Int i=0; i < 8; i++)
   {
     m3[0][i] = m2[0][i] + m2[4][i];
+    m3[1][i] = m2[1][i] + m2[5][i];
+    m3[2][i] = m2[2][i] + m2[6][i];
+    m3[3][i] = m2[3][i] + m2[7][i];
+    m3[4][i] = m2[0][i] - m2[4][i];
+    m3[5][i] = m2[1][i] - m2[5][i];
+    m3[6][i] = m2[2][i] - m2[6][i];
+    m3[7][i] = m2[3][i] - m2[7][i];
+
+    m1[0][i] = m3[0][i] + m3[2][i];
+    m1[1][i] = m3[1][i] + m3[3][i];
+    m1[2][i] = m3[0][i] - m3[2][i];
+    m1[3][i] = m3[1][i] - m3[3][i];
+    m1[4][i] = m3[4][i] + m3[6][i];
+    m1[5][i] = m3[5][i] + m3[7][i];
+    m1[6][i] = m3[4][i] - m3[6][i];
+    m1[7][i] = m3[5][i] - m3[7][i];
+
+    m2[0][i] = m1[0][i] + m1[1][i];
+    m2[1][i] = m1[0][i] - m1[1][i];
+    m2[2][i] = m1[2][i] + m1[3][i];
+    m2[3][i] = m1[2][i] - m1[3][i];
+    m2[4][i] = m1[4][i] + m1[5][i];
+    m2[5][i] = m1[4][i] - m1[5][i];
+    m2[6][i] = m1[6][i] + m1[7][i];
+    m2[7][i] = m1[6][i] - m1[7][i];
+  }
+
+  for (Int j=0; j < 8; j++)
+  {
+    for (Int i=0; i < 8; i++)
+    {
+      sad += (abs(m2[j][i]));
+    }
+  }
+
+  sad=((sad+2)>>2);
+
+  return sad;
+}
+
+
+//! get weighted Hadamard cost
+Distortion TComRdCostWeightPrediction::xGetHADsw( DistParam* pcDtParam )
+{
+  const Pel        *piOrg      = pcDtParam->pOrg;
+  const Pel        *piCur      = pcDtParam->pCur;
+  const Int         iRows      = pcDtParam->iRows;
+  const Int         iCols      = pcDtParam->iCols;
+  const Int         iStrideCur = pcDtParam->iStrideCur;
+  const Int         iStrideOrg = pcDtParam->iStrideOrg;
+  const Int         iStep      = pcDtParam->iStep;
+  const ComponentID compIdx    = pcDtParam->compIdx;
+  assert(compIdx<MAX_NUM_COMPONENT);
+  const WPScalingParam &wpCur  = pcDtParam->wpCur[compIdx];
+
+  Distortion uiSum = 0;
+
+  if( ( iRows % 8 == 0) && (iCols % 8 == 0) )
+  {
+    const Int iOffsetOrg = iStrideOrg<<3;
+    const Int iOffsetCur = iStrideCur<<3;
+    for (Int y=0; y<iRows; y+= 8 )
+    {
+      for (Int x=0; x<iCols; x+= 8 )
+      {
+        uiSum += xCalcHADs8x8w( wpCur, &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else if( ( iRows % 4 == 0) && (iCols % 4 == 0) )
+  {
+    const Int iOffsetOrg = iStrideOrg<<2;
+    const Int iOffsetCur = iStrideCur<<2;
+
+    for (Int y=0; y<iRows; y+= 4 )
+    {
+      for (Int x=0; x<iCols; x+= 4 )
+      {
+        uiSum += xCalcHADs4x4w( wpCur, &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else
+  {
+    for (Int y=0; y<iRows; y+=2 )
+    {
+      for (Int x=0; x<iCols; x+=2 )
+      {
+        uiSum += xCalcHADs2x2w( wpCur, &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+
+  return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8);
