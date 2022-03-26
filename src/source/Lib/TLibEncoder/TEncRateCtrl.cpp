@@ -98,3 +98,103 @@ Void TEncRCSeq::create( Int totalFrames, Int targetBitrate, Int frameRate, Int G
   m_numberOfLevel       = numberOfLevel;
   m_useLCUSeparateModel = useLCUSeparateModel;
 
+  m_numberOfPixel   = m_picWidth * m_picHeight;
+  m_targetBits      = (Int64)m_totalFrames * (Int64)m_targetRate / (Int64)m_frameRate;
+  m_seqTargetBpp = (Double)m_targetRate / (Double)m_frameRate / (Double)m_numberOfPixel;
+  if ( m_seqTargetBpp < 0.03 )
+  {
+    m_alphaUpdate = 0.01;
+    m_betaUpdate  = 0.005;
+  }
+  else if ( m_seqTargetBpp < 0.08 )
+  {
+    m_alphaUpdate = 0.05;
+    m_betaUpdate  = 0.025;
+  }
+  else if ( m_seqTargetBpp < 0.2 )
+  {
+    m_alphaUpdate = 0.1;
+    m_betaUpdate  = 0.05;
+  }
+  else if ( m_seqTargetBpp < 0.5 )
+  {
+    m_alphaUpdate = 0.2;
+    m_betaUpdate  = 0.1;
+  }
+  else
+  {
+    m_alphaUpdate = 0.4;
+    m_betaUpdate  = 0.2;
+  }
+
+  m_averageBits     = (Int)(m_targetBits / totalFrames);
+  Int picWidthInBU  = ( m_picWidth  % m_LCUWidth  ) == 0 ? m_picWidth  / m_LCUWidth  : m_picWidth  / m_LCUWidth  + 1;
+  Int picHeightInBU = ( m_picHeight % m_LCUHeight ) == 0 ? m_picHeight / m_LCUHeight : m_picHeight / m_LCUHeight + 1;
+  m_numberOfLCU     = picWidthInBU * picHeightInBU;
+
+  m_bitsRatio   = new Int[m_GOPSize];
+  for ( Int i=0; i<m_GOPSize; i++ )
+  {
+    m_bitsRatio[i] = 1;
+  }
+
+  m_GOPID2Level = new Int[m_GOPSize];
+  for ( Int i=0; i<m_GOPSize; i++ )
+  {
+    m_GOPID2Level[i] = 1;
+  }
+
+  m_picPara = new TRCParameter[m_numberOfLevel];
+  for ( Int i=0; i<m_numberOfLevel; i++ )
+  {
+    m_picPara[i].m_alpha = 0.0;
+    m_picPara[i].m_beta  = 0.0;
+#if JVET_K0390_RATE_CTRL
+    m_picPara[i].m_validPix = -1;
+#endif
+#if JVET_M0600_RATE_CTRL
+    m_picPara[i].m_skipRatio = 0.0;
+#endif
+  }
+
+  if ( m_useLCUSeparateModel )
+  {
+    m_LCUPara = new TRCParameter*[m_numberOfLevel];
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      m_LCUPara[i] = new TRCParameter[m_numberOfLCU];
+      for ( Int j=0; j<m_numberOfLCU; j++)
+      {
+        m_LCUPara[i][j].m_alpha = 0.0;
+        m_LCUPara[i][j].m_beta  = 0.0;
+#if JVET_K0390_RATE_CTRL
+        m_LCUPara[i][j].m_validPix = -1;
+#endif
+#if JVET_M0600_RATE_CTRL
+        m_LCUPara[i][j].m_skipRatio = 0.0;
+#endif
+      }
+    }
+  }
+
+  m_framesLeft = m_totalFrames;
+  m_bitsLeft   = m_targetBits;
+  m_adaptiveBit = adaptiveBit;
+  m_lastLambda = 0.0;
+}
+
+Void TEncRCSeq::destroy()
+{
+  if (m_bitsRatio != NULL)
+  {
+    delete[] m_bitsRatio;
+    m_bitsRatio = NULL;
+  }
+
+  if ( m_GOPID2Level != NULL )
+  {
+    delete[] m_GOPID2Level;
+    m_GOPID2Level = NULL;
+  }
+
+  if ( m_picPara != NULL )
