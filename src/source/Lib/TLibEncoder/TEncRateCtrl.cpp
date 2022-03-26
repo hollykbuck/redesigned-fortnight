@@ -198,3 +198,103 @@ Void TEncRCSeq::destroy()
   }
 
   if ( m_picPara != NULL )
+  {
+    delete[] m_picPara;
+    m_picPara = NULL;
+  }
+
+  if ( m_LCUPara != NULL )
+  {
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      delete[] m_LCUPara[i];
+    }
+    delete[] m_LCUPara;
+    m_LCUPara = NULL;
+  }
+}
+
+Void TEncRCSeq::initBitsRatio( Int bitsRatio[])
+{
+  for (Int i=0; i<m_GOPSize; i++)
+  {
+    m_bitsRatio[i] = bitsRatio[i];
+  }
+}
+
+Void TEncRCSeq::initGOPID2Level( Int GOPID2Level[] )
+{
+  for ( Int i=0; i<m_GOPSize; i++ )
+  {
+    m_GOPID2Level[i] = GOPID2Level[i];
+  }
+}
+
+Void TEncRCSeq::initPicPara( TRCParameter* picPara )
+{
+  assert( m_picPara != NULL );
+
+  if ( picPara == NULL )
+  {
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      if (i>0)
+      {
+        m_picPara[i].m_alpha = 3.2003;
+        m_picPara[i].m_beta  = -1.367;
+      }
+      else
+      {
+        m_picPara[i].m_alpha = ALPHA;
+        m_picPara[i].m_beta  = BETA2;
+      }
+    }
+  }
+  else
+  {
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      m_picPara[i] = picPara[i];
+    }
+  }
+}
+
+Void TEncRCSeq::initLCUPara( TRCParameter** LCUPara )
+{
+  if ( m_LCUPara == NULL )
+  {
+    return;
+  }
+  if ( LCUPara == NULL )
+  {
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      for ( Int j=0; j<m_numberOfLCU; j++)
+      {
+        m_LCUPara[i][j].m_alpha = m_picPara[i].m_alpha;
+        m_LCUPara[i][j].m_beta  = m_picPara[i].m_beta;
+      }
+    }
+  }
+  else
+  {
+    for ( Int i=0; i<m_numberOfLevel; i++ )
+    {
+      for ( Int j=0; j<m_numberOfLCU; j++)
+      {
+        m_LCUPara[i][j] = LCUPara[i][j];
+      }
+    }
+  }
+}
+
+Void TEncRCSeq::updateAfterPic ( Int bits )
+{
+  m_bitsLeft -= bits;
+  m_framesLeft--;
+}
+
+Void TEncRCSeq::setAllBitRatio( Double basicLambda, Double* equaCoeffA, Double* equaCoeffB )
+{
+  Int* bitsRatio = new Int[m_GOPSize];
+  for ( Int i=0; i<m_GOPSize; i++ )
