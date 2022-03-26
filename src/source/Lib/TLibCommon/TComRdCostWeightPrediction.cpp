@@ -598,3 +598,4 @@ Distortion TComRdCostWeightPrediction::xGetHADsw( DistParam* pcDtParam )
   }
 
   return uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8);
+}
