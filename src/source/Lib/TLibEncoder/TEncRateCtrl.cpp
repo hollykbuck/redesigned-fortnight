@@ -298,3 +298,103 @@ Void TEncRCSeq::setAllBitRatio( Double basicLambda, Double* equaCoeffA, Double* 
 {
   Int* bitsRatio = new Int[m_GOPSize];
   for ( Int i=0; i<m_GOPSize; i++ )
+  {
+#if JVET_K0390_RATE_CTRL
+    bitsRatio[i] = (Int)( equaCoeffA[i] * pow(basicLambda, equaCoeffB[i]) * (Double)getPicPara(getGOPID2Level(i)).m_validPix);
+#else
+    bitsRatio[i] = (Int)( equaCoeffA[i] * pow( basicLambda, equaCoeffB[i] ) * m_numberOfPixel );
+#endif
+  }
+  initBitsRatio( bitsRatio );
+  delete[] bitsRatio;
+}
+
+//GOP level
+TEncRCGOP::TEncRCGOP()
+{
+  m_encRCSeq  = NULL;
+  m_picTargetBitInGOP = NULL;
+  m_numPic     = 0;
+  m_targetBits = 0;
+  m_picLeft    = 0;
+  m_bitsLeft   = 0;
+}
+
+TEncRCGOP::~TEncRCGOP()
+{
+  destroy();
+}
+
+#if JVET_Y0105_SW_AND_QDF
+Void TEncRCGOP::create( TEncRCSeq* encRCSeq, Int numPic, Bool useAdaptiveBitsRatio )
+#else
+Void TEncRCGOP::create( TEncRCSeq* encRCSeq, Int numPic )
+#endif
+{
+  destroy();
+  Int targetBits = xEstGOPTargetBits( encRCSeq, numPic );
+
+
+
+#if JVET_Y0105_SW_AND_QDF
+  if ( useAdaptiveBitsRatio )
+#else
+  if ( encRCSeq->getAdaptiveBits() > 0 && encRCSeq->getLastLambda() > 0.1 )
+#endif
+  {
+    Double targetBpp = (Double)targetBits / encRCSeq->getNumPixel();
+    Double basicLambda = 0.0;
+    Double* lambdaRatio = new Double[encRCSeq->getGOPSize()];
+    Double* equaCoeffA = new Double[encRCSeq->getGOPSize()];
+    Double* equaCoeffB = new Double[encRCSeq->getGOPSize()];
+
+    if ( encRCSeq->getAdaptiveBits() == 1 )   // for GOP size =4, low delay case
+    {
+      if ( encRCSeq->getLastLambda() < 120.0 )
+      {
+        lambdaRatio[1] = 0.725 * log( encRCSeq->getLastLambda() ) + 0.5793;
+        lambdaRatio[0] = 1.3 * lambdaRatio[1];
+        lambdaRatio[2] = 1.3 * lambdaRatio[1];
+        lambdaRatio[3] = 1.0;
+      }
+      else
+      {
+        lambdaRatio[0] = 5.0;
+        lambdaRatio[1] = 4.0;
+        lambdaRatio[2] = 5.0;
+        lambdaRatio[3] = 1.0;
+      }
+    }
+    else if ( encRCSeq->getAdaptiveBits() == 2 )  // for GOP size = 8, random access case
+    {
+      if ( encRCSeq->getLastLambda() < 90.0 )
+      {
+        lambdaRatio[0] = 1.0;
+        lambdaRatio[1] = 0.725 * log( encRCSeq->getLastLambda() ) + 0.7963;
+        lambdaRatio[2] = 1.3 * lambdaRatio[1];
+        lambdaRatio[3] = 3.25 * lambdaRatio[1];
+        lambdaRatio[4] = 3.25 * lambdaRatio[1];
+        lambdaRatio[5] = 1.3  * lambdaRatio[1];
+        lambdaRatio[6] = 3.25 * lambdaRatio[1];
+        lambdaRatio[7] = 3.25 * lambdaRatio[1];
+      }
+      else
+      {
+        lambdaRatio[0] = 1.0;
+        lambdaRatio[1] = 4.0;
+        lambdaRatio[2] = 5.0;
+        lambdaRatio[3] = 12.3;
+        lambdaRatio[4] = 12.3;
+        lambdaRatio[5] = 5.0;
+        lambdaRatio[6] = 12.3;
+        lambdaRatio[7] = 12.3;
+      }
+    }
+#if JVET_K0390_RATE_CTRL
+    else if (encRCSeq->getAdaptiveBits() == 3)  // for GOP size = 16, random access case
+    {
+      Double hierarQp = 4.2005 * log(encRCSeq->getLastLambda()) + 13.7122;  //  the qp of POC16
+      Double qpLev2 = (hierarQp + 0.0) + 0.2016    * (hierarQp + 0.0) - 4.8848;
+      Double qpLev3 = (hierarQp + 3.0) + 0.22286 * (hierarQp + 3.0) - 5.7476;
+      Double qpLev4 = (hierarQp + 4.0) + 0.2333    * (hierarQp + 4.0) - 5.9;
+      Double qpLev5 = (hierarQp + 5.0) + 0.3            * (hierarQp + 5.0) - 7.1444;
