@@ -398,3 +398,103 @@ Void TEncRCGOP::create( TEncRCSeq* encRCSeq, Int numPic )
       Double qpLev3 = (hierarQp + 3.0) + 0.22286 * (hierarQp + 3.0) - 5.7476;
       Double qpLev4 = (hierarQp + 4.0) + 0.2333    * (hierarQp + 4.0) - 5.9;
       Double qpLev5 = (hierarQp + 5.0) + 0.3            * (hierarQp + 5.0) - 7.1444;
+
+      Double lambdaLev1 = exp((hierarQp - 13.7122) / 4.2005);
+      Double lambdaLev2 = exp((qpLev2 - 13.7122) / 4.2005);
+      Double lambdaLev3 = exp((qpLev3 - 13.7122) / 4.2005);
+      Double lambdaLev4 = exp((qpLev4 - 13.7122) / 4.2005);
+      Double lambdaLev5 = exp((qpLev5 - 13.7122) / 4.2005);
+
+      lambdaRatio[0] = 1.0;
+      lambdaRatio[1] = lambdaLev2 / lambdaLev1;
+      lambdaRatio[2] = lambdaLev3 / lambdaLev1;
+      lambdaRatio[3] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[4] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[5] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[6] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[7] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[8] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[9] = lambdaLev3 / lambdaLev1;
+      lambdaRatio[10] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[11] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[12] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[13] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[14] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[15] = lambdaLev5 / lambdaLev1;
+#if JVET_M0600_RATE_CTRL
+      const Double qdfParaLev2A = 0.5847;
+      const Double qdfParaLev2B = -0.0782;
+      const Double qdfParaLev3A = 0.5468;
+      const Double qdfParaLev3B = -0.1364;
+      const Double qdfParaLev4A = 0.6539;
+      const Double qdfParaLev4B = -0.203;
+      const Double qdfParaLev5A = 0.8623;
+      const Double qdfParaLev5B = -0.4676;
+      Double qdfLev1Lev2 = Clip3(0.12, 0.9, qdfParaLev2A * encRCSeq->getPicPara(2).m_skipRatio + qdfParaLev2B);
+      Double qdfLev1Lev3 = Clip3(0.13, 0.9, qdfParaLev3A * encRCSeq->getPicPara(3).m_skipRatio + qdfParaLev3B);
+      Double qdfLev1Lev4 = Clip3(0.15, 0.9, qdfParaLev4A * encRCSeq->getPicPara(4).m_skipRatio + qdfParaLev4B);
+      Double qdfLev1Lev5 = Clip3(0.20, 0.9, qdfParaLev5A * encRCSeq->getPicPara(5).m_skipRatio + qdfParaLev5B);
+      Double qdfLev2Lev3 = Clip3(0.09, 0.9, qdfLev1Lev3 * (1 - qdfLev1Lev2));
+      Double qdfLev2Lev4 = Clip3(0.12, 0.9, qdfLev1Lev4 * (1 - qdfLev1Lev2));
+      Double qdfLev2Lev5 = Clip3(0.14, 0.9, qdfLev1Lev5 * (1 - qdfLev1Lev2));
+      Double qdfLev3Lev4 = Clip3(0.06, 0.9, qdfLev1Lev4 * (1 - qdfLev1Lev3));
+      Double qdfLev3Lev5 = Clip3(0.09, 0.9, qdfLev1Lev5 * (1 - qdfLev1Lev3));
+      Double qdfLev4Lev5 = Clip3(0.10, 0.9, qdfLev1Lev5 * (1 - qdfLev1Lev4));
+
+      lambdaLev1 = 1 / (1 + 2 * (qdfLev1Lev2 + 2 * qdfLev1Lev3 + 4 * qdfLev1Lev4 + 8 * qdfLev1Lev5));
+      lambdaLev2 = 1 / (1 + (3 * qdfLev2Lev3 + 5 * qdfLev2Lev4 + 8 * qdfLev2Lev5));
+      lambdaLev3 = 1 / (1 + 2 * qdfLev3Lev4 + 4 * qdfLev3Lev5);
+      lambdaLev4 = 1 / (1 + 2 * qdfLev4Lev5);
+      lambdaLev5 = 1 / (1.0);
+
+      lambdaRatio[0] = 1.0;
+      lambdaRatio[1] = lambdaLev2 / lambdaLev1;
+      lambdaRatio[2] = lambdaLev3 / lambdaLev1;
+      lambdaRatio[3] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[4] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[5] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[6] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[7] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[8] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[9] = lambdaLev3 / lambdaLev1;
+      lambdaRatio[10] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[11] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[12] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[13] = lambdaLev4 / lambdaLev1;
+      lambdaRatio[14] = lambdaLev5 / lambdaLev1;
+      lambdaRatio[15] = lambdaLev5 / lambdaLev1;
+#endif
+    }
+#endif
+    xCalEquaCoeff( encRCSeq, lambdaRatio, equaCoeffA, equaCoeffB, encRCSeq->getGOPSize() );
+#if JVET_K0390_RATE_CTRL
+    basicLambda = xSolveEqua(encRCSeq, targetBpp, equaCoeffA, equaCoeffB, encRCSeq->getGOPSize());
+#else
+    basicLambda = xSolveEqua( targetBpp, equaCoeffA, equaCoeffB, encRCSeq->getGOPSize() );
+#endif
+    encRCSeq->setAllBitRatio( basicLambda, equaCoeffA, equaCoeffB );
+
+    delete []lambdaRatio;
+    delete []equaCoeffA;
+    delete []equaCoeffB;
+  }
+
+  m_picTargetBitInGOP = new Int[numPic];
+  Int i;
+  Int totalPicRatio = 0;
+  Int currPicRatio = 0;
+  for ( i=0; i<numPic; i++ )
+  {
+    totalPicRatio += encRCSeq->getBitRatio( i );
+  }
+  for ( i=0; i<numPic; i++ )
+  {
+    currPicRatio = encRCSeq->getBitRatio( i );
+    m_picTargetBitInGOP[i] = (Int)( ((Double)targetBits) * currPicRatio / totalPicRatio );
+  }
+
+  m_encRCSeq    = encRCSeq;
+  m_numPic       = numPic;
+  m_targetBits   = targetBits;
+  m_picLeft      = m_numPic;
+  m_bitsLeft     = m_targetBits;
