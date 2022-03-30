@@ -598,3 +598,103 @@ TEncRCPic::TEncRCPic()
   m_encRCGOP = NULL;
 
   m_frameLevel    = 0;
+  m_numberOfPixel = 0;
+  m_numberOfLCU   = 0;
+  m_targetBits    = 0;
+  m_estHeaderBits = 0;
+  m_estPicQP      = 0;
+  m_estPicLambda  = 0.0;
+
+  m_LCULeft       = 0;
+  m_bitsLeft      = 0;
+  m_pixelsLeft    = 0;
+
+  m_LCUs         = NULL;
+  m_picActualHeaderBits = 0;
+  m_picActualBits       = 0;
+  m_picQP               = 0;
+  m_picLambda           = 0.0;
+#if JVET_K0390_RATE_CTRL
+  m_picMSE = 0.0;
+  m_validPixelsInPic = 0;
+#endif
+}
+
+TEncRCPic::~TEncRCPic()
+{
+  destroy();
+}
+
+Int TEncRCPic::xEstPicTargetBits( TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP )
+{
+  Int targetBits        = 0;
+  Int GOPbitsLeft       = encRCGOP->getBitsLeft();
+
+  Int i;
+  Int currPicPosition = encRCGOP->getNumPic()-encRCGOP->getPicLeft();
+  Int currPicRatio    = encRCSeq->getBitRatio( currPicPosition );
+  Int totalPicRatio   = 0;
+  for ( i=currPicPosition; i<encRCGOP->getNumPic(); i++ )
+  {
+    totalPicRatio += encRCSeq->getBitRatio( i );
+  }
+
+  targetBits  = Int( ((Double)GOPbitsLeft) * currPicRatio / totalPicRatio );
+
+  if ( targetBits < 100 )
+  {
+    targetBits = 100;   // at least allocate 100 bits for one picture
+  }
+
+  if ( m_encRCSeq->getFramesLeft() > 16 )
+  {
+    targetBits = Int( g_RCWeightPicRargetBitInBuffer * targetBits + g_RCWeightPicTargetBitInGOP * m_encRCGOP->getTargetBitInGOP( currPicPosition ) );
+  }
+
+  return targetBits;
+}
+
+Int TEncRCPic::xEstPicHeaderBits( list<TEncRCPic*>& listPreviousPictures, Int frameLevel )
+{
+  Int numPreviousPics   = 0;
+  Int totalPreviousBits = 0;
+
+  list<TEncRCPic*>::iterator it;
+  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
+  {
+    if ( (*it)->getFrameLevel() == frameLevel )
+    {
+      totalPreviousBits += (*it)->getPicActualHeaderBits();
+      numPreviousPics++;
+    }
+  }
+
+  Int estHeaderBits = 0;
+  if ( numPreviousPics > 0 )
+  {
+    estHeaderBits = totalPreviousBits / numPreviousPics;
+  }
+
+  return estHeaderBits;
+}
+
+Int TEncRCPic::xEstPicLowerBound(TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP)
+{
+  Int lowerBound = 0;
+  Int GOPbitsLeft = encRCGOP->getBitsLeft();
+
+  const Int nextPicPosition = (encRCGOP->getNumPic() - encRCGOP->getPicLeft() + 1) % encRCGOP->getNumPic();
+  const Int nextPicRatio = encRCSeq->getBitRatio(nextPicPosition);
+
+  Int totalPicRatio = 0;
+  for (Int i = nextPicPosition; i < encRCGOP->getNumPic(); i++)
+  {
+    totalPicRatio += encRCSeq->getBitRatio(i);
+  }
+
+  if (nextPicPosition == 0)
+  {
+    GOPbitsLeft = encRCGOP->getTargetBits();
+  }
+  else
+  {
