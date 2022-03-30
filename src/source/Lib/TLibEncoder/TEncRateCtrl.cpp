@@ -498,3 +498,103 @@ Void TEncRCGOP::create( TEncRCSeq* encRCSeq, Int numPic )
   m_targetBits   = targetBits;
   m_picLeft      = m_numPic;
   m_bitsLeft     = m_targetBits;
+}
+
+Void TEncRCGOP::xCalEquaCoeff( TEncRCSeq* encRCSeq, Double* lambdaRatio, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize )
+{
+  for ( Int i=0; i<GOPSize; i++ )
+  {
+    Int frameLevel = encRCSeq->getGOPID2Level(i);
+    Double alpha   = encRCSeq->getPicPara(frameLevel).m_alpha;
+    Double beta    = encRCSeq->getPicPara(frameLevel).m_beta;
+    equaCoeffA[i] = pow( 1.0/alpha, 1.0/beta ) * pow( lambdaRatio[i], 1.0/beta );
+    equaCoeffB[i] = 1.0/beta;
+  }
+}
+
+#if JVET_K0390_RATE_CTRL
+Double TEncRCGOP::xSolveEqua(TEncRCSeq* encRCSeq, Double targetBpp, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize)
+#else
+Double TEncRCGOP::xSolveEqua( Double targetBpp, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize )
+#endif
+{
+  Double solution = 100.0;
+  Double minNumber = 0.1;
+  Double maxNumber = 10000.0;
+  for ( Int i=0; i<g_RCIterationNum; i++ )
+  {
+    Double fx = 0.0;
+    for ( Int j=0; j<GOPSize; j++ )
+    {
+#if JVET_K0390_RATE_CTRL
+      Double tmpBpp = equaCoeffA[j] * pow(solution, equaCoeffB[j]);
+      Double actualBpp = tmpBpp * (Double)encRCSeq->getPicPara(encRCSeq->getGOPID2Level(j)).m_validPix / (Double)encRCSeq->getNumPixel();
+      fx += actualBpp;
+#else
+      fx += equaCoeffA[j] * pow( solution, equaCoeffB[j] );
+#endif
+    }
+
+    if ( fabs( fx - targetBpp ) < 0.000001 )
+    {
+      break;
+    }
+
+    if ( fx > targetBpp )
+    {
+      minNumber = solution;
+      solution = ( solution + maxNumber ) / 2.0;
+    }
+    else
+    {
+      maxNumber = solution;
+      solution = ( solution + minNumber ) / 2.0;
+    }
+  }
+
+  solution = Clip3( 0.1, 10000.0, solution );
+  return solution;
+}
+
+Void TEncRCGOP::destroy()
+{
+  m_encRCSeq = NULL;
+  if ( m_picTargetBitInGOP != NULL )
+  {
+    delete[] m_picTargetBitInGOP;
+    m_picTargetBitInGOP = NULL;
+  }
+}
+
+Void TEncRCGOP::updateAfterPicture( Int bitsCost )
+{
+  m_bitsLeft -= bitsCost;
+  m_picLeft--;
+}
+
+Int TEncRCGOP::xEstGOPTargetBits( TEncRCSeq* encRCSeq, Int GOPSize )
+{
+#if JVET_Y0105_SW_AND_QDF
+  Int realInfluencePicture = min( g_RCSmoothWindowSizeAlpha * GOPSize / max(encRCSeq->getIntraPeriod(), 32) + g_RCSmoothWindowSizeBeta, encRCSeq->getFramesLeft() );
+#else
+  Int realInfluencePicture = min( g_RCSmoothWindowSize, encRCSeq->getFramesLeft() );
+#endif
+  Int averageTargetBitsPerPic = (Int)( encRCSeq->getTargetBits() / encRCSeq->getTotalFrames() );
+  Int currentTargetBitsPerPic = (Int)( ( encRCSeq->getBitsLeft() - averageTargetBitsPerPic * (encRCSeq->getFramesLeft() - realInfluencePicture) ) / realInfluencePicture );
+  Int targetBits = currentTargetBitsPerPic * GOPSize;
+
+  if ( targetBits < 200 )
+  {
+    targetBits = 200;   // at least allocate 200 bits for one GOP
+  }
+
+  return targetBits;
+}
+
+//picture level
+TEncRCPic::TEncRCPic()
+{
+  m_encRCSeq = NULL;
+  m_encRCGOP = NULL;
+
+  m_frameLevel    = 0;
