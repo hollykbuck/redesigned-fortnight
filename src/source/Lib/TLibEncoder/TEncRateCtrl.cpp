@@ -698,3 +698,103 @@ Int TEncRCPic::xEstPicLowerBound(TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP)
   }
   else
   {
+    GOPbitsLeft -= m_targetBits;
+  }
+
+  lowerBound = Int(((Double)GOPbitsLeft) * nextPicRatio / totalPicRatio);
+
+  if (lowerBound < 100)
+  {
+    lowerBound = 100;   // at least allocate 100 bits for one picture
+  }
+
+  if (m_encRCSeq->getFramesLeft() > 16)
+  {
+    lowerBound = Int(g_RCWeightPicRargetBitInBuffer * lowerBound + g_RCWeightPicTargetBitInGOP * m_encRCGOP->getTargetBitInGOP(nextPicPosition));
+  }
+
+  return lowerBound;
+}
+
+Void TEncRCPic::addToPictureLsit( list<TEncRCPic*>& listPreviousPictures )
+{
+  if ( listPreviousPictures.size() > g_RCMaxPicListSize )
+  {
+    TEncRCPic* p = listPreviousPictures.front();
+    listPreviousPictures.pop_front();
+    p->destroy();
+    delete p;
+  }
+
+  listPreviousPictures.push_back( this );
+}
+
+Void TEncRCPic::create( TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP, Int frameLevel, list<TEncRCPic*>& listPreviousPictures )
+{
+  destroy();
+  m_encRCSeq = encRCSeq;
+  m_encRCGOP = encRCGOP;
+
+  Int targetBits    = xEstPicTargetBits( encRCSeq, encRCGOP );
+  Int estHeaderBits = xEstPicHeaderBits( listPreviousPictures, frameLevel );
+
+  if ( targetBits < estHeaderBits + 100 )
+  {
+    targetBits = estHeaderBits + 100;   // at least allocate 100 bits for picture data
+  }
+
+  m_frameLevel       = frameLevel;
+  m_numberOfPixel    = encRCSeq->getNumPixel();
+  m_numberOfLCU      = encRCSeq->getNumberOfLCU();
+  m_estPicLambda     = 100.0;
+  m_targetBits       = targetBits;
+  m_estHeaderBits    = estHeaderBits;
+  m_bitsLeft         = m_targetBits;
+  Int picWidth       = encRCSeq->getPicWidth();
+  Int picHeight      = encRCSeq->getPicHeight();
+  Int LCUWidth       = encRCSeq->getLCUWidth();
+  Int LCUHeight      = encRCSeq->getLCUHeight();
+  Int picWidthInLCU  = ( picWidth  % LCUWidth  ) == 0 ? picWidth  / LCUWidth  : picWidth  / LCUWidth  + 1;
+  Int picHeightInLCU = ( picHeight % LCUHeight ) == 0 ? picHeight / LCUHeight : picHeight / LCUHeight + 1;
+  m_lowerBound       = xEstPicLowerBound( encRCSeq, encRCGOP );
+
+  m_LCULeft         = m_numberOfLCU;
+  m_bitsLeft       -= m_estHeaderBits;
+  m_pixelsLeft      = m_numberOfPixel;
+
+  m_LCUs           = new TRCLCU[m_numberOfLCU];
+  Int i, j;
+  Int LCUIdx;
+  for ( i=0; i<picWidthInLCU; i++ )
+  {
+    for ( j=0; j<picHeightInLCU; j++ )
+    {
+      LCUIdx = j*picWidthInLCU + i;
+      m_LCUs[LCUIdx].m_actualBits = 0;
+#if JVET_K0390_RATE_CTRL
+      m_LCUs[LCUIdx].m_actualSSE = 0.0;
+      m_LCUs[LCUIdx].m_actualMSE = 0.0;
+#endif
+      m_LCUs[LCUIdx].m_QP         = 0;
+      m_LCUs[LCUIdx].m_lambda     = 0.0;
+      m_LCUs[LCUIdx].m_targetBits = 0;
+      m_LCUs[LCUIdx].m_bitWeight  = 1.0;
+      Int currWidth  = ( (i == picWidthInLCU -1) ? picWidth  - LCUWidth *(picWidthInLCU -1) : LCUWidth  );
+      Int currHeight = ( (j == picHeightInLCU-1) ? picHeight - LCUHeight*(picHeightInLCU-1) : LCUHeight );
+      m_LCUs[LCUIdx].m_numberOfPixel = currWidth * currHeight;
+    }
+  }
+  m_picActualHeaderBits = 0;
+  m_picActualBits       = 0;
+  m_picQP               = 0;
+  m_picLambda           = 0.0;
+}
+
+Void TEncRCPic::destroy()
+{
+  if( m_LCUs != NULL )
+  {
+    delete[] m_LCUs;
+    m_LCUs = NULL;
+  }
+  m_encRCSeq = NULL;
