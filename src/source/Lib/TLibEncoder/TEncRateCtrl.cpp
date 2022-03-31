@@ -798,3 +798,103 @@ Void TEncRCPic::destroy()
     m_LCUs = NULL;
   }
   m_encRCSeq = NULL;
+  m_encRCGOP = NULL;
+}
+
+
+Double TEncRCPic::estimatePicLambda( list<TEncRCPic*>& listPreviousPictures, SliceType eSliceType)
+{
+  Double alpha         = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
+  Double beta          = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
+  Double bpp       = (Double)m_targetBits/(Double)m_numberOfPixel;
+  
+#if JVET_K0390_RATE_CTRL
+  Int lastPicValPix = 0;
+  if (listPreviousPictures.size() > 0)
+  {
+    lastPicValPix = m_encRCSeq->getPicPara(m_frameLevel).m_validPix;
+  }
+  if (lastPicValPix > 0)
+  {
+    bpp = (Double)m_targetBits / (Double)lastPicValPix;
+  }
+#endif
+  
+  Double estLambda;
+  if (eSliceType == I_SLICE)
+  {
+    estLambda = calculateLambdaIntra(alpha, beta, pow(m_totalCostIntra/(Double)m_numberOfPixel, BETA1), bpp);
+  }
+  else
+  {
+    estLambda = alpha * pow( bpp, beta );
+  }
+
+  Double lastLevelLambda = -1.0;
+  Double lastPicLambda   = -1.0;
+  Double lastValidLambda = -1.0;
+  list<TEncRCPic*>::iterator it;
+  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
+  {
+    if ( (*it)->getFrameLevel() == m_frameLevel )
+    {
+      lastLevelLambda = (*it)->getPicActualLambda();
+    }
+    lastPicLambda     = (*it)->getPicActualLambda();
+
+    if ( lastPicLambda > 0.0 )
+    {
+      lastValidLambda = lastPicLambda;
+    }
+  }
+
+  if ( lastLevelLambda > 0.0 )
+  {
+    lastLevelLambda = Clip3( 0.1, 10000.0, lastLevelLambda );
+    estLambda = Clip3( lastLevelLambda * pow( 2.0, -3.0/3.0 ), lastLevelLambda * pow( 2.0, 3.0/3.0 ), estLambda );
+  }
+
+  if ( lastPicLambda > 0.0 )
+  {
+    lastPicLambda = Clip3( 0.1, 2000.0, lastPicLambda );
+    estLambda = Clip3( lastPicLambda * pow( 2.0, -10.0/3.0 ), lastPicLambda * pow( 2.0, 10.0/3.0 ), estLambda );
+  }
+  else if ( lastValidLambda > 0.0 )
+  {
+    lastValidLambda = Clip3( 0.1, 2000.0, lastValidLambda );
+    estLambda = Clip3( lastValidLambda * pow(2.0, -10.0/3.0), lastValidLambda * pow(2.0, 10.0/3.0), estLambda );
+  }
+  else
+  {
+    estLambda = Clip3( 0.1, 10000.0, estLambda );
+  }
+
+  if ( estLambda < 0.1 )
+  {
+    estLambda = 0.1;
+  }
+#if JVET_K0390_RATE_CTRL
+  //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
+  estLambda = Double(int64_t(estLambda * (Double)LAMBDA_PREC + 0.5)) / (Double)LAMBDA_PREC;
+#endif
+  m_estPicLambda = estLambda;
+
+  Double totalWeight = 0.0;
+  // initial BU bit allocation weight
+  for ( Int i=0; i<m_numberOfLCU; i++ )
+  {
+    Double alphaLCU, betaLCU;
+    if ( m_encRCSeq->getUseLCUSeparateModel() )
+    {
+      alphaLCU = m_encRCSeq->getLCUPara( m_frameLevel, i ).m_alpha;
+      betaLCU  = m_encRCSeq->getLCUPara( m_frameLevel, i ).m_beta;
+    }
+    else
+    {
+      alphaLCU = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
+      betaLCU  = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
+    }
+
+    m_LCUs[i].m_bitWeight =  m_LCUs[i].m_numberOfPixel * pow( estLambda/alphaLCU, 1.0/betaLCU );
+
+    if ( m_LCUs[i].m_bitWeight < 0.01 )
