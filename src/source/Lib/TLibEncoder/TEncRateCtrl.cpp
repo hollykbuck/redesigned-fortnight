@@ -898,3 +898,103 @@ Double TEncRCPic::estimatePicLambda( list<TEncRCPic*>& listPreviousPictures, Sli
     m_LCUs[i].m_bitWeight =  m_LCUs[i].m_numberOfPixel * pow( estLambda/alphaLCU, 1.0/betaLCU );
 
     if ( m_LCUs[i].m_bitWeight < 0.01 )
+    {
+      m_LCUs[i].m_bitWeight = 0.01;
+    }
+    totalWeight += m_LCUs[i].m_bitWeight;
+  }
+  for ( Int i=0; i<m_numberOfLCU; i++ )
+  {
+    Double BUTargetBits = m_targetBits * m_LCUs[i].m_bitWeight / totalWeight;
+    m_LCUs[i].m_bitWeight = BUTargetBits;
+  }
+
+  return estLambda;
+}
+
+Int TEncRCPic::estimatePicQP( Double lambda, list<TEncRCPic*>& listPreviousPictures )
+{
+  Int QP = Int( 4.2005 * log( lambda ) + 13.7122 + 0.5 );
+
+  Int lastLevelQP = g_RCInvalidQPValue;
+  Int lastPicQP   = g_RCInvalidQPValue;
+  Int lastValidQP = g_RCInvalidQPValue;
+  list<TEncRCPic*>::iterator it;
+  for ( it = listPreviousPictures.begin(); it != listPreviousPictures.end(); it++ )
+  {
+    if ( (*it)->getFrameLevel() == m_frameLevel )
+    {
+      lastLevelQP = (*it)->getPicActualQP();
+    }
+    lastPicQP = (*it)->getPicActualQP();
+    if ( lastPicQP > g_RCInvalidQPValue )
+    {
+      lastValidQP = lastPicQP;
+    }
+  }
+
+  if ( lastLevelQP > g_RCInvalidQPValue )
+  {
+    QP = Clip3( lastLevelQP - 3, lastLevelQP + 3, QP );
+  }
+
+  if( lastPicQP > g_RCInvalidQPValue )
+  {
+    QP = Clip3( lastPicQP - 10, lastPicQP + 10, QP );
+  }
+  else if( lastValidQP > g_RCInvalidQPValue )
+  {
+    QP = Clip3( lastValidQP - 10, lastValidQP + 10, QP );
+  }
+
+  return QP;
+}
+
+Double TEncRCPic::getLCUTargetBpp(SliceType eSliceType)
+{
+  Int   LCUIdx    = getLCUCoded();
+  Double bpp      = -1.0;
+  Int avgBits     = 0;
+
+  if (eSliceType == I_SLICE)
+  {
+    Int noOfLCUsLeft = m_numberOfLCU - LCUIdx + 1;
+    Int bitrateWindow = min(4,noOfLCUsLeft);
+    Double MAD      = getLCU(LCUIdx).m_costIntra;
+
+    if (m_remainingCostIntra > 0.1 )
+    {
+      Double weightedBitsLeft = (m_bitsLeft*bitrateWindow+(m_bitsLeft-getLCU(LCUIdx).m_targetBitsLeft)*noOfLCUsLeft)/(Double)bitrateWindow;
+      avgBits = Int( MAD*weightedBitsLeft/m_remainingCostIntra );
+    }
+    else
+    {
+      avgBits = Int( m_bitsLeft / m_LCULeft );
+    }
+    m_remainingCostIntra -= MAD;
+  }
+  else
+  {
+    Double totalWeight = 0;
+    for ( Int i=LCUIdx; i<m_numberOfLCU; i++ )
+    {
+      totalWeight += m_LCUs[i].m_bitWeight;
+    }
+    Int realInfluenceLCU = min( g_RCLCUSmoothWindowSize, getLCULeft() );
+    avgBits = (Int)( m_LCUs[LCUIdx].m_bitWeight - ( totalWeight - m_bitsLeft ) / realInfluenceLCU + 0.5 );
+  }
+
+  if ( avgBits < 1 )
+  {
+    avgBits = 1;
+  }
+
+  bpp = ( Double )avgBits/( Double )m_LCUs[ LCUIdx ].m_numberOfPixel;
+  m_LCUs[ LCUIdx ].m_targetBits = avgBits;
+
+  return bpp;
+}
+
+Double TEncRCPic::getLCUEstLambda( Double bpp )
+{
+  Int   LCUIdx = getLCUCoded();
