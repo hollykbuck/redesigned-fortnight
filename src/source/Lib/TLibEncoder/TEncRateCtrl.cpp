@@ -998,3 +998,103 @@ Double TEncRCPic::getLCUTargetBpp(SliceType eSliceType)
 Double TEncRCPic::getLCUEstLambda( Double bpp )
 {
   Int   LCUIdx = getLCUCoded();
+  Double alpha;
+  Double beta;
+  if ( m_encRCSeq->getUseLCUSeparateModel() )
+  {
+    alpha = m_encRCSeq->getLCUPara( m_frameLevel, LCUIdx ).m_alpha;
+    beta  = m_encRCSeq->getLCUPara( m_frameLevel, LCUIdx ).m_beta;
+  }
+  else
+  {
+    alpha = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
+    beta  = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
+  }
+
+  Double estLambda = alpha * pow( bpp, beta );
+  //for Lambda clip, picture level clip
+  Double clipPicLambda = m_estPicLambda;
+
+  //for Lambda clip, LCU level clip
+  Double clipNeighbourLambda = -1.0;
+  for ( Int i=LCUIdx - 1; i>=0; i-- )
+  {
+    if ( m_LCUs[i].m_lambda > 0 )
+    {
+      clipNeighbourLambda = m_LCUs[i].m_lambda;
+      break;
+    }
+  }
+
+  if ( clipNeighbourLambda > 0.0 )
+  {
+    estLambda = Clip3( clipNeighbourLambda * pow( 2.0, -1.0/3.0 ), clipNeighbourLambda * pow( 2.0, 1.0/3.0 ), estLambda );
+  }
+
+  if ( clipPicLambda > 0.0 )
+  {
+    estLambda = Clip3( clipPicLambda * pow( 2.0, -2.0/3.0 ), clipPicLambda * pow( 2.0, 2.0/3.0 ), estLambda );
+  }
+  else
+  {
+    estLambda = Clip3( 10.0, 1000.0, estLambda );
+  }
+
+  if ( estLambda < 0.1 )
+  {
+    estLambda = 0.1;
+  }
+#if JVET_K0390_RATE_CTRL
+  //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
+  estLambda = Double(int64_t(estLambda * (Double)LAMBDA_PREC + 0.5)) / (Double)LAMBDA_PREC;
+#endif
+  return estLambda;
+}
+
+Int TEncRCPic::getLCUEstQP( Double lambda, Int clipPicQP )
+{
+  Int LCUIdx = getLCUCoded();
+  Int estQP = Int( 4.2005 * log( lambda ) + 13.7122 + 0.5 );
+
+  //for Lambda clip, LCU level clip
+  Int clipNeighbourQP = g_RCInvalidQPValue;
+  for ( Int i=LCUIdx - 1; i>=0; i-- )
+  {
+    if ( (getLCU(i)).m_QP > g_RCInvalidQPValue )
+    {
+      clipNeighbourQP = getLCU(i).m_QP;
+      break;
+    }
+  }
+
+  if ( clipNeighbourQP > g_RCInvalidQPValue )
+  {
+    estQP = Clip3( clipNeighbourQP - 1, clipNeighbourQP + 1, estQP );
+  }
+
+  estQP = Clip3( clipPicQP - 2, clipPicQP + 2, estQP );
+
+  return estQP;
+}
+
+#if JVET_M0600_RATE_CTRL
+Void TEncRCPic::updateAfterCTU(Int LCUIdx, Int bits, Int QP, Double lambda, Double skipRatio, Bool updateLCUParameter)
+#else
+Void TEncRCPic::updateAfterCTU( Int LCUIdx, Int bits, Int QP, Double lambda, Bool updateLCUParameter )
+#endif
+{
+  m_LCUs[LCUIdx].m_actualBits = bits;
+  m_LCUs[LCUIdx].m_QP         = QP;
+  m_LCUs[LCUIdx].m_lambda     = lambda;
+#if JVET_K0390_RATE_CTRL
+  m_LCUs[LCUIdx].m_actualSSE = m_LCUs[LCUIdx].m_actualMSE * m_LCUs[LCUIdx].m_numberOfPixel;
+#endif
+
+  m_LCULeft--;
+  m_bitsLeft   -= bits;
+  m_pixelsLeft -= m_LCUs[LCUIdx].m_numberOfPixel;
+
+  if ( !updateLCUParameter )
+  {
+    return;
+  }
