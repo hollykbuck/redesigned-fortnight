@@ -1098,3 +1098,103 @@ Void TEncRCPic::updateAfterCTU( Int LCUIdx, Int bits, Int QP, Double lambda, Boo
   {
     return;
   }
+
+  if ( !m_encRCSeq->getUseLCUSeparateModel() )
+  {
+    return;
+  }
+
+  Double alpha = m_encRCSeq->getLCUPara( m_frameLevel, LCUIdx ).m_alpha;
+  Double beta  = m_encRCSeq->getLCUPara( m_frameLevel, LCUIdx ).m_beta;
+
+  Int LCUActualBits   = m_LCUs[LCUIdx].m_actualBits;
+  Int LCUTotalPixels  = m_LCUs[LCUIdx].m_numberOfPixel;
+  Double bpp         = ( Double )LCUActualBits/( Double )LCUTotalPixels;
+  Double calLambda   = alpha * pow( bpp, beta );
+  Double inputLambda = m_LCUs[LCUIdx].m_lambda;
+
+  if( inputLambda < 0.01 || calLambda < 0.01 || bpp < 0.0001 )
+  {
+    alpha *= ( 1.0 - m_encRCSeq->getAlphaUpdate() / 2.0 );
+    beta  *= ( 1.0 - m_encRCSeq->getBetaUpdate() / 2.0 );
+
+    alpha = Clip3( g_RCAlphaMinValue, g_RCAlphaMaxValue, alpha );
+    beta  = Clip3( g_RCBetaMinValue,  g_RCBetaMaxValue,  beta  );
+
+    TRCParameter rcPara;
+    rcPara.m_alpha = alpha;
+    rcPara.m_beta  = beta;
+#if JVET_M0600_RATE_CTRL
+    rcPara.m_skipRatio = skipRatio;
+#endif
+#if JVET_K0390_RATE_CTRL
+    if (QP == g_RCInvalidQPValue && m_encRCSeq->getAdaptiveBits() == 1)
+    {
+      rcPara.m_validPix = 0;
+    }
+    else
+    {
+      rcPara.m_validPix = LCUTotalPixels;
+    }
+
+    Double MSE = m_LCUs[LCUIdx].m_actualMSE;
+    Double updatedK = bpp * inputLambda / MSE;
+    Double updatedC = MSE / pow(bpp, -updatedK);
+    rcPara.m_alpha = updatedC * updatedK;
+    rcPara.m_beta = -updatedK - 1.0;
+
+    if (bpp > 0 && updatedK > 0.0001)
+    {
+      m_encRCSeq->setLCUPara(m_frameLevel, LCUIdx, rcPara);
+    }
+    else
+    {
+      rcPara.m_alpha = Clip3(0.0001, g_RCAlphaMaxValue, rcPara.m_alpha);
+      m_encRCSeq->setLCUPara(m_frameLevel, LCUIdx, rcPara);
+    }
+#else
+    m_encRCSeq->setLCUPara( m_frameLevel, LCUIdx, rcPara );
+#endif
+    return;
+  }
+
+  calLambda = Clip3( inputLambda / 10.0, inputLambda * 10.0, calLambda );
+  alpha += m_encRCSeq->getAlphaUpdate() * ( log( inputLambda ) - log( calLambda ) ) * alpha;
+  Double lnbpp = log( bpp );
+  lnbpp = Clip3( -5.0, -0.1, lnbpp );
+  beta  += m_encRCSeq->getBetaUpdate() * ( log( inputLambda ) - log( calLambda ) ) * lnbpp;
+
+  alpha = Clip3( g_RCAlphaMinValue, g_RCAlphaMaxValue, alpha );
+  beta  = Clip3( g_RCBetaMinValue,  g_RCBetaMaxValue,  beta  );
+
+  TRCParameter rcPara;
+  rcPara.m_alpha = alpha;
+  rcPara.m_beta  = beta;
+#if JVET_M0600_RATE_CTRL
+  rcPara.m_skipRatio = skipRatio;
+#endif
+#if JVET_K0390_RATE_CTRL
+  if (QP == g_RCInvalidQPValue && m_encRCSeq->getAdaptiveBits() == 1)
+  {
+    rcPara.m_validPix = 0;
+  }
+  else
+  {
+    rcPara.m_validPix = LCUTotalPixels;
+  }
+
+  Double MSE = m_LCUs[LCUIdx].m_actualMSE;
+  Double updatedK = bpp * inputLambda / MSE;
+  Double updatedC = MSE / pow(bpp, -updatedK);
+  rcPara.m_alpha = updatedC * updatedK;
+  rcPara.m_beta = -updatedK - 1.0;
+
+  if (bpp > 0 && updatedK > 0.0001)
+  {
+    m_encRCSeq->setLCUPara(m_frameLevel, LCUIdx, rcPara);
+  }
+  else
+  {
+    rcPara.m_alpha = Clip3(0.0001, g_RCAlphaMaxValue, rcPara.m_alpha);
+    m_encRCSeq->setLCUPara(m_frameLevel, LCUIdx, rcPara);
+  }
