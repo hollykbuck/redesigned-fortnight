@@ -1198,3 +1198,103 @@ Void TEncRCPic::updateAfterCTU( Int LCUIdx, Int bits, Int QP, Double lambda, Boo
     rcPara.m_alpha = Clip3(0.0001, g_RCAlphaMaxValue, rcPara.m_alpha);
     m_encRCSeq->setLCUPara(m_frameLevel, LCUIdx, rcPara);
   }
+#else
+  m_encRCSeq->setLCUPara( m_frameLevel, LCUIdx, rcPara );
+#endif
+}
+
+Double TEncRCPic::calAverageQP()
+{
+  Int totalQPs = 0;
+  Int numTotalLCUs = 0;
+
+  Int i;
+  for ( i=0; i<m_numberOfLCU; i++ )
+  {
+    if ( m_LCUs[i].m_QP > 0 )
+    {
+      totalQPs += m_LCUs[i].m_QP;
+      numTotalLCUs++;
+    }
+  }
+
+  Double avgQP = 0.0;
+  if ( numTotalLCUs == 0 )
+  {
+    avgQP = g_RCInvalidQPValue;
+  }
+  else
+  {
+    avgQP = ((Double)totalQPs) / ((Double)numTotalLCUs);
+  }
+  return avgQP;
+}
+
+Double TEncRCPic::calAverageLambda()
+{
+  Double totalLambdas = 0.0;
+  Int numTotalLCUs = 0;
+#if JVET_K0390_RATE_CTRL
+  Double totalSSE = 0.0;
+  Int totalPixels = 0;
+#endif
+  Int i;
+  for ( i=0; i<m_numberOfLCU; i++ )
+  {
+    if ( m_LCUs[i].m_lambda > 0.01 )
+    {
+#if JVET_K0390_RATE_CTRL
+      if (m_LCUs[i].m_QP > 0 || m_encRCSeq->getAdaptiveBits() != 1)
+      {
+        m_validPixelsInPic += m_LCUs[i].m_numberOfPixel;
+
+        totalLambdas += log(m_LCUs[i].m_lambda);
+        numTotalLCUs++;
+      }
+#else
+      totalLambdas += log( m_LCUs[i].m_lambda );
+      numTotalLCUs++;
+#endif
+
+#if JVET_K0390_RATE_CTRL
+      if (m_LCUs[i].m_QP > 0 || m_encRCSeq->getAdaptiveBits() != 1)
+      {
+        totalSSE += m_LCUs[i].m_actualSSE;
+        totalPixels += m_LCUs[i].m_numberOfPixel;
+      }
+#endif
+    }
+  }
+#if JVET_K0390_RATE_CTRL
+  setPicMSE(totalPixels > 0 ? totalSSE / (Double)totalPixels : 1.0); //1.0 is useless in the following process, just to make sure the divisor not be 0
+#endif
+
+  Double avgLambda;
+  if( numTotalLCUs == 0 )
+  {
+    avgLambda = -1.0;
+  }
+  else
+  {
+    avgLambda = pow( 2.7183, totalLambdas / numTotalLCUs );
+  }
+  return avgLambda;
+}
+
+
+Void TEncRCPic::updateAfterPicture( Int actualHeaderBits, Int actualTotalBits, Double averageQP, Double averageLambda, SliceType eSliceType)
+{
+  m_picActualHeaderBits = actualHeaderBits;
+  m_picActualBits       = actualTotalBits;
+  if ( averageQP > 0.0 )
+  {
+    m_picQP             = Int( averageQP + 0.5 );
+  }
+  else
+  {
+    m_picQP             = g_RCInvalidQPValue;
+  }
+  m_picLambda           = averageLambda;
+
+  Double alpha = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
+  Double beta  = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
