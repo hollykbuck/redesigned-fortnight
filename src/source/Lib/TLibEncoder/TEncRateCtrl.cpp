@@ -1298,3 +1298,103 @@ Void TEncRCPic::updateAfterPicture( Int actualHeaderBits, Int actualTotalBits, D
 
   Double alpha = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
   Double beta  = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
+#if JVET_M0600_RATE_CTRL //calculate the skipRatio of picture
+  Double skipRatio = 0;
+  Int numOfSkipPixel = 0;
+  for (Int LCUIdx = 0; LCUIdx < m_numberOfLCU; LCUIdx++)
+  {
+    numOfSkipPixel += Int(m_encRCSeq->getLCUPara(m_frameLevel, LCUIdx).m_skipRatio*m_LCUs[LCUIdx].m_numberOfPixel);
+  }
+  skipRatio = (Double)numOfSkipPixel / (Double)m_numberOfPixel;
+#endif
+  if (eSliceType == I_SLICE)
+  {
+    updateAlphaBetaIntra(&alpha, &beta);
+  }
+  else
+  {
+    // update parameters
+    Double picActualBits = ( Double )m_picActualBits;
+#if JVET_K0390_RATE_CTRL
+    Double picActualBpp = picActualBits / (Double)m_validPixelsInPic;
+#else
+    Double picActualBpp  = picActualBits/(Double)m_numberOfPixel;
+#endif
+    Double calLambda     = alpha * pow( picActualBpp, beta );
+    Double inputLambda   = m_picLambda;
+
+    if ( inputLambda < 0.01 || calLambda < 0.01 || picActualBpp < 0.0001 )
+    {
+      alpha *= ( 1.0 - m_encRCSeq->getAlphaUpdate() / 2.0 );
+      beta  *= ( 1.0 - m_encRCSeq->getBetaUpdate() / 2.0 );
+
+      alpha = Clip3( g_RCAlphaMinValue, g_RCAlphaMaxValue, alpha );
+      beta  = Clip3( g_RCBetaMinValue,  g_RCBetaMaxValue,  beta  );
+
+      TRCParameter rcPara;
+      rcPara.m_alpha = alpha;
+      rcPara.m_beta  = beta;
+#if JVET_M0600_RATE_CTRL
+      rcPara.m_skipRatio = skipRatio;
+#endif
+#if JVET_K0390_RATE_CTRL
+      Double avgMSE = getPicMSE();
+      Double updatedK = picActualBpp * averageLambda / avgMSE;
+      Double updatedC = avgMSE / pow(picActualBpp, -updatedK);
+
+      if (m_frameLevel > 0)  //only use for level > 0
+      {
+        rcPara.m_alpha = updatedC * updatedK;
+        rcPara.m_beta = -updatedK - 1.0;
+      }
+
+      rcPara.m_validPix = m_validPixelsInPic;
+
+      if (m_validPixelsInPic > 0)
+      {
+        m_encRCSeq->setPicPara(m_frameLevel, rcPara);
+      }
+#else
+      m_encRCSeq->setPicPara( m_frameLevel, rcPara );
+#endif
+
+      return;
+    }
+
+    calLambda = Clip3( inputLambda / 10.0, inputLambda * 10.0, calLambda );
+    alpha += m_encRCSeq->getAlphaUpdate() * ( log( inputLambda ) - log( calLambda ) ) * alpha;
+    Double lnbpp = log( picActualBpp );
+    lnbpp = Clip3( -5.0, -0.1, lnbpp );
+
+    beta  += m_encRCSeq->getBetaUpdate() * ( log( inputLambda ) - log( calLambda ) ) * lnbpp;
+
+    alpha = Clip3( g_RCAlphaMinValue, g_RCAlphaMaxValue, alpha );
+    beta  = Clip3( g_RCBetaMinValue,  g_RCBetaMaxValue,  beta  );
+  }
+
+  TRCParameter rcPara;
+  rcPara.m_alpha = alpha;
+  rcPara.m_beta  = beta;
+#if JVET_M0600_RATE_CTRL
+  rcPara.m_skipRatio = skipRatio;
+
+#endif
+#if JVET_K0390_RATE_CTRL
+  Double picActualBpp = (Double)m_picActualBits / (Double)m_validPixelsInPic;
+
+  Double avgMSE = getPicMSE();
+  Double updatedK = picActualBpp * averageLambda / avgMSE;
+  Double updatedC = avgMSE / pow(picActualBpp, -updatedK);
+  if (m_frameLevel > 0)  //only use for level > 0
+  {
+    rcPara.m_alpha = updatedC * updatedK;
+    rcPara.m_beta = -updatedK - 1.0;
+  }
+
+  rcPara.m_validPix = m_validPixelsInPic;
+
+  if (m_validPixelsInPic > 0)
+  {
+    m_encRCSeq->setPicPara(m_frameLevel, rcPara);
+  }
+#else
