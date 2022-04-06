@@ -1398,3 +1398,103 @@ Void TEncRCPic::updateAfterPicture( Int actualHeaderBits, Int actualTotalBits, D
     m_encRCSeq->setPicPara(m_frameLevel, rcPara);
   }
 #else
+  m_encRCSeq->setPicPara( m_frameLevel, rcPara );
+#endif
+
+  if ( m_frameLevel == 1 )
+  {
+    Double currLambda = Clip3( 0.1, 10000.0, m_picLambda );
+    Double updateLastLambda = g_RCWeightHistoryLambda * m_encRCSeq->getLastLambda() + g_RCWeightCurrentLambda * currLambda;
+    m_encRCSeq->setLastLambda( updateLastLambda );
+  }
+}
+
+Int TEncRCPic::getRefineBitsForIntra( Int orgBits )
+{
+  Double alpha=0.25, beta=0.5582;
+  Int iIntraBits;
+
+  if (orgBits*40 < m_numberOfPixel)
+  {
+    alpha=0.25;
+  }
+  else
+  {
+    alpha=0.30;
+  }
+
+  iIntraBits = (Int)(alpha* pow(m_totalCostIntra*4.0/(Double)orgBits, beta)*(Double)orgBits+0.5);
+
+  return iIntraBits;
+}
+
+Double TEncRCPic::calculateLambdaIntra(Double alpha, Double beta, Double MADPerPixel, Double bitsPerPixel)
+{
+  return ( (alpha/256.0) * pow( MADPerPixel/bitsPerPixel, beta ) );
+}
+
+Void TEncRCPic::updateAlphaBetaIntra(Double *alpha, Double *beta)
+{
+  Double lnbpp = log(pow(m_totalCostIntra / (Double)m_numberOfPixel, BETA1));
+  Double diffLambda = (*beta)*(log((Double)m_picActualBits)-log((Double)m_targetBits));
+
+  diffLambda = Clip3(-0.125, 0.125, 0.25*diffLambda);
+  *alpha    =  (*alpha) * exp(diffLambda);
+  *beta     =  (*beta) + diffLambda / lnbpp;
+}
+
+
+Void TEncRCPic::getLCUInitTargetBits()
+{
+  Int iAvgBits     = 0;
+
+  m_remainingCostIntra = m_totalCostIntra;
+  for (Int i=m_numberOfLCU-1; i>=0; i--)
+  {
+    iAvgBits += Int(m_targetBits * getLCU(i).m_costIntra/m_totalCostIntra);
+    getLCU(i).m_targetBitsLeft = iAvgBits;
+  }
+}
+
+
+Double TEncRCPic::getLCUEstLambdaAndQP(Double bpp, Int clipPicQP, Int *estQP)
+{
+  Int   LCUIdx = getLCUCoded();
+
+  Double   alpha = m_encRCSeq->getPicPara( m_frameLevel ).m_alpha;
+  Double   beta  = m_encRCSeq->getPicPara( m_frameLevel ).m_beta;
+
+  Double costPerPixel = getLCU(LCUIdx).m_costIntra/(Double)getLCU(LCUIdx).m_numberOfPixel;
+  costPerPixel = pow(costPerPixel, BETA1);
+  Double estLambda = calculateLambdaIntra(alpha, beta, costPerPixel, bpp);
+
+  Int clipNeighbourQP = g_RCInvalidQPValue;
+  for (Int i=LCUIdx-1; i>=0; i--)
+  {
+    if ((getLCU(i)).m_QP > g_RCInvalidQPValue)
+    {
+      clipNeighbourQP = getLCU(i).m_QP;
+      break;
+    }
+  }
+
+  Int minQP = clipPicQP - 2;
+  Int maxQP = clipPicQP + 2;
+
+  if ( clipNeighbourQP > g_RCInvalidQPValue )
+  {
+    maxQP = min(clipNeighbourQP + 1, maxQP);
+    minQP = max(clipNeighbourQP - 1, minQP);
+  }
+
+  Double maxLambda=exp(((Double)(maxQP+0.49)-13.7122)/4.2005);
+  Double minLambda=exp(((Double)(minQP-0.49)-13.7122)/4.2005);
+
+  estLambda = Clip3(minLambda, maxLambda, estLambda);
+#if JVET_K0390_RATE_CTRL
+  //Avoid different results in different platforms. The problem is caused by the different results of pow() in different platforms.
+  estLambda = Double(int64_t(estLambda * (Double)LAMBDA_PREC + 0.5)) / (Double)LAMBDA_PREC;
+#endif
+  *estQP = Int( 4.2005 * log(estLambda) + 13.7122 + 0.5 );
+  *estQP = Clip3(minQP, maxQP, *estQP);
+
