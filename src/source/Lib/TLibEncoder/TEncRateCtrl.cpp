@@ -1498,3 +1498,103 @@ Double TEncRCPic::getLCUEstLambdaAndQP(Double bpp, Int clipPicQP, Int *estQP)
   *estQP = Int( 4.2005 * log(estLambda) + 13.7122 + 0.5 );
   *estQP = Clip3(minQP, maxQP, *estQP);
 
+  return estLambda;
+}
+
+TEncRateCtrl::TEncRateCtrl()
+{
+  m_encRCSeq = NULL;
+  m_encRCGOP = NULL;
+  m_encRCPic = NULL;
+}
+
+TEncRateCtrl::~TEncRateCtrl()
+{
+  destroy();
+}
+
+Void TEncRateCtrl::destroy()
+{
+  if ( m_encRCSeq != NULL )
+  {
+    delete m_encRCSeq;
+    m_encRCSeq = NULL;
+  }
+  if ( m_encRCGOP != NULL )
+  {
+    delete m_encRCGOP;
+    m_encRCGOP = NULL;
+  }
+  while ( m_listRCPictures.size() > 0 )
+  {
+    TEncRCPic* p = m_listRCPictures.front();
+    m_listRCPictures.pop_front();
+    delete p;
+  }
+}
+
+#if JVET_Y0105_SW_AND_QDF
+Void TEncRateCtrl::init( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int intraPeriod, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int keepHierBits, Bool useLCUSeparateModel, GOPEntry  GOPList[MAX_GOP] )
+#else
+Void TEncRateCtrl::init( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int keepHierBits, Bool useLCUSeparateModel, GOPEntry  GOPList[MAX_GOP] )
+#endif
+{
+  destroy();
+
+  Bool isLowdelay = true;
+  for ( Int i=0; i<GOPSize-1; i++ )
+  {
+    if ( GOPList[i].m_POC > GOPList[i+1].m_POC )
+    {
+      isLowdelay = false;
+      break;
+    }
+  }
+
+  Int numberOfLevel = 1;
+  Int adaptiveBit = 0;
+  if ( keepHierBits > 0 )
+  {
+    numberOfLevel = Int( log((Double)GOPSize)/log(2.0) + 0.5 ) + 1;
+  }
+#if JVET_K0390_RATE_CTRL
+  if (!isLowdelay && (GOPSize == 16 || GOPSize == 8))
+#else
+  if ( !isLowdelay && GOPSize == 8 )
+#endif
+  {
+    numberOfLevel = Int( log((Double)GOPSize)/log(2.0) + 0.5 ) + 1;
+  }
+  numberOfLevel++;    // intra picture
+  numberOfLevel++;    // non-reference picture
+
+
+  Int* bitsRatio;
+  bitsRatio = new Int[ GOPSize ];
+  for ( Int i=0; i<GOPSize; i++ )
+  {
+    bitsRatio[i] = 10;
+    if ( !GOPList[i].m_refPic )
+    {
+      bitsRatio[i] = 2;
+    }
+  }
+
+  if ( keepHierBits > 0 )
+  {
+    Double bpp = (Double)( targetBitrate / (Double)( frameRate*picWidth*picHeight ) );
+    if ( GOPSize == 4 && isLowdelay )
+    {
+      if ( bpp > 0.2 )
+      {
+        bitsRatio[0] = 2;
+        bitsRatio[1] = 3;
+        bitsRatio[2] = 2;
+        bitsRatio[3] = 6;
+      }
+      else if( bpp > 0.1 )
+      {
+        bitsRatio[0] = 2;
+        bitsRatio[1] = 3;
+        bitsRatio[2] = 2;
+        bitsRatio[3] = 10;
