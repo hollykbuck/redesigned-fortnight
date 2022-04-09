@@ -1598,3 +1598,103 @@ Void TEncRateCtrl::init( Int totalFrames, Int targetBitrate, Int frameRate, Int 
         bitsRatio[1] = 3;
         bitsRatio[2] = 2;
         bitsRatio[3] = 10;
+      }
+      else if ( bpp > 0.05 )
+      {
+        bitsRatio[0] = 2;
+        bitsRatio[1] = 3;
+        bitsRatio[2] = 2;
+        bitsRatio[3] = 12;
+      }
+      else
+      {
+        bitsRatio[0] = 2;
+        bitsRatio[1] = 3;
+        bitsRatio[2] = 2;
+        bitsRatio[3] = 14;
+      }
+
+      if ( keepHierBits == 2 )
+      {
+        adaptiveBit = 1;
+      }
+    }
+    else if ( GOPSize == 8 && !isLowdelay )
+    {
+      if ( bpp > 0.2 )
+      {
+        bitsRatio[0] = 15;
+        bitsRatio[1] = 5;
+        bitsRatio[2] = 4;
+        bitsRatio[3] = 1;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 4;
+        bitsRatio[6] = 1;
+        bitsRatio[7] = 1;
+      }
+      else if ( bpp > 0.1 )
+      {
+        bitsRatio[0] = 20;
+        bitsRatio[1] = 6;
+        bitsRatio[2] = 4;
+        bitsRatio[3] = 1;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 4;
+        bitsRatio[6] = 1;
+        bitsRatio[7] = 1;
+      }
+      else if ( bpp > 0.05 )
+      {
+        bitsRatio[0] = 25;
+        bitsRatio[1] = 7;
+        bitsRatio[2] = 4;
+        bitsRatio[3] = 1;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 4;
+        bitsRatio[6] = 1;
+        bitsRatio[7] = 1;
+      }
+      else
+      {
+        bitsRatio[0] = 30;
+        bitsRatio[1] = 8;
+        bitsRatio[2] = 4;
+        bitsRatio[3] = 1;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 4;
+        bitsRatio[6] = 1;
+        bitsRatio[7] = 1;
+      }
+
+      if ( keepHierBits == 2 )
+      {
+        adaptiveBit = 2;
+      }
+    }
+#if JVET_K0390_RATE_CTRL
+    else if (GOPSize == 16 && !isLowdelay)
+    {
+      if (bpp > 0.2)
+      {
+        bitsRatio[0] = 10;
+        bitsRatio[1] = 8;
+        bitsRatio[2] = 4;
+        bitsRatio[3] = 2;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 1;
+        bitsRatio[6] = 2;
+        bitsRatio[7] = 1;
+        bitsRatio[8] = 1;
+        bitsRatio[9] = 4;
+        bitsRatio[10] = 2;
+        bitsRatio[11] = 1;
+        bitsRatio[12] = 1;
+        bitsRatio[13] = 2;
+        bitsRatio[14] = 1;
+        bitsRatio[15] = 1;
+      }
+      else if (bpp > 0.1)
+      {
+        bitsRatio[0] = 15;
+        bitsRatio[1] = 9;
+        bitsRatio[2] = 4;
