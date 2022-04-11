@@ -1698,3 +1698,103 @@ Void TEncRateCtrl::init( Int totalFrames, Int targetBitrate, Int frameRate, Int 
         bitsRatio[0] = 15;
         bitsRatio[1] = 9;
         bitsRatio[2] = 4;
+        bitsRatio[3] = 2;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 1;
+        bitsRatio[6] = 2;
+        bitsRatio[7] = 1;
+        bitsRatio[8] = 1;
+        bitsRatio[9] = 4;
+        bitsRatio[10] = 2;
+        bitsRatio[11] = 1;
+        bitsRatio[12] = 1;
+        bitsRatio[13] = 2;
+        bitsRatio[14] = 1;
+        bitsRatio[15] = 1;
+      }
+      else if (bpp > 0.05)
+      {
+        bitsRatio[0] = 40;
+        bitsRatio[1] = 17;
+        bitsRatio[2] = 7;
+        bitsRatio[3] = 2;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 1;
+        bitsRatio[6] = 2;
+        bitsRatio[7] = 1;
+        bitsRatio[8] = 1;
+        bitsRatio[9] = 7;
+        bitsRatio[10] = 2;
+        bitsRatio[11] = 1;
+        bitsRatio[12] = 1;
+        bitsRatio[13] = 2;
+        bitsRatio[14] = 1;
+        bitsRatio[15] = 1;
+      }
+      else
+      {
+        bitsRatio[0] = 40;
+        bitsRatio[1] = 15;
+        bitsRatio[2] = 6;
+        bitsRatio[3] = 3;
+        bitsRatio[4] = 1;
+        bitsRatio[5] = 1;
+        bitsRatio[6] = 3;
+        bitsRatio[7] = 1;
+        bitsRatio[8] = 1;
+        bitsRatio[9] = 6;
+        bitsRatio[10] = 3;
+        bitsRatio[11] = 1;
+        bitsRatio[12] = 1;
+        bitsRatio[13] = 3;
+        bitsRatio[14] = 1;
+        bitsRatio[15] = 1;
+      }
+
+      if (keepHierBits == 2)
+      {
+        adaptiveBit = 3;
+      }
+    }
+#endif
+    else
+    {
+      printf( "\n hierarchical bit allocation is not support for the specified coding structure currently.\n" );
+    }
+  }
+
+  Int* GOPID2Level = new Int[ GOPSize ];
+  for ( Int i=0; i<GOPSize; i++ )
+  {
+    GOPID2Level[i] = 1;
+    if ( !GOPList[i].m_refPic )
+    {
+      GOPID2Level[i] = 2;
+    }
+  }
+
+  if ( keepHierBits > 0 )
+  {
+    if ( GOPSize == 4 && isLowdelay )
+    {
+      GOPID2Level[0] = 3;
+      GOPID2Level[1] = 2;
+      GOPID2Level[2] = 3;
+      GOPID2Level[3] = 1;
+    }
+    else if ( GOPSize == 8 && !isLowdelay )
+    {
+      GOPID2Level[0] = 1;
+      GOPID2Level[1] = 2;
+      GOPID2Level[2] = 3;
+      GOPID2Level[3] = 4;
+      GOPID2Level[4] = 4;
+      GOPID2Level[5] = 3;
+      GOPID2Level[6] = 4;
+      GOPID2Level[7] = 4;
+    }
+#if JVET_K0390_RATE_CTRL
+    else if (GOPSize == 16 && !isLowdelay)
+    {
+      GOPID2Level[0] = 1;
+      GOPID2Level[1] = 2;
