@@ -1798,3 +1798,103 @@ Void TEncRateCtrl::init( Int totalFrames, Int targetBitrate, Int frameRate, Int 
     {
       GOPID2Level[0] = 1;
       GOPID2Level[1] = 2;
+      GOPID2Level[2] = 3;
+      GOPID2Level[3] = 4;
+      GOPID2Level[4] = 5;
+      GOPID2Level[5] = 5;
+      GOPID2Level[6] = 4;
+      GOPID2Level[7] = 5;
+      GOPID2Level[8] = 5;
+      GOPID2Level[9] = 3;
+      GOPID2Level[10] = 4;
+      GOPID2Level[11] = 5;
+      GOPID2Level[12] = 5;
+      GOPID2Level[13] = 4;
+      GOPID2Level[14] = 5;
+      GOPID2Level[15] = 5;
+    }
+#endif
+  }
+
+  if ( !isLowdelay && GOPSize == 8 )
+  {
+    GOPID2Level[0] = 1;
+    GOPID2Level[1] = 2;
+    GOPID2Level[2] = 3;
+    GOPID2Level[3] = 4;
+    GOPID2Level[4] = 4;
+    GOPID2Level[5] = 3;
+    GOPID2Level[6] = 4;
+    GOPID2Level[7] = 4;
+  }
+#if JVET_K0390_RATE_CTRL
+  else if (GOPSize == 16 && !isLowdelay)
+  {
+    GOPID2Level[0] = 1;
+    GOPID2Level[1] = 2;
+    GOPID2Level[2] = 3;
+    GOPID2Level[3] = 4;
+    GOPID2Level[4] = 5;
+    GOPID2Level[5] = 5;
+    GOPID2Level[6] = 4;
+    GOPID2Level[7] = 5;
+    GOPID2Level[8] = 5;
+    GOPID2Level[9] = 3;
+    GOPID2Level[10] = 4;
+    GOPID2Level[11] = 5;
+    GOPID2Level[12] = 5;
+    GOPID2Level[13] = 4;
+    GOPID2Level[14] = 5;
+    GOPID2Level[15] = 5;
+  }
+#endif
+
+  m_encRCSeq = new TEncRCSeq;
+#if JVET_Y0105_SW_AND_QDF
+  m_encRCSeq->create( totalFrames, targetBitrate, frameRate, GOPSize, intraPeriod, picWidth, picHeight, LCUWidth, LCUHeight, numberOfLevel, useLCUSeparateModel, adaptiveBit );
+#else
+  m_encRCSeq->create( totalFrames, targetBitrate, frameRate, GOPSize, picWidth, picHeight, LCUWidth, LCUHeight, numberOfLevel, useLCUSeparateModel, adaptiveBit );
+#endif
+  
+  m_encRCSeq->initBitsRatio( bitsRatio );
+  m_encRCSeq->initGOPID2Level( GOPID2Level );
+  m_encRCSeq->initPicPara();
+  if ( useLCUSeparateModel )
+  {
+    m_encRCSeq->initLCUPara();
+  }
+  m_CpbSaturationEnabled = false;
+  m_cpbSize              = targetBitrate;
+  m_cpbState             = (UInt)(m_cpbSize*0.5f);
+  m_bufferingRate        = (Int)(targetBitrate / frameRate);
+
+  delete[] bitsRatio;
+  delete[] GOPID2Level;
+}
+
+Void TEncRateCtrl::initRCPic( Int frameLevel )
+{
+  m_encRCPic = new TEncRCPic;
+  m_encRCPic->create( m_encRCSeq, m_encRCGOP, frameLevel, m_listRCPictures );
+}
+
+Void TEncRateCtrl::initRCGOP( Int numberOfPictures )
+{
+  m_encRCGOP = new TEncRCGOP;
+#if JVET_Y0105_SW_AND_QDF
+  bool useAdaptiveBitsRatio = ( m_encRCSeq->getAdaptiveBits() > 0 ) && ( m_listRCPictures.size() >= m_encRCSeq->getGOPSize() );
+  m_encRCGOP->create( m_encRCSeq, numberOfPictures, useAdaptiveBitsRatio);
+#else
+  m_encRCGOP->create( m_encRCSeq, numberOfPictures );
+#endif
+}
+
+Int  TEncRateCtrl::updateCpbState(Int actualBits)
+{
+  Int cpbState = 1;
+
+  m_cpbState -= actualBits;
+  if (m_cpbState < 0)
+  {
+    cpbState = -1;
+  }
