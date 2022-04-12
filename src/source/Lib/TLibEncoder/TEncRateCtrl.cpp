@@ -1898,3 +1898,27 @@ Int  TEncRateCtrl::updateCpbState(Int actualBits)
   {
     cpbState = -1;
   }
+
+  m_cpbState += m_bufferingRate;
+  if (m_cpbState > m_cpbSize)
+  {
+    cpbState = 0;
+  }
+
+  return cpbState;
+}
+
+Void TEncRateCtrl::initHrdParam(const TComHRD* pcHrd, Int iFrameRate, Double fInitialCpbFullness)
+{
+  m_CpbSaturationEnabled = true;
+  m_cpbSize = (pcHrd->getCpbSizeValueMinus1(0, 0, 0) + 1) << (4 + pcHrd->getCpbSizeScale());
+  m_cpbState = (UInt)(m_cpbSize*fInitialCpbFullness);
+  m_bufferingRate = (UInt)(((pcHrd->getBitRateValueMinus1(0, 0, 0) + 1) << (6 + pcHrd->getBitRateScale())) / iFrameRate);
+  printf("\nHRD - [Initial CPB state %6d] [CPB Size %6d] [Buffering Rate %6d]\n", m_cpbState, m_cpbSize, m_bufferingRate);
+}
+
+Void TEncRateCtrl::destroyRCGOP()
+{
+  delete m_encRCGOP;
+  m_encRCGOP = NULL;
+}
