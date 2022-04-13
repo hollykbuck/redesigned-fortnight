@@ -31,78 +31,70 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/**
+ * \file
+ * \brief Implementation of TComInterpolationFilter class
+ */
 
-/** \file     ContextModel.h
-    \brief    context model class (header)
-*/
+// ====================================================================================================================
+// Includes
+// ====================================================================================================================
 
-#ifndef __CONTEXTMODEL__
-#define __CONTEXTMODEL__
-
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
-
-#include "CommonDef.h"
 #include "TComRom.h"
+#include "TComInterpolationFilter.h"
+#include <assert.h>
+
+#include "TComChromaFormat.h"
+
+#if VECTOR_CODING__INTERPOLATION_FILTER && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+#include <emmintrin.h>
+#endif
 
 //! \ingroup TLibCommon
 //! \{
 
 // ====================================================================================================================
-// Class definition
+// Tables
 // ====================================================================================================================
 
-/// context model class
-class ContextModel
+const TFilterCoeff TComInterpolationFilter::m_lumaFilter[LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS][NTAPS_LUMA] =
 {
-public:
-  ContextModel  ()                        { m_ucState = 0; m_binsCoded = 0; }
-  ~ContextModel ()                        {}
-
-  UChar getState  ()                { return ( m_ucState >> 1 ); }                    ///< get current state
-  UChar getMps    ()                { return ( m_ucState  & 1 ); }                    ///< get curret MPS
-  Void  setStateAndMps( UChar ucState, UChar ucMPS) { m_ucState = (ucState << 1) + ucMPS; } ///< set state and MPS
-
-  Void init ( Int qp, Int initValue );   ///< initialize state with initial probability
-
-  Void updateLPS ()
-  {
-    m_ucState = m_aucNextStateLPS[ m_ucState ];
-  }
-
-  Void updateMPS ()
-  {
-    m_ucState = m_aucNextStateMPS[ m_ucState ];
-  }
-
-  Int getEntropyBits(Short val) { return m_entropyBits[m_ucState ^ val]; }
-
-#if FAST_BIT_EST
-  Void update( Int binVal )
-  {
-    m_ucState = m_nextState[m_ucState][binVal];
-  }
-  static Void buildNextStateTable();
-  static Int getEntropyBitsTrm( Int val ) { return m_entropyBits[126 ^ val]; }
-#endif
-  Void setBinsCoded(UInt val)   { m_binsCoded = val;  }
-  UInt getBinsCoded()           { return m_binsCoded;   }
-
-private:
-  UChar         m_ucState;                                                                  ///< internal state variable
-
-  static const  UInt  m_totalStates = (1 << CONTEXT_STATE_BITS) * 2; //*2 for MPS = [0|1]
-  static const  UChar m_aucNextStateMPS[m_totalStates];
-  static const  UChar m_aucNextStateLPS[m_totalStates];
-  static const  Int   m_entropyBits    [m_totalStates];
-#if FAST_BIT_EST
-  static UChar m_nextState[m_totalStates][2 /*MPS = [0|1]*/];
-#endif
-  UInt          m_binsCoded;
+  {  0, 0,   0, 64,  0,   0, 0,  0 },
+  { -1, 4, -10, 58, 17,  -5, 1,  0 },
+  { -1, 4, -11, 40, 40, -11, 4, -1 },
+  {  0, 1,  -5, 17, 58, -10, 4, -1 }
 };
 
-//! \}
+const TFilterCoeff TComInterpolationFilter::m_chromaFilter[CHROMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS][NTAPS_CHROMA] =
+{
+  {  0, 64,  0,  0 },
+  { -2, 58, 10, -2 },
+  { -4, 54, 16, -2 },
+  { -6, 46, 28, -4 },
+  { -4, 36, 36, -4 },
+  { -4, 28, 46, -6 },
+  { -2, 16, 54, -4 },
+  { -2, 10, 58, -2 }
+};
 
-#endif
+#if VECTOR_CODING__INTERPOLATION_FILTER && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+inline __m128i simdInterpolateLuma4( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
+{
+  __m128i sumHi = _mm_setzero_si128();
+  __m128i sumLo = _mm_setzero_si128();
+  for( Int n = 0 ; n < 8 ; n++ )
+  {
+    __m128i mmPix = _mm_loadl_epi64( ( __m128i* )src );
+    __m128i hi = _mm_mulhi_epi16( mmPix , mmCoeff[n] );
+    __m128i lo = _mm_mullo_epi16( mmPix , mmCoeff[n] );
+    sumHi = _mm_add_epi32( sumHi , _mm_unpackhi_epi16( lo , hi ) );
+    sumLo = _mm_add_epi32( sumLo , _mm_unpacklo_epi16( lo , hi ) );
+    src += srcStride;
+  }
+  sumHi = _mm_srai_epi32( _mm_add_epi32( sumHi , mmOffset ) , shift );
+  sumLo = _mm_srai_epi32( _mm_add_epi32( sumLo , mmOffset ) , shift );
+  return( _mm_packs_epi32( sumLo , sumHi ) );
+}
 
+inline __m128i simdInterpolateChroma4( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
+{
