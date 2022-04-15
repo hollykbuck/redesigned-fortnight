@@ -198,3 +198,103 @@ inline __m128i simdClip3( __m128i mmMin , __m128i mmMax , __m128i mmPix )
 Void TComInterpolationFilter::filterCopy(Int bitDepth, const Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Bool isFirst, Bool isLast)
 {
   Int row, col;
+
+  if ( isFirst == isLast )
+  {
+    for (row = 0; row < height; row++)
+    {
+      for (col = 0; col < width; col++)
+      {
+        dst[col] = src[col];
+      }
+
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
+  else if ( isFirst )
+  {
+    const Int shift = std::max<Int>(2, (IF_INTERNAL_PREC - bitDepth));
+
+    for (row = 0; row < height; row++)
+    {
+      for (col = 0; col < width; col++)
+      {
+        Pel val = leftShift_round(src[col], shift);
+        dst[col] = val - (Pel)IF_INTERNAL_OFFS;
+      }
+
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
+  else
+  {
+    const Int shift = std::max<Int>(2, (IF_INTERNAL_PREC - bitDepth));
+
+    Pel maxVal = (1 << bitDepth) - 1;
+    Pel minVal = 0;
+    for (row = 0; row < height; row++)
+    {
+      for (col = 0; col < width; col++)
+      {
+        Pel val = src[ col ];
+        val = rightShift_round((val + IF_INTERNAL_OFFS), shift);
+        if (val < minVal)
+        {
+          val = minVal;
+        }
+        if (val > maxVal)
+        {
+          val = maxVal;
+        }
+        dst[col] = val;
+      }
+
+      src += srcStride;
+      dst += dstStride;
+    }
+  }
+}
+
+/**
+ * \brief Apply FIR filter to a block of samples
+ *
+ * \tparam N          Number of taps
+ * \tparam isVertical Flag indicating filtering along vertical direction
+ * \tparam isFirst    Flag indicating whether it is the first filtering operation
+ * \tparam isLast     Flag indicating whether it is the last filtering operation
+ * \param  bitDepth   Bit depth of samples
+ * \param  src        Pointer to source samples
+ * \param  srcStride  Stride of source samples
+ * \param  dst        Pointer to destination samples
+ * \param  dstStride  Stride of destination samples
+ * \param  width      Width of block
+ * \param  height     Height of block
+ * \param  coeff      Pointer to filter taps
+ */
+template<Int N, Bool isVertical, Bool isFirst, Bool isLast>
+Void TComInterpolationFilter::filter(Int bitDepth, Pel const *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, TFilterCoeff const *coeff)
+{
+  Int row, col;
+
+  Pel c[8];
+  c[0] = coeff[0];
+  c[1] = coeff[1];
+  if ( N >= 4 )
+  {
+    c[2] = coeff[2];
+    c[3] = coeff[3];
+  }
+  if ( N >= 6 )
+  {
+    c[4] = coeff[4];
+    c[5] = coeff[5];
+  }
+  if ( N == 8 )
+  {
+    c[6] = coeff[6];
+    c[7] = coeff[7];
+  }
+
+  Int cStride = ( isVertical ) ? srcStride : 1;
