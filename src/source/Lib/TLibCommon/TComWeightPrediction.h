@@ -98,3 +98,5 @@ public:
                                 const Int                   iHeight,
                                       TComYuv              *pcYuvDst );
 };
+
+#endif
