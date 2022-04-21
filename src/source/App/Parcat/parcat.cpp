@@ -298,3 +298,103 @@ std::vector<uint8_t> filter_segment(const std::vector<uint8_t> & v, int idx, int
 
       offset += 1; //first_slice_segment_in_pic_flag
       if (nalu_type >= BLA_W_LP && nalu_type <= RESERVED_IRAP_VCL23)
+      {
+        offset += 1; //no_output_of_prior_pics_flag
+      }
+
+      // determine offset for slice_pic_parameter_set_id TODO: ue(v)
+      int byte_offset2 = offset / 8;
+      int hi_bits2 = offset % 8;
+      uint16_t data2 = (nalu[byte_offset2] << 8) | nalu[byte_offset2 + 1];
+      int low_bits2 = 16 - hi_bits2 - 1;      
+      if(((data2 >> low_bits2) % 2))
+        offset += 1; // PPSId=0 
+      else
+        offset += 3; // PPSId=1 
+      offset += 1; // slice_type TODO: ue(v)
+      // separate_colour_plane_flag is not supported in JEM1.0
+      if (nalu_type == CRA)
+      {
+        offset += 2;
+      }
+      int byte_offset = offset / 8;
+      int hi_bits = offset % 8;
+      uint16_t data = (nalu[byte_offset] << 8) | nalu[byte_offset + 1];
+      int low_bits = 16 - hi_bits - bits_for_poc;
+      poc_lsb = (data >> low_bits) & 0xff;
+      poc = poc_lsb; //calc_poc(poc_lsb, 0, bits_for_poc, nalu_type);
+
+      new_poc = poc + *poc_base;
+      // int picOrderCntLSB = (pcSlice->getPOC()-pcSlice->getLastIDR()+(1<<pcSlice->getSPS()->getBitsForPOC())) & ((1<<pcSlice->getSPS()->getBitsForPOC())-1);
+      unsigned picOrderCntLSB = (new_poc - *last_idr_poc +(1 << bits_for_poc)) & ((1<<bits_for_poc)-1);
+
+      int low = data & ((1 << (low_bits + 1)) - 1);
+      int hi = data >> (16 - hi_bits);
+      data = (hi << (16 - hi_bits)) | (picOrderCntLSB << low_bits) | low;
+
+      nalu[byte_offset] = data >> 8;
+      nalu[byte_offset + 1] = data & 0xff;
+
+      ++cnt;
+    }
+
+    if(idx > 1 && (nalu_type == IDR_W_RADL || nalu_type == IDR_N_LP))
+    {
+      skip_next_sei = true;
+      idr_found = true;
+    }
+
+    if((idx > 1 && (nalu_type == IDR_W_RADL || nalu_type == IDR_N_LP )) || ((idx>1 && !idr_found) && ( nalu_type == VPS || nalu_type == SPS || nalu_type == PPS))
+      || (nalu_type == SUFFIX_SEI && skip_next_sei))
+    {
+    }
+    else
+    {
+      out.insert(out.end(), p - nal_start, p);
+      out.insert(out.end(), nalu.begin(), nalu.end());
+    }
+
+    if(nalu_type == SUFFIX_SEI && skip_next_sei)
+    {
+      skip_next_sei = false;
+    }
+
+
+    p += (nal_end - nal_start);
+    sz -= nal_end;
+  }
+
+  *poc_base += cnt;
+  return out;
+}
+
+std::vector<uint8_t> process_segment(const char * path, int idx, int * poc_base, int * last_idr_poc)
+{
+  FILE * fdi = fopen(path, "rb");
+
+  if (fdi == NULL)
+  {
+    fprintf(stderr, "Error: could not open input file: %s", path);
+    exit(1);
+  }
+
+  fseek(fdi, 0, SEEK_END);
+  size_t full_sz = ftell(fdi);
+  fseek(fdi, 0, SEEK_SET);
+
+  std::vector<uint8_t> v(full_sz);
+
+  size_t sz = fread((char*) v.data(), 1, full_sz, fdi);
+  fclose(fdi);
+
+  if(sz != full_sz)
+  {
+    fprintf(stderr, "Error: input file was not read completely.");
+    exit(1);
+  }
+
+  return filter_segment(v, idx, poc_base, last_idr_poc);
+}
+
+int main(int argc, char * argv[])
+{
