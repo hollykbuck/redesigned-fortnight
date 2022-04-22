@@ -398,3 +398,27 @@ std::vector<uint8_t> process_segment(const char * path, int idx, int * poc_base,
 
 int main(int argc, char * argv[])
 {
+  if(argc < 3)
+  {
+    printf("usage: %s <bitstream1> [<bitstream2> ...] <outfile>\n", argv[0]);
+    return -1;
+  }
+
+  FILE * fdo = fopen(argv[argc - 1], "wb");
+  if (fdo==NULL)
+  {
+    fprintf(stderr, "Error: could not open output file: %s", argv[argc - 1]);
+    exit(1);
+  }
+  int poc_base = 0;
+  int last_idr_poc = 0;
+
+  for(int i = 1; i < argc - 1; ++i)
+  {
+    std::vector<uint8_t> v = process_segment(argv[i], i, &poc_base, &last_idr_poc);
+
+    fwrite(v.data(), 1, v.size(), fdo);
+  }
+
+  fclose(fdo);
+}
