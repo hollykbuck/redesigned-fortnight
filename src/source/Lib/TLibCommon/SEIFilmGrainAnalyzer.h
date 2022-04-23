@@ -98,3 +98,103 @@ public:
   void detect_edges(const TComPicYuv* orig, TComPicYuv* dest, unsigned int uiBitDepth, ComponentID compID);
 
 private:
+  static const int  m_gx[3][3];                               // Sobel kernel x
+  static const int  m_gy[3][3];                               // Sobel kernel y
+  static const int  m_gauss5x5[5][5];                         // Gauss 5x5 kernel, integer approximation
+
+  unsigned int      m_convWidthS = 3, m_convHeightS = 3;		  // Pixel's row and col positions for Sobel filtering
+
+  double            m_lowThresholdRatio   = 0.1;               // low threshold rato
+  int               m_highThresholdRatio  = 3;                 // high threshold rato
+  
+  void gradient   (TComPicYuv* buff1, TComPicYuv* buff2,
+                    unsigned int width, unsigned int height,
+                    unsigned int convWidthS, unsigned int convHeightS, unsigned int bitDepth, ComponentID compID );
+  void suppressNonMax (TComPicYuv* buff1, TComPicYuv* buff2, unsigned int width, unsigned int height, ComponentID compID );
+  void doubleThreshold(TComPicYuv* buff, unsigned int width, unsigned int height, /*unsigned int windowSizeRatio,*/
+                       unsigned int bitDepth, ComponentID compID);
+  void edgeTracking   (TComPicYuv* buff1, unsigned int width, unsigned int height,
+                       unsigned int windowWidth, unsigned int windowHeight, unsigned int bitDepth, ComponentID compID );
+};
+
+
+class Morph
+{
+public:
+  Morph();
+  ~Morph();
+
+  int dilation  (TComPicYuv* buff, unsigned int bitDepth, ComponentID compID, int numIter, int iter = 0);
+  int erosion   (TComPicYuv* buff, unsigned int bitDepth, ComponentID compID, int numIter, int iter = 0);
+
+private:
+  unsigned int m_kernelSize = 3;		// Dilation and erosion kernel size
+};
+
+
+class FGAnalyser
+{
+public:
+  FGAnalyser();
+  ~FGAnalyser();
+
+  void init(const int width,
+      const int height,
+      const int sourcePaddingWidth,
+      const int sourcePaddingHeight,
+      const InputColourSpaceConversion ipCSC,
+      const bool         bClipInputVideoToRec709Range,
+      const ChromaFormat inputChroma,
+      const BitDepths& inputBitDepths,
+      const BitDepths& outputBitDepths,
+      const int frameSkip,
+      const bool doAnalysis[],
+      std::string filmGrainExternalMask,
+      std::string filmGrainExternalDenoised);
+  void destroy        ();
+  bool initBufs       (TComPic* pic);
+  void estimate_grain (TComPic* pic);
+
+  int                                     getLog2scaleFactor()  { return m_log2ScaleFactor; };
+  SEIFilmGrainCharacteristics::CompModel  getCompModel(int idx) { return m_compModel[idx];  };
+
+private:
+  std::string                      m_filmGrainExternalMask = "";
+  std::string                      m_filmGrainExternalDenoised = "";
+  int                              m_sourcePadding[2];
+  InputColourSpaceConversion       m_ipCSC;
+  bool                             m_bClipInputVideoToRec709Range;
+  BitDepths                        m_bitDepthsIn;
+  int                              m_frameSkip;
+  ChromaFormat  m_chromaFormatIDC;
+  BitDepths     m_bitDepths;
+  bool          m_doAnalysis[MAX_NUM_COMPONENT] = { false, false, false };
+
+  Canny    m_edgeDetector;
+  Morph    m_morphOperation;
+  double   m_lowIntensityRatio            = 0.1;                    // supress everything below 0.1*maxIntensityOffset
+  static constexpr double m_tap_filtar[3] = { 1, 2, 1 };
+  static constexpr double m_normTap       = 4.0;
+
+  // fg model parameters
+  int                                    m_log2ScaleFactor;
+  SEIFilmGrainCharacteristics::CompModel m_compModel[MAX_NUM_COMPONENT];
+
+  TComPicYuv *m_originalBuf = nullptr;
+  TComPicYuv *m_workingBuf  = nullptr;
+  TComPicYuv *m_maskBuf     = nullptr;
+
+  void findMask                 ();
+
+  void estimate_grain_parameters    ();
+  void block_transform              (const TComPicYuv& buff1, std::vector<PelMatrix>& squared_dct_grain_block_list, int offsetX, int offsetY, unsigned int bitDepth, ComponentID compID);
+  void estimate_cutoff_freq         (const std::vector<PelMatrix>& blocks, ComponentID compID);
+  int  cutoff_frequency             (std::vector<double>& mean);
+  void estimate_scaling_factors     (std::vector<int>& data_x, std::vector<int>& data_y, unsigned int bitDepth, ComponentID compID);
+  bool fit_function                 (std::vector<int>& data_x, std::vector<int>& data_y, std::vector<double>& coeffs, std::vector<double>& scalingVec,
+                                     int order, int bitDepth, bool second_pass);
+  void avg_scaling_vec              (std::vector<double> &scalingVec, ComponentID compID, int bitDepth);
+  bool lloyd_max                    (std::vector<double>& scalingVec, std::vector<int>& quantizedVec, double& distortion, int numQuantizedLevels, int bitDepth);
+  void quantize                     (std::vector<double>& scalingVec, std::vector<double>& quantizedVec, double& distortion, std::vector<double> partition, std::vector<double> codebook);
+  void extend_points                (std::vector<int>& data_x, std::vector<int>& data_y, int bitDepth);
+
