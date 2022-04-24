@@ -198,3 +198,26 @@ private:
   void quantize                     (std::vector<double>& scalingVec, std::vector<double>& quantizedVec, double& distortion, std::vector<double> partition, std::vector<double> codebook);
   void extend_points                (std::vector<int>& data_x, std::vector<int>& data_y, int bitDepth);
 
+  void setEstimatedParameters       (std::vector<int>& quantizedVec, unsigned int bitDepth, ComponentID compID);
+  void define_intervals_and_scalings(std::vector<std::vector<int>>& parameters, std::vector<int>& quantizedVec, int bitDepth);
+  void scale_down                   (std::vector<std::vector<int>>& parameters, int bitDepth);
+  void confirm_intervals            (std::vector<std::vector<int>>& parameters);
+
+  long double ldpow                 (long double n, unsigned p);
+  int         meanVar               (TComPicYuv& buffer, int windowSize, ComponentID compID, int offsetX, int offsetY, bool getVar);
+  int         count_edges           (TComPicYuv& buffer, int windowSize, ComponentID compID, int offsetX, int offsetY);
+
+  void subsample                    (const TComPicYuv& input, TComPicYuv& output, ComponentID compID, const int factor = 2, const int padding = 0) const;
+  void upsample                     (const TComPicYuv& input, TComPicYuv& output, ComponentID compID, const int factor = 2, const int padding = 0) const;
+  void combineMasks                 (TComPicYuv& buff, TComPicYuv& buff2, ComponentID compID);
+  void suppressLowIntensity         (const TComPicYuv& buff1, TComPicYuv& buff2, unsigned int bitDepth, ComponentID compID);
+  void subtract                     (TComPicYuv& buffer1, TComPicYuv& buffer2);
+
+}; // END CLASS DEFINITION
+
+//! \}
+#endif
+
+#endif // __SEIFILMGRAINANALYZER__
+
+
