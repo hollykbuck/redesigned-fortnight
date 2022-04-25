@@ -98,3 +98,103 @@ Void TComPrediction::destroy()
       m_piYuvExt[ch][buf] = NULL;
     }
   }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_acYuvPred[i].destroy();
+  }
+
+  m_cYuvPredTemp.destroy();
+
+  if( m_pLumaRecBuffer )
+  {
+    delete [] m_pLumaRecBuffer;
+    m_pLumaRecBuffer = 0;
+  }
+  m_iLumaRecStride = 0;
+
+  for (UInt i = 0; i < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS; i++)
+  {
+    for (UInt j = 0; j < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS; j++)
+    {
+      m_filteredBlock[i][j].destroy();
+    }
+    m_filteredBlockTmp[i].destroy();
+  }
+}
+
+Void TComPrediction::initTempBuff(ChromaFormat chromaFormatIDC)
+{
+  // if it has been initialised before, but the chroma format has changed, release the memory and start again.
+  if( m_piYuvExt[COMPONENT_Y][PRED_BUF_UNFILTERED] != NULL && m_cYuvPredTemp.getChromaFormat()!=chromaFormatIDC)
+  {
+    destroy();
+  }
+
+  if( m_piYuvExt[COMPONENT_Y][PRED_BUF_UNFILTERED] == NULL ) // check if first is null (in which case, nothing initialised yet)
+  {
+    Int extWidth  = MAX_CU_SIZE + 16;
+    Int extHeight = MAX_CU_SIZE + 1;
+
+    for (UInt i = 0; i < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS; i++)
+    {
+      m_filteredBlockTmp[i].create(extWidth, extHeight + 7, chromaFormatIDC);
+      for (UInt j = 0; j < LUMA_INTERPOLATION_FILTER_SUB_SAMPLE_POSITIONS; j++)
+      {
+        m_filteredBlock[i][j].create(extWidth, extHeight, chromaFormatIDC);
+      }
+    }
+
+    m_iYuvExtSize = (MAX_CU_SIZE*2+1) * (MAX_CU_SIZE*2+1);
+    for(UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+    {
+      for(UInt buf=0; buf<NUM_PRED_BUF; buf++)
+      {
+        m_piYuvExt[ch][buf] = new Pel[ m_iYuvExtSize ];
+      }
+    }
+
+    // new structure
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      m_acYuvPred[i] .create( MAX_CU_SIZE, MAX_CU_SIZE, chromaFormatIDC );
+    }
+
+    m_cYuvPredTemp.create( MAX_CU_SIZE, MAX_CU_SIZE, chromaFormatIDC );
+  }
+
+
+  if (m_iLumaRecStride != (MAX_CU_SIZE>>1) + 1)
+  {
+    m_iLumaRecStride =  (MAX_CU_SIZE>>1) + 1;
+    if (!m_pLumaRecBuffer)
+    {
+      m_pLumaRecBuffer = new Pel[ m_iLumaRecStride * m_iLumaRecStride ];
+    }
+  }
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+// Function for calculating DC value of the reference samples used in Intra prediction
+//NOTE: Bit-Limit - 25-bit source
+Pel TComPrediction::predIntraGetPredValDC( const Pel* pSrc, Int iSrcStride, UInt iWidth, UInt iHeight)
+{
+  assert(iWidth > 0 && iHeight > 0);
+  Int iInd, iSum = 0;
+  Pel pDcVal;
+
+  for (iInd = 0;iInd < iWidth;iInd++)
+  {
+    iSum += pSrc[iInd-iSrcStride];
+  }
+  for (iInd = 0;iInd < iHeight;iInd++)
+  {
+    iSum += pSrc[iInd*iSrcStride-1];
+  }
+
+  pDcVal = (iSum + iWidth) / (iWidth + iHeight);
+
+  return pDcVal;
