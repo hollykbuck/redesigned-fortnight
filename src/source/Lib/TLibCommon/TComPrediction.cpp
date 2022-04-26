@@ -298,3 +298,103 @@ Void TComPrediction::xPredIntraAng(       Int bitDepth,
         refMain[k] = refSide[invAngleSum>>8];
       }
     }
+    else
+    {
+      for (Int x=0;x<2*width+1;x++)
+      {
+        refAbove[x] = pSrc[x-srcStride-1];
+      }
+      for (Int y=0;y<2*height+1;y++)
+      {
+        refLeft[y] = pSrc[(y-1)*srcStride-1];
+      }
+      refMain = bIsModeVer ? refAbove : refLeft ;
+      refSide = bIsModeVer ? refLeft  : refAbove;
+    }
+
+    // swap width/height if we are doing a horizontal mode:
+    Pel tempArray[MAX_CU_SIZE*MAX_CU_SIZE];
+    const Int dstStride = bIsModeVer ? dstStrideTrue : MAX_CU_SIZE;
+    Pel *pDst = bIsModeVer ? pTrueDst : tempArray;
+    if (!bIsModeVer)
+    {
+      std::swap(width, height);
+    }
+
+    if (intraPredAngle == 0)  // pure vertical or pure horizontal
+    {
+      for (Int y=0;y<height;y++)
+      {
+        for (Int x=0;x<width;x++)
+        {
+          pDst[y*dstStride+x] = refMain[x+1];
+        }
+      }
+
+      if (edgeFilter)
+      {
+        for (Int y=0;y<height;y++)
+        {
+          pDst[y*dstStride] = Clip3 (0, ((1 << bitDepth) - 1), pDst[y*dstStride] + (( refSide[y+1] - refSide[0] ) >> 1) );
+        }
+      }
+    }
+    else
+    {
+      Pel *pDsty=pDst;
+
+      for (Int y=0, deltaPos=intraPredAngle; y<height; y++, deltaPos+=intraPredAngle, pDsty+=dstStride)
+      {
+        const Int deltaInt   = deltaPos >> 5;
+        const Int deltaFract = deltaPos & (32 - 1);
+
+        if (deltaFract)
+        {
+          // Do linear filtering
+          const Pel *pRM=refMain+deltaInt+1;
+          Int lastRefMainPel=*pRM++;
+          for (Int x=0;x<width;pRM++,x++)
+          {
+            Int thisRefMainPel=*pRM;
+            pDsty[x+0] = (Pel) ( ((32-deltaFract)*lastRefMainPel + deltaFract*thisRefMainPel +16) >> 5 );
+            lastRefMainPel=thisRefMainPel;
+          }
+        }
+        else
+        {
+          // Just copy the integer samples
+          for (Int x=0;x<width; x++)
+          {
+            pDsty[x] = refMain[x+deltaInt+1];
+          }
+        }
+      }
+    }
+
+    // Flip the block if this is the horizontal mode
+    if (!bIsModeVer)
+    {
+      for (Int y=0; y<height; y++)
+      {
+        for (Int x=0; x<width; x++)
+        {
+          pTrueDst[x*dstStrideTrue] = pDst[x];
+        }
+        pTrueDst++;
+        pDst+=dstStride;
+      }
+    }
+  }
+}
+
+Void TComPrediction::predIntraAng( const ComponentID compID, UInt uiDirMode, Pel* piOrg /* Will be null for decoding */, UInt uiOrgStride, Pel* piPred, UInt uiStride, TComTU &rTu, const Bool bUseFilteredPredSamples, const Bool bUseLosslessDPCM )
+{
+  const ChannelType    channelType = toChannelType(compID);
+  const TComRectangle &rect        = rTu.getRect(isLuma(compID) ? COMPONENT_Y : COMPONENT_Cb);
+  const Int            iWidth      = rect.width;
+  const Int            iHeight     = rect.height;
+
+  assert( g_aucConvertToBit[ iWidth ] >= 0 ); //   4x  4
+  assert( g_aucConvertToBit[ iWidth ] <= 5 ); // 128x128
+  //assert( iWidth == iHeight  );
+
