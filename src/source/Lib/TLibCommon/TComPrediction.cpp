@@ -398,3 +398,103 @@ Void TComPrediction::predIntraAng( const ComponentID compID, UInt uiDirMode, Pel
   assert( g_aucConvertToBit[ iWidth ] <= 5 ); // 128x128
   //assert( iWidth == iHeight  );
 
+        Pel *pDst = piPred;
+
+  // get starting pixel in block
+  const Int sw = (2 * iWidth + 1);
+
+  if ( bUseLosslessDPCM )
+  {
+    const Pel *ptrSrc = getPredictorPtr( compID, false );
+    // Sample Adaptive intra-Prediction (SAP)
+    if (uiDirMode==HOR_IDX)
+    {
+      // left column filled with reference samples
+      // remaining columns filled with piOrg data (if available).
+      for(Int y=0; y<iHeight; y++)
+      {
+        piPred[y*uiStride+0] = ptrSrc[(y+1)*sw];
+      }
+      if (piOrg!=0)
+      {
+        piPred+=1; // miss off first column
+        for(Int y=0; y<iHeight; y++, piPred+=uiStride, piOrg+=uiOrgStride)
+        {
+          memcpy(piPred, piOrg, (iWidth-1)*sizeof(Pel));
+        }
+      }
+    }
+    else // VER_IDX
+    {
+      // top row filled with reference samples
+      // remaining rows filled with piOrd data (if available)
+      for(Int x=0; x<iWidth; x++)
+      {
+        piPred[x] = ptrSrc[x+1];
+      }
+      if (piOrg!=0)
+      {
+        piPred+=uiStride; // miss off the first row
+        for(Int y=1; y<iHeight; y++, piPred+=uiStride, piOrg+=uiOrgStride)
+        {
+          memcpy(piPred, piOrg, iWidth*sizeof(Pel));
+        }
+      }
+    }
+  }
+  else
+  {
+    const Pel *ptrSrc = getPredictorPtr( compID, bUseFilteredPredSamples );
+
+    if ( uiDirMode == PLANAR_IDX )
+    {
+      xPredIntraPlanar( ptrSrc+sw+1, sw, pDst, uiStride, iWidth, iHeight );
+    }
+    else
+    {
+      // Create the prediction
+            TComDataCU *const pcCU              = rTu.getCU();
+      const UInt              uiAbsPartIdx      = rTu.GetAbsPartIdxTU();
+      const Bool              enableEdgeFilters = !(pcCU->isRDPCMEnabled(uiAbsPartIdx) && pcCU->getCUTransquantBypass(uiAbsPartIdx));
+#if O0043_BEST_EFFORT_DECODING
+      const Int channelsBitDepthForPrediction = rTu.getCU()->getSlice()->getSPS()->getStreamBitDepth(channelType);
+#else
+      const Int channelsBitDepthForPrediction = rTu.getCU()->getSlice()->getSPS()->getBitDepth(channelType);
+#endif
+      xPredIntraAng( channelsBitDepthForPrediction, ptrSrc+sw+1, sw, pDst, uiStride, iWidth, iHeight, channelType, uiDirMode, enableEdgeFilters );
+
+      if( uiDirMode == DC_IDX )
+      {
+        xDCPredFiltering( ptrSrc+sw+1, sw, pDst, uiStride, iWidth, iHeight, channelType );
+      }
+    }
+  }
+
+}
+
+/** Check for identical motion in both motion vector direction of a bi-directional predicted CU
+  * \returns true, if motion vectors and reference pictures match
+ */
+Bool TComPrediction::xCheckIdenticalMotion ( TComDataCU* pcCU, UInt PartAddr )
+{
+  if( pcCU->getSlice()->isInterB() && !pcCU->getSlice()->getPPS()->getWPBiPred() )
+  {
+    if( pcCU->getCUMvField(REF_PIC_LIST_0)->getRefIdx(PartAddr) >= 0 && pcCU->getCUMvField(REF_PIC_LIST_1)->getRefIdx(PartAddr) >= 0)
+    {
+      Int RefPOCL0 = pcCU->getSlice()->getRefPic(REF_PIC_LIST_0, pcCU->getCUMvField(REF_PIC_LIST_0)->getRefIdx(PartAddr))->getPOC();
+      Int RefPOCL1 = pcCU->getSlice()->getRefPic(REF_PIC_LIST_1, pcCU->getCUMvField(REF_PIC_LIST_1)->getRefIdx(PartAddr))->getPOC();
+      if(RefPOCL0 == RefPOCL1 && pcCU->getCUMvField(REF_PIC_LIST_0)->getMv(PartAddr) == pcCU->getCUMvField(REF_PIC_LIST_1)->getMv(PartAddr))
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+Void TComPrediction::motionCompensation ( TComDataCU* pcCU, TComYuv* pcYuvPred, RefPicList eRefPicList, Int iPartIdx )
+{
+  Int         iWidth;
+  Int         iHeight;
+  UInt        uiPartAddr;
+  const TComSlice *pSlice    = pcCU->getSlice();
