@@ -498,3 +498,103 @@ Void TComPrediction::motionCompensation ( TComDataCU* pcCU, TComYuv* pcYuvPred, 
   Int         iHeight;
   UInt        uiPartAddr;
   const TComSlice *pSlice    = pcCU->getSlice();
+  const SliceType  sliceType = pSlice->getSliceType();
+  const TComPPS   &pps       = *(pSlice->getPPS());
+
+  if ( iPartIdx >= 0 )
+  {
+    pcCU->getPartIndexAndSize( iPartIdx, uiPartAddr, iWidth, iHeight );
+    if ( eRefPicList != REF_PIC_LIST_X )
+    {
+      if( (sliceType == P_SLICE && pps.getUseWP()) || (sliceType == B_SLICE && pps.getWPBiPred()))
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred, true );
+        xWeightedPredictionUni( pcCU, pcYuvPred, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred );
+      }
+      else
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred );
+      }
+    }
+    else
+    {
+      if ( xCheckIdenticalMotion( pcCU, uiPartAddr ) )
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, REF_PIC_LIST_0, pcYuvPred );
+      }
+      else
+      {
+        xPredInterBi  (pcCU, uiPartAddr, iWidth, iHeight, pcYuvPred );
+      }
+    }
+    return;
+  }
+
+  for ( iPartIdx = 0; iPartIdx < pcCU->getNumPartitions(); iPartIdx++ )
+  {
+    pcCU->getPartIndexAndSize( iPartIdx, uiPartAddr, iWidth, iHeight );
+
+    if ( eRefPicList != REF_PIC_LIST_X )
+    {
+      if( (sliceType == P_SLICE && pps.getUseWP()) || (sliceType == B_SLICE && pps.getWPBiPred()))
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred, true );
+        xWeightedPredictionUni( pcCU, pcYuvPred, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred );
+      }
+      else
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, eRefPicList, pcYuvPred );
+      }
+    }
+    else
+    {
+      if ( xCheckIdenticalMotion( pcCU, uiPartAddr ) )
+      {
+        xPredInterUni (pcCU, uiPartAddr, iWidth, iHeight, REF_PIC_LIST_0, pcYuvPred );
+      }
+      else
+      {
+        xPredInterBi  (pcCU, uiPartAddr, iWidth, iHeight, pcYuvPred );
+      }
+    }
+  }
+  return;
+}
+
+Void TComPrediction::xPredInterUni ( TComDataCU* pcCU, UInt uiPartAddr, Int iWidth, Int iHeight, RefPicList eRefPicList, TComYuv* pcYuvPred, Bool bi )
+{
+  Int         iRefIdx     = pcCU->getCUMvField( eRefPicList )->getRefIdx( uiPartAddr );           assert (iRefIdx >= 0);
+  TComMv      cMv         = pcCU->getCUMvField( eRefPicList )->getMv( uiPartAddr );
+  pcCU->clipMv(cMv);
+
+  for (UInt comp=COMPONENT_Y; comp<pcYuvPred->getNumberValidComponents(); comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    xPredInterBlk  (compID,  pcCU, pcCU->getSlice()->getRefPic( eRefPicList, iRefIdx )->getPicYuvRec(), uiPartAddr, &cMv, iWidth, iHeight, pcYuvPred, bi, pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID)) );
+  }
+}
+
+Void TComPrediction::xPredInterBi ( TComDataCU* pcCU, UInt uiPartAddr, Int iWidth, Int iHeight, TComYuv* pcYuvPred )
+{
+  TComYuv* pcMbYuv;
+  Int      iRefIdx[NUM_REF_PIC_LIST_01] = {-1, -1};
+
+  for ( UInt refList = 0; refList < NUM_REF_PIC_LIST_01; refList++ )
+  {
+    RefPicList eRefPicList = (refList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
+    iRefIdx[refList] = pcCU->getCUMvField( eRefPicList )->getRefIdx( uiPartAddr );
+
+    if ( iRefIdx[refList] < 0 )
+    {
+      continue;
+    }
+
+    assert( iRefIdx[refList] < pcCU->getSlice()->getNumRefIdx(eRefPicList) );
+
+    pcMbYuv = &m_acYuvPred[refList];
+    if( pcCU->getCUMvField( REF_PIC_LIST_0 )->getRefIdx( uiPartAddr ) >= 0 && pcCU->getCUMvField( REF_PIC_LIST_1 )->getRefIdx( uiPartAddr ) >= 0 )
+    {
+      xPredInterUni ( pcCU, uiPartAddr, iWidth, iHeight, eRefPicList, pcMbYuv, true );
+    }
+    else
+    {
