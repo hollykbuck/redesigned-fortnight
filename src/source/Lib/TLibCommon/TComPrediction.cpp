@@ -698,3 +698,103 @@ Void TComPrediction::xWeightedAverage( TComYuv* pcYuvSrc0, TComYuv* pcYuvSrc1, I
 
 // AMVP
 Void TComPrediction::getMvPredAMVP( TComDataCU* pcCU, UInt uiPartIdx, UInt uiPartAddr, RefPicList eRefPicList, TComMv& rcMvPred )
+{
+  AMVPInfo* pcAMVPInfo = pcCU->getCUMvField(eRefPicList)->getAMVPInfo();
+
+  if( pcAMVPInfo->iN <= 1 )
+  {
+    rcMvPred = pcAMVPInfo->m_acMvCand[0];
+
+    pcCU->setMVPIdxSubParts( 0, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+    pcCU->setMVPNumSubParts( pcAMVPInfo->iN, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+    return;
+  }
+
+  assert(pcCU->getMVPIdx(eRefPicList,uiPartAddr) >= 0);
+  rcMvPred = pcAMVPInfo->m_acMvCand[pcCU->getMVPIdx(eRefPicList,uiPartAddr)];
+  return;
+}
+
+/** Function for deriving planar intra prediction.
+ * \param pSrc        pointer to reconstructed sample array
+ * \param srcStride   the stride of the reconstructed sample array
+ * \param rpDst       reference to pointer for the prediction sample array
+ * \param dstStride   the stride of the prediction sample array
+ * \param width       the width of the block
+ * \param height      the height of the block
+ * \param channelType type of pel array (luma, chroma)
+ * \param format      chroma format
+ *
+ * This function derives the prediction samples for planar mode (intra coding).
+ */
+//NOTE: Bit-Limit - 24-bit source
+Void TComPrediction::xPredIntraPlanar( const Pel* pSrc, Int srcStride, Pel* rpDst, Int dstStride, UInt width, UInt height )
+{
+  assert(width <= height);
+
+  Int leftColumn[MAX_CU_SIZE+1] = {0};
+  Int topRow[MAX_CU_SIZE+1] = {0};
+  Int bottomRow[MAX_CU_SIZE] = {0};
+  Int rightColumn[MAX_CU_SIZE] = {0};
+  UInt shift1Dhor = g_aucConvertToBit[ width ] + 2;
+  UInt shift1Dver = g_aucConvertToBit[ height ] + 2;
+
+  // Get left and above reference column and row
+  for(Int k=0;k<width+1;k++)
+  {
+    topRow[k] = pSrc[k-srcStride];
+  }
+
+  for (Int k=0; k < height+1; k++)
+  {
+    leftColumn[k] = pSrc[k*srcStride-1];
+  }
+
+  // Prepare intermediate variables used in interpolation
+  Int bottomLeft = leftColumn[height];
+  Int topRight   = topRow[width];
+
+  for(Int k=0;k<width;k++)
+  {
+    bottomRow[k]  = bottomLeft - topRow[k];
+    topRow[k]     <<= shift1Dver;
+  }
+
+  for(Int k=0;k<height;k++)
+  {
+    rightColumn[k]  = topRight - leftColumn[k];
+    leftColumn[k]   <<= shift1Dhor;
+  }
+
+  const UInt topRowShift = 0;
+
+  // Generate prediction signal
+  for (Int y=0;y<height;y++)
+  {
+    Int horPred = leftColumn[y] + width;
+    for (Int x=0;x<width;x++)
+    {
+      horPred += rightColumn[y];
+      topRow[x] += bottomRow[x];
+
+      Int vertPred = ((topRow[x] + topRowShift)>>topRowShift);
+      rpDst[y*dstStride+x] = ( horPred + vertPred ) >> (shift1Dhor+1);
+    }
+  }
+}
+
+/** Function for filtering intra DC predictor.
+ * \param pSrc pointer to reconstructed sample array
+ * \param iSrcStride the stride of the reconstructed sample array
+ * \param pDst reference to pointer for the prediction sample array
+ * \param iDstStride the stride of the prediction sample array
+ * \param iWidth the width of the block
+ * \param iHeight the height of the block
+ * \param channelType type of pel array (luma, chroma)
+ *
+ * This function performs filtering left and top edges of the prediction samples for DC mode (intra coding).
+ */
+Void TComPrediction::xDCPredFiltering( const Pel* pSrc, Int iSrcStride, Pel* pDst, Int iDstStride, Int iWidth, Int iHeight, ChannelType channelType )
+{
+  Int x, y, iDstStride2, iSrcStride2;
+
