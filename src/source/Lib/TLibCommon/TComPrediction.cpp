@@ -798,3 +798,103 @@ Void TComPrediction::xDCPredFiltering( const Pel* pSrc, Int iSrcStride, Pel* pDs
 {
   Int x, y, iDstStride2, iSrcStride2;
 
+  if (isLuma(channelType) && (iWidth <= MAXIMUM_INTRA_FILTERED_WIDTH) && (iHeight <= MAXIMUM_INTRA_FILTERED_HEIGHT))
+  {
+    //top-left
+    pDst[0] = (Pel)((pSrc[-iSrcStride] + pSrc[-1] + 2 * pDst[0] + 2) >> 2);
+
+    //top row (vertical filter)
+    for ( x = 1; x < iWidth; x++ )
+    {
+      pDst[x] = (Pel)((pSrc[x - iSrcStride] +  3 * pDst[x] + 2) >> 2);
+    }
+
+    //left column (horizontal filter)
+    for ( y = 1, iDstStride2 = iDstStride, iSrcStride2 = iSrcStride-1; y < iHeight; y++, iDstStride2+=iDstStride, iSrcStride2+=iSrcStride )
+    {
+      pDst[iDstStride2] = (Pel)((pSrc[iSrcStride2] + 3 * pDst[iDstStride2] + 2) >> 2);
+    }
+  }
+
+  return;
+}
+
+/* Static member function */
+Bool TComPrediction::UseDPCMForFirstPassIntraEstimation(TComTU &rTu, const UInt uiDirMode)
+{
+  return (rTu.getCU()->isRDPCMEnabled(rTu.GetAbsPartIdxTU()) ) &&
+          rTu.getCU()->getCUTransquantBypass(rTu.GetAbsPartIdxTU()) &&
+          (uiDirMode==HOR_IDX || uiDirMode==VER_IDX);
+}
+
+#if MCTS_ENC_CHECK
+
+Void getRefPUPartPos(TComDataCU* pcCU, TComMv& cMv, Int uiPartIdx, Int& ruiPredXLeft, Int& ruiPredYTop, Int& ruiPredXRight, Int& ruiPredYBottom, Int iWidth, Int iHeight)
+{
+  ruiPredXLeft = pcCU->getCUPelX();
+  ruiPredYTop = pcCU->getCUPelY();
+
+  switch (pcCU->getPartitionSize(0))
+  {
+  case SIZE_2NxN:
+    if (uiPartIdx == 0)
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + iHeight;
+    }
+    else
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + (iHeight << 1);
+      ruiPredYTop += iHeight;
+    }
+    break;
+  case SIZE_Nx2N:
+    if (uiPartIdx == 0)
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + iHeight;
+    }
+    else
+    {
+      ruiPredXRight = ruiPredXLeft + (iWidth << 1);
+      ruiPredYBottom = ruiPredYTop + iHeight;
+      ruiPredXLeft += iWidth;
+    }
+    break;
+  case SIZE_NxN:
+    if (uiPartIdx == 0)
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + iHeight;
+    }
+    else if (uiPartIdx == 1)
+    {
+      ruiPredXRight = ruiPredXLeft + (iWidth << 1);
+      ruiPredYBottom = ruiPredYTop + iHeight;
+      ruiPredXLeft += iWidth;
+    }
+    else if (uiPartIdx == 2)
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + (iHeight << 1);
+      ruiPredYTop += iHeight;
+    }
+    else if (uiPartIdx == 3)
+    {
+      ruiPredXRight = ruiPredXLeft + (iWidth << 1);
+      ruiPredYBottom = ruiPredYTop + (iHeight << 1);
+      ruiPredXLeft += iWidth;
+      ruiPredYTop += iHeight;
+    }
+    break;
+  case SIZE_2NxnU:
+    if (uiPartIdx == 0)
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + iHeight;
+    }
+    else
+    {
+      ruiPredXRight = ruiPredXLeft + iWidth;
+      ruiPredYBottom = ruiPredYTop + pcCU->getHeight(0);
