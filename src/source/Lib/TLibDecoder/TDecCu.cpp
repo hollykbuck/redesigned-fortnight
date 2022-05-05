@@ -98,3 +98,103 @@ Void TDecCu::create( UInt uiMaxDepth, UInt uiMaxWidth, UInt uiMaxHeight, ChromaF
     // (Section 7.4.3.2: "The CVS shall not contain data that result in (Log2MinTrafoSize) MinTbLog2SizeY
     //                    greater than or equal to MinCbLog2SizeY")
     // TODO: tidy the array allocation given the above comment.
+
+    m_ppcYuvResi[ui] = new TComYuv;    m_ppcYuvResi[ui]->create( uiWidth, uiHeight, chromaFormatIDC );
+    m_ppcYuvReco[ui] = new TComYuv;    m_ppcYuvReco[ui]->create( uiWidth, uiHeight, chromaFormatIDC );
+    m_ppcCU     [ui] = new TComDataCU; m_ppcCU     [ui]->create( chromaFormatIDC, uiNumPartitions, uiWidth, uiHeight, true, uiMaxWidth >> (m_uiMaxDepth - 1) );
+  }
+
+  m_bDecodeDQP = false;
+  m_IsChromaQpAdjCoded = false;
+
+  // initialize partition order.
+  UInt* piTmp = &g_auiZscanToRaster[0];
+  initZscanToRaster(m_uiMaxDepth, 1, 0, piTmp);
+  initRasterToZscan( uiMaxWidth, uiMaxHeight, m_uiMaxDepth );
+
+  // initialize conversion matrix from partition index to pel
+  initRasterToPelXY( uiMaxWidth, uiMaxHeight, m_uiMaxDepth );
+}
+
+Void TDecCu::destroy()
+{
+  for ( UInt ui = 0; ui < m_uiMaxDepth-1; ui++ )
+  {
+    m_ppcYuvResi[ui]->destroy(); delete m_ppcYuvResi[ui]; m_ppcYuvResi[ui] = NULL;
+    m_ppcYuvReco[ui]->destroy(); delete m_ppcYuvReco[ui]; m_ppcYuvReco[ui] = NULL;
+    m_ppcCU     [ui]->destroy(); delete m_ppcCU     [ui]; m_ppcCU     [ui] = NULL;
+  }
+
+  delete [] m_ppcYuvResi; m_ppcYuvResi = NULL;
+  delete [] m_ppcYuvReco; m_ppcYuvReco = NULL;
+  delete [] m_ppcCU     ; m_ppcCU      = NULL;
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+/** 
+ Parse a CTU.
+ \param    pCtu                      [in/out] pointer to CTU data structure
+ \param    isLastCtuOfSliceSegment   [out]    true, if last CTU of the slice segment
+ */
+Void TDecCu::decodeCtu( TComDataCU* pCtu, Bool& isLastCtuOfSliceSegment )
+{
+  if ( pCtu->getSlice()->getPPS()->getUseDQP() )
+  {
+    setdQPFlag(true);
+  }
+
+  if ( pCtu->getSlice()->getUseChromaQpAdj() )
+  {
+    setIsChromaQpAdjCoded(true);
+  }
+
+  // start from the top level CU
+  xDecodeCU( pCtu, 0, 0, isLastCtuOfSliceSegment);
+}
+
+/** 
+ Decoding process for a CTU.
+ \param    pCtu                      [in/out] pointer to CTU data structure
+ */
+Void TDecCu::decompressCtu( TComDataCU* pCtu )
+{
+  xDecompressCU( pCtu, 0,  0 );
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+//! decode end-of-slice flag
+Bool TDecCu::xDecodeSliceEnd( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  UInt uiIsLastCtuOfSliceSegment;
+
+  if (pcCU->isLastSubCUOfCtu(uiAbsPartIdx))
+  {
+    m_pcEntropyDecoder->decodeTerminatingBit( uiIsLastCtuOfSliceSegment );
+  }
+  else
+  {
+    uiIsLastCtuOfSliceSegment=0;
+  }
+
+  return uiIsLastCtuOfSliceSegment>0;
+}
+
+//! decode CU block recursively
+Void TDecCu::xDecodeCU( TComDataCU*const pcCU, const UInt uiAbsPartIdx, const UInt uiDepth, Bool &isLastCtuOfSliceSegment)
+{
+  TComPic* pcPic        = pcCU->getPic();
+  const TComSPS &sps    = pcPic->getPicSym()->getSPS();
+  const TComPPS &pps    = pcPic->getPicSym()->getPPS();
+  const UInt maxCuWidth = sps.getMaxCUWidth();
+  const UInt maxCuHeight= sps.getMaxCUHeight();
+  UInt uiCurNumParts    = pcPic->getNumPartitionsInCtu() >> (uiDepth<<1);
+  UInt uiQNumParts      = uiCurNumParts>>2;
+
+
+  Bool bBoundary = false;
