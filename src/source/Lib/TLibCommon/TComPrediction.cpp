@@ -998,3 +998,102 @@ Bool checkMVPRange(TComMv& cMv, UInt ctuLength, UInt tileXPosInCtus, UInt tileYP
     const Int cRangeYBottom = rightBottomPelPosY - (isFullPelVerChroma ? 0 : CromaRBSampleoffset);
 
     if (!(PredXLeft >= cRangeXLeft && PredXLeft <= cRangeXRight) || !(PredXRight >= cRangeXLeft && PredXRight <= cRangeXRight))
+    {
+      return false;
+    }
+    else if ((!(PredYTop >= cRangeYTop && PredYTop <= cRangeYBottom) || !(PredYBottom >= cRangeYTop && PredYBottom <= cRangeYBottom)) && (chromaFormat != CHROMA_422))
+    {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+Bool TComPrediction::checkTMctsMvp(TComDataCU* pcCU, Int partIdx)
+{
+  Int   partWidth  = 0;
+  Int   partHeight = 0;
+  UInt  partAddr   = 0;
+
+  UInt  tileXPosInCtus = 0;
+  UInt  tileYPosInCtus = 0;
+  UInt  tileWidthtInCtus = 0;
+  UInt  tileHeightInCtus = 0;
+  
+  getTilePosition(pcCU, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus);
+
+  const UInt            ctuLength = pcCU->getPic()->getPicSym()->getSPS().getMaxCUWidth();
+  const ChromaFormat chromaFormat = pcCU->getPic()->getPicSym()->getSPS().getChromaFormatIdc();
+
+  Int   predXLeft;
+  Int   predYTop;
+  Int   predXRight;
+  Int   predYBottom;
+
+  if (partIdx >= 0)
+  {
+    pcCU->getPartIndexAndSize(partIdx, partAddr, partWidth, partHeight);
+
+    if (xCheckIdenticalMotion(pcCU, partAddr))
+    {
+      RefPicList eRefPicList = REF_PIC_LIST_0;
+      TComMv      cMv = pcCU->getCUMvField(eRefPicList)->getMv(partAddr);
+      getRefPUPartPos(pcCU, cMv, partIdx, predXLeft, predYTop, predXRight, predYBottom, partWidth, partHeight);
+      if (!checkMVPRange(cMv, ctuLength, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus, predXLeft, predXRight, predYTop, predYBottom, chromaFormat))
+      {
+        return false;
+      }
+    }
+    else
+    {
+      for (UInt refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
+      {
+        RefPicList eRefPicList = (refList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
+
+        TComMv      cMv = pcCU->getCUMvField(eRefPicList)->getMv(partAddr);
+        getRefPUPartPos(pcCU, cMv, partIdx, predXLeft, predYTop, predXRight, predYBottom, partWidth, partHeight);
+        if (!checkMVPRange(cMv, ctuLength, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus, predXLeft, predXRight, predYTop, predYBottom, chromaFormat))
+        {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  for (partIdx = 0; partIdx < pcCU->getNumPartitions(); partIdx++)
+  {
+    pcCU->getPartIndexAndSize(partIdx, partAddr, partWidth, partHeight);
+
+    if (xCheckIdenticalMotion(pcCU, partAddr))
+    {
+      RefPicList eRefPicList = REF_PIC_LIST_0;
+      TComMv      cMv = pcCU->getCUMvField(eRefPicList)->getMv(partAddr);
+      getRefPUPartPos(pcCU, cMv, partIdx, predXLeft, predYTop, predXRight, predYBottom, partWidth, partHeight);
+      if (!checkMVPRange(cMv, ctuLength, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus, predXLeft, predXRight, predYTop, predYBottom, chromaFormat))
+      {
+        return false;
+      }
+    }
+    else
+    {
+      for (UInt refList = 0; refList < NUM_REF_PIC_LIST_01; refList++)
+      {
+        RefPicList eRefPicList = (refList ? REF_PIC_LIST_1 : REF_PIC_LIST_0);
+
+        TComMv      cMv = pcCU->getCUMvField(eRefPicList)->getMv(partAddr);
+        getRefPUPartPos(pcCU, cMv, partIdx, predXLeft, predYTop, predXRight, predYBottom, partWidth, partHeight);
+        if (!checkMVPRange(cMv, ctuLength, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus, predXLeft, predXRight, predYTop, predYBottom, chromaFormat))
+        {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+
+#endif
+//! \}
