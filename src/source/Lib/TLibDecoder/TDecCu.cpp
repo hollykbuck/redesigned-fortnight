@@ -298,3 +298,103 @@ Void TDecCu::xDecodeCU( TComDataCU*const pcCU, const UInt uiAbsPartIdx, const UI
 #else
     m_ppcCU[uiDepth]->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, uiMergeIndex );
 #endif
+    pcCU->setInterDirSubParts( uhInterDirNeighbours[uiMergeIndex], uiAbsPartIdx, 0, uiDepth );
+
+    TComMv cTmpMv( 0, 0 );
+    for ( UInt uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
+    {
+      if ( pcCU->getSlice()->getNumRefIdx( RefPicList( uiRefListIdx ) ) > 0 )
+      {
+        pcCU->setMVPIdxSubParts( 0, RefPicList( uiRefListIdx ), uiAbsPartIdx, 0, uiDepth);
+        pcCU->setMVPNumSubParts( 0, RefPicList( uiRefListIdx ), uiAbsPartIdx, 0, uiDepth);
+        pcCU->getCUMvField( RefPicList( uiRefListIdx ) )->setAllMvd( cTmpMv, SIZE_2Nx2N, uiAbsPartIdx, uiDepth );
+        pcCU->getCUMvField( RefPicList( uiRefListIdx ) )->setAllMvField( cMvFieldNeighbours[ 2*uiMergeIndex + uiRefListIdx ], SIZE_2Nx2N, uiAbsPartIdx, uiDepth );
+      }
+    }
+    xFinishDecodeCU( pcCU, uiAbsPartIdx, uiDepth, isLastCtuOfSliceSegment );
+    return;
+  }
+
+  m_pcEntropyDecoder->decodePredMode( pcCU, uiAbsPartIdx, uiDepth );
+  m_pcEntropyDecoder->decodePartSize( pcCU, uiAbsPartIdx, uiDepth );
+
+  if (pcCU->isIntra( uiAbsPartIdx ) && pcCU->getPartitionSize( uiAbsPartIdx ) == SIZE_2Nx2N )
+  {
+    m_pcEntropyDecoder->decodeIPCMInfo( pcCU, uiAbsPartIdx, uiDepth );
+
+    if(pcCU->getIPCMFlag(uiAbsPartIdx))
+    {
+      xFinishDecodeCU( pcCU, uiAbsPartIdx, uiDepth, isLastCtuOfSliceSegment );
+      return;
+    }
+  }
+
+  // prediction mode ( Intra : direction mode, Inter : Mv, reference idx )
+  m_pcEntropyDecoder->decodePredInfo( pcCU, uiAbsPartIdx, uiDepth, m_ppcCU[uiDepth]);
+
+  // Coefficient decoding
+  Bool bCodeDQP = getdQPFlag();
+  Bool isChromaQpAdjCoded = getIsChromaQpAdjCoded();
+  m_pcEntropyDecoder->decodeCoeff( pcCU, uiAbsPartIdx, uiDepth, bCodeDQP, isChromaQpAdjCoded );
+  setIsChromaQpAdjCoded( isChromaQpAdjCoded );
+  setdQPFlag( bCodeDQP );
+  xFinishDecodeCU( pcCU, uiAbsPartIdx, uiDepth, isLastCtuOfSliceSegment );
+}
+
+Void TDecCu::xFinishDecodeCU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool &isLastCtuOfSliceSegment)
+{
+  if(  pcCU->getSlice()->getPPS()->getUseDQP())
+  {
+    pcCU->setQPSubParts( getdQPFlag()?pcCU->getRefQP(uiAbsPartIdx):pcCU->getCodedQP(), uiAbsPartIdx, uiDepth ); // set QP
+  }
+
+  if (pcCU->getSlice()->getUseChromaQpAdj() && !getIsChromaQpAdjCoded())
+  {
+    pcCU->setChromaQpAdjSubParts( pcCU->getCodedChromaQpAdj(), uiAbsPartIdx, uiDepth ); // set QP
+  }
+
+  isLastCtuOfSliceSegment = xDecodeSliceEnd( pcCU, uiAbsPartIdx );
+}
+
+Void TDecCu::xDecompressCU( TComDataCU* pCtu, UInt uiAbsPartIdx,  UInt uiDepth )
+{
+  TComPic* pcPic = pCtu->getPic();
+  TComSlice * pcSlice = pCtu->getSlice();
+  const TComSPS &sps=*(pcSlice->getSPS());
+
+  Bool bBoundary = false;
+  UInt uiLPelX   = pCtu->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  UInt uiRPelX   = uiLPelX + (sps.getMaxCUWidth()>>uiDepth)  - 1;
+  UInt uiTPelY   = pCtu->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  UInt uiBPelY   = uiTPelY + (sps.getMaxCUHeight()>>uiDepth) - 1;
+
+  if( ( uiRPelX >= sps.getPicWidthInLumaSamples() ) || ( uiBPelY >= sps.getPicHeightInLumaSamples() ) )
+  {
+    bBoundary = true;
+  }
+
+  if( ( ( uiDepth < pCtu->getDepth( uiAbsPartIdx ) ) && ( uiDepth < sps.getLog2DiffMaxMinCodingBlockSize() ) ) || bBoundary )
+  {
+    UInt uiNextDepth = uiDepth + 1;
+    UInt uiQNumParts = pCtu->getTotalNumPart() >> (uiNextDepth<<1);
+    UInt uiIdx = uiAbsPartIdx;
+    for ( UInt uiPartIdx = 0; uiPartIdx < 4; uiPartIdx++ )
+    {
+      uiLPelX = pCtu->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiIdx] ];
+      uiTPelY = pCtu->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiIdx] ];
+
+      if( ( uiLPelX < sps.getPicWidthInLumaSamples() ) && ( uiTPelY < sps.getPicHeightInLumaSamples() ) )
+      {
+        xDecompressCU(pCtu, uiIdx, uiNextDepth );
+      }
+
+      uiIdx += uiQNumParts;
+    }
+    return;
+  }
+
+  // Residual reconstruction
+  m_ppcYuvResi[uiDepth]->clear();
+
+  m_ppcCU[uiDepth]->copySubCU( pCtu, uiAbsPartIdx );
+
