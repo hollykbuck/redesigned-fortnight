@@ -198,3 +198,103 @@ Void TDecCu::xDecodeCU( TComDataCU*const pcCU, const UInt uiAbsPartIdx, const UI
 
 
   Bool bBoundary = false;
+  UInt uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  UInt uiRPelX   = uiLPelX + (maxCuWidth>>uiDepth)  - 1;
+  UInt uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  UInt uiBPelY   = uiTPelY + (maxCuHeight>>uiDepth) - 1;
+
+  if( ( uiRPelX < sps.getPicWidthInLumaSamples() ) && ( uiBPelY < sps.getPicHeightInLumaSamples() ) )
+  {
+    m_pcEntropyDecoder->decodeSplitFlag( pcCU, uiAbsPartIdx, uiDepth );
+  }
+  else
+  {
+    bBoundary = true;
+  }
+  if( ( ( uiDepth < pcCU->getDepth( uiAbsPartIdx ) ) && ( uiDepth < sps.getLog2DiffMaxMinCodingBlockSize() ) ) || bBoundary )
+  {
+    UInt uiIdx = uiAbsPartIdx;
+    if( uiDepth == pps.getMaxCuDQPDepth() && pps.getUseDQP())
+    {
+      setdQPFlag(true);
+      pcCU->setQPSubParts( pcCU->getRefQP(uiAbsPartIdx), uiAbsPartIdx, uiDepth ); // set QP to default QP
+    }
+
+    if( uiDepth == pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth() && pcCU->getSlice()->getUseChromaQpAdj() )
+    {
+      setIsChromaQpAdjCoded(true);
+    }
+
+    for ( UInt uiPartUnitIdx = 0; uiPartUnitIdx < 4; uiPartUnitIdx++ )
+    {
+      uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiIdx] ];
+      uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiIdx] ];
+
+      if ( !isLastCtuOfSliceSegment && ( uiLPelX < sps.getPicWidthInLumaSamples() ) && ( uiTPelY < sps.getPicHeightInLumaSamples() ) )
+      {
+        xDecodeCU( pcCU, uiIdx, uiDepth+1, isLastCtuOfSliceSegment );
+      }
+      else
+      {
+        pcCU->setOutsideCUPart( uiIdx, uiDepth+1 );
+      }
+
+      uiIdx += uiQNumParts;
+    }
+    if( uiDepth == pps.getMaxCuDQPDepth() && pps.getUseDQP())
+    {
+      if ( getdQPFlag() )
+      {
+        UInt uiQPSrcPartIdx = uiAbsPartIdx;
+        pcCU->setQPSubParts( pcCU->getRefQP( uiQPSrcPartIdx ), uiAbsPartIdx, uiDepth ); // set QP to default QP
+      }
+    }
+    return;
+  }
+
+  if( uiDepth <= pps.getMaxCuDQPDepth() && pps.getUseDQP())
+  {
+    setdQPFlag(true);
+    pcCU->setQPSubParts( pcCU->getRefQP(uiAbsPartIdx), uiAbsPartIdx, uiDepth ); // set QP to default QP
+  }
+
+  if( uiDepth <= pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth() && pcCU->getSlice()->getUseChromaQpAdj() )
+  {
+    setIsChromaQpAdjCoded(true);
+  }
+
+  if (pps.getTransquantBypassEnabledFlag())
+  {
+    m_pcEntropyDecoder->decodeCUTransquantBypassFlag( pcCU, uiAbsPartIdx, uiDepth );
+  }
+
+  // decode CU mode and the partition size
+  if( !pcCU->getSlice()->isIntra())
+  {
+    m_pcEntropyDecoder->decodeSkipFlag( pcCU, uiAbsPartIdx, uiDepth );
+  }
+
+
+  if( pcCU->isSkipped(uiAbsPartIdx) )
+  {
+    m_ppcCU[uiDepth]->copyInterPredInfoFrom( pcCU, uiAbsPartIdx, REF_PIC_LIST_0 );
+    m_ppcCU[uiDepth]->copyInterPredInfoFrom( pcCU, uiAbsPartIdx, REF_PIC_LIST_1 );
+    TComMvField cMvFieldNeighbours[MRG_MAX_NUM_CANDS << 1]; // double length for mv of both lists
+    UChar uhInterDirNeighbours[MRG_MAX_NUM_CANDS];
+    Int numValidMergeCand = 0;
+    for( UInt ui = 0; ui < m_ppcCU[uiDepth]->getSlice()->getMaxNumMergeCand(); ++ui )
+    {
+      uhInterDirNeighbours[ui] = 0;
+    }
+    m_pcEntropyDecoder->decodeMergeIndex( pcCU, 0, uiAbsPartIdx, uiDepth );
+    UInt uiMergeIndex = pcCU->getMergeIndex(uiAbsPartIdx);
+#if MCTS_ENC_CHECK
+    UInt numSpatialMergeCandidates = 0;
+    m_ppcCU[uiDepth]->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates, uiMergeIndex );
+    if ( m_pConformanceCheck->getTMctsCheck() && m_ppcCU[uiDepth]->isLastColumnCTUInTile() && (uiMergeIndex >= numSpatialMergeCandidates) )
+    {
+      m_pConformanceCheck->flagTMctsError("Merge Index using non-spatial merge candidate (Skip)");
+    }
+#else
+    m_ppcCU[uiDepth]->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, uiMergeIndex );
+#endif
