@@ -498,3 +498,103 @@ TDecCu::xIntraRecBlk(       TComYuv*    pcRecoYuv,
   const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
 
   const TComRectangle &tuRect  =rTu.getRect(compID);
+  const UInt uiWidth           = tuRect.width;
+  const UInt uiHeight          = tuRect.height;
+  const UInt uiStride          = pcRecoYuv->getStride (compID);
+        Pel* piPred            = pcPredYuv->getAddr( compID, uiAbsPartIdx );
+  const ChromaFormat chFmt     = rTu.GetChromaFormat();
+
+  if (uiWidth != uiHeight)
+  {
+    //------------------------------------------------
+
+    //split at current level if dividing into square sub-TUs
+
+    TComTURecurse subTURecurse(rTu, false, TComTU::VERTICAL_SPLIT, true, compID);
+
+    //recurse further
+    do
+    {
+      xIntraRecBlk(pcRecoYuv, pcPredYuv, pcResiYuv, compID, subTURecurse);
+    } while (subTURecurse.nextSection(rTu));
+
+    //------------------------------------------------
+
+    return;
+  }
+
+  const UInt uiChPredMode  = pcCU->getIntraDir( toChannelType(compID), uiAbsPartIdx );
+  const UInt partsPerMinCU = 1<<(2*(sps.getMaxTotalCUDepth() - sps.getLog2DiffMaxMinCodingBlockSize()));
+  const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && !bIsLuma) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
+  const UInt uiChFinalMode = ((chFmt == CHROMA_422)       && !bIsLuma) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
+
+  //===== init availability pattern =====
+  const Bool bUseFilteredPredictions=TComPrediction::filteringIntraReferenceSamples(compID, uiChFinalMode, uiWidth, uiHeight, chFmt, pcCU->getSlice()->getSPS()->getSpsRangeExtension().getIntraSmoothingDisabledFlag());
+
+#if DEBUG_STRING
+  std::ostream &ss(std::cout);
+#endif
+
+  DEBUG_STRING_NEW(sTemp)
+  m_pcPrediction->initIntraPatternChType( rTu, compID, bUseFilteredPredictions  DEBUG_STRING_PASS_INTO(sTemp) );
+
+
+  //===== get prediction signal =====
+
+  m_pcPrediction->predIntraAng( compID,   uiChFinalMode, 0 /* Decoder does not have an original image */, 0, piPred, uiStride, rTu, bUseFilteredPredictions );
+
+#if DEBUG_STRING
+  ss << sTemp;
+#endif
+
+  //===== inverse transform =====
+  Pel*      piResi            = pcResiYuv->getAddr( compID, uiAbsPartIdx );
+  TCoeff*   pcCoeff           = pcCU->getCoeff(compID) + rTu.getCoefficientOffset(compID);//( uiNumCoeffInc * uiAbsPartIdx );
+
+  const QpParam cQP(*pcCU, compID);
+
+
+  DEBUG_STRING_NEW(sDebug);
+#if DEBUG_STRING
+  const Int debugPredModeMask=DebugStringGetPredModeMask(MODE_INTRA);
+  std::string *psDebug=(DebugOptionList::DebugString_InvTran.getInt()&debugPredModeMask) ? &sDebug : 0;
+#endif
+
+  if (pcCU->getCbf(uiAbsPartIdx, compID, rTu.GetTransformDepthRel()) != 0)
+  {
+    m_pcTrQuant->invTransformNxN( rTu, compID, piResi, uiStride, pcCoeff, cQP DEBUG_STRING_PASS_INTO(psDebug) );
+  }
+  else
+  {
+    for (UInt y = 0; y < uiHeight; y++)
+    {
+      for (UInt x = 0; x < uiWidth; x++)
+      {
+        piResi[(y * uiStride) + x] = 0;
+      }
+    }
+  }
+
+#if DEBUG_STRING
+  if (psDebug)
+  {
+    ss << (*psDebug);
+  }
+#endif
+
+  //===== reconstruction =====
+  const UInt uiRecIPredStride  = pcCU->getPic()->getPicYuvRec()->getStride(compID);
+
+  const Bool useCrossComponentPrediction = isChroma(compID) && (pcCU->getCrossComponentPredictionAlpha(uiAbsPartIdx, compID) != 0);
+  const Pel* pResiLuma  = pcResiYuv->getAddr( COMPONENT_Y, uiAbsPartIdx );
+  const Int  strideLuma = pcResiYuv->getStride( COMPONENT_Y );
+
+        Pel* pPred      = piPred;
+        Pel* pResi      = piResi;
+        Pel* pReco      = pcRecoYuv->getAddr( compID, uiAbsPartIdx );
+        Pel* pRecIPred  = pcCU->getPic()->getPicYuvRec()->getAddr( compID, pcCU->getCtuRsAddr(), pcCU->getZorderIdxInCtu() + uiAbsPartIdx );
+
+
+#if DEBUG_STRING
+  const Bool bDebugPred=((DebugOptionList::DebugString_Pred.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+  const Bool bDebugResi=((DebugOptionList::DebugString_Resi.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
