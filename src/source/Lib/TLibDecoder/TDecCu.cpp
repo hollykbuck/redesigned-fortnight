@@ -398,3 +398,103 @@ Void TDecCu::xDecompressCU( TComDataCU* pCtu, UInt uiAbsPartIdx,  UInt uiDepth )
 
   m_ppcCU[uiDepth]->copySubCU( pCtu, uiAbsPartIdx );
 
+  switch( m_ppcCU[uiDepth]->getPredictionMode(0) )
+  {
+    case MODE_INTER:
+      xReconInter( m_ppcCU[uiDepth], uiDepth );
+      break;
+    case MODE_INTRA:
+      xReconIntraQT( m_ppcCU[uiDepth], uiDepth );
+      break;
+    default:
+      assert(0);
+      break;
+  }
+
+#if DEBUG_STRING
+  const PredMode predMode=m_ppcCU[uiDepth]->getPredictionMode(0);
+  if (DebugOptionList::DebugString_Structure.getInt()&DebugStringGetPredModeMask(predMode))
+  {
+    PartSize eSize=m_ppcCU[uiDepth]->getPartitionSize(0);
+    std::ostream &ss(std::cout);
+
+    ss <<"###: " << (predMode==MODE_INTRA?"Intra   ":"Inter   ") << partSizeToString[eSize] << " CU at " << m_ppcCU[uiDepth]->getCUPelX() << ", " << m_ppcCU[uiDepth]->getCUPelY() << " width=" << UInt(m_ppcCU[uiDepth]->getWidth(0)) << std::endl;
+  }
+#endif
+
+  if ( m_ppcCU[uiDepth]->isLosslessCoded(0) && (m_ppcCU[uiDepth]->getIPCMFlag(0) == false))
+  {
+    xFillPCMBuffer(m_ppcCU[uiDepth], uiDepth);
+  }
+
+  xCopyToPic( m_ppcCU[uiDepth], pcPic, uiAbsPartIdx, uiDepth );
+}
+
+Void TDecCu::xReconInter( TComDataCU* pcCU, UInt uiDepth )
+{
+
+  // inter prediction
+#if MCTS_ENC_CHECK
+  if (m_pConformanceCheck->getTMctsCheck()  && !m_pcPrediction->checkTMctsMvp(pcCU))
+  {
+    m_pConformanceCheck->flagTMctsError("motion vector across tile boundaries");
+  }
+#endif
+  m_pcPrediction->motionCompensation( pcCU, m_ppcYuvReco[uiDepth] );
+
+#if DEBUG_STRING
+  const Int debugPredModeMask=DebugStringGetPredModeMask(MODE_INTER);
+  if (DebugOptionList::DebugString_Pred.getInt()&debugPredModeMask)
+  {
+    printBlockToStream(std::cout, "###inter-pred: ", *(m_ppcYuvReco[uiDepth]));
+  }
+#endif
+
+  // inter recon
+  xDecodeInterTexture( pcCU, uiDepth );
+
+#if DEBUG_STRING
+  if (DebugOptionList::DebugString_Resi.getInt()&debugPredModeMask)
+  {
+    printBlockToStream(std::cout, "###inter-resi: ", *(m_ppcYuvResi[uiDepth]));
+  }
+#endif
+
+  // clip for only non-zero cbp case
+  if  ( pcCU->getQtRootCbf( 0) )
+  {
+    m_ppcYuvReco[uiDepth]->addClip( m_ppcYuvReco[uiDepth], m_ppcYuvResi[uiDepth], 0, pcCU->getWidth( 0 ), pcCU->getSlice()->getSPS()->getBitDepths() );
+  }
+  else
+  {
+    m_ppcYuvReco[uiDepth]->copyPartToPartYuv( m_ppcYuvReco[uiDepth],0, pcCU->getWidth( 0 ),pcCU->getHeight( 0 ));
+  }
+#if DEBUG_STRING
+  if (DebugOptionList::DebugString_Reco.getInt()&debugPredModeMask)
+  {
+    printBlockToStream(std::cout, "###inter-reco: ", *(m_ppcYuvReco[uiDepth]));
+  }
+#endif
+
+}
+
+
+Void
+TDecCu::xIntraRecBlk(       TComYuv*    pcRecoYuv,
+                            TComYuv*    pcPredYuv,
+                            TComYuv*    pcResiYuv,
+                      const ComponentID compID,
+                            TComTU     &rTu)
+{
+  if (!rTu.ProcessComponentSection(compID))
+  {
+    return;
+  }
+  const Bool       bIsLuma = isLuma(compID);
+
+
+  TComDataCU *pcCU = rTu.getCU();
+  const TComSPS &sps=*(pcCU->getSlice()->getSPS());
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+
+  const TComRectangle &tuRect  =rTu.getRect(compID);
