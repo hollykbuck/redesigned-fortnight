@@ -598,3 +598,103 @@ TDecCu::xIntraRecBlk(       TComYuv*    pcRecoYuv,
 #if DEBUG_STRING
   const Bool bDebugPred=((DebugOptionList::DebugString_Pred.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
   const Bool bDebugResi=((DebugOptionList::DebugString_Resi.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+  const Bool bDebugReco=((DebugOptionList::DebugString_Reco.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+  if (bDebugPred || bDebugResi || bDebugReco)
+  {
+    ss << "###: " << "CompID: " << compID << " pred mode (ch/fin): " << uiChPredMode << "/" << uiChFinalMode << " absPartIdx: " << rTu.GetAbsPartIdxTU() << std::endl;
+  }
+#endif
+
+  const Int clipbd = sps.getBitDepth(toChannelType(compID));
+#if O0043_BEST_EFFORT_DECODING
+  const Int bitDepthDelta = sps.getStreamBitDepth(toChannelType(compID)) - clipbd;
+#endif
+
+  if( useCrossComponentPrediction )
+  {
+    TComTrQuant::crossComponentPrediction( rTu, compID, pResiLuma, piResi, piResi, uiWidth, uiHeight, strideLuma, uiStride, uiStride, true );
+  }
+
+  for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+  {
+#if DEBUG_STRING
+    if (bDebugPred || bDebugResi || bDebugReco)
+    {
+      ss << "###: ";
+    }
+
+    if (bDebugPred)
+    {
+      ss << " - pred: ";
+      for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+      {
+        ss << pPred[ uiX ] << ", ";
+      }
+    }
+    if (bDebugResi)
+    {
+      ss << " - resi: ";
+    }
+#endif
+
+    for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+    {
+#if DEBUG_STRING
+      if (bDebugResi)
+      {
+        ss << pResi[ uiX ] << ", ";
+      }
+#endif
+#if O0043_BEST_EFFORT_DECODING
+      pReco    [ uiX ] = ClipBD( rightShiftEvenRounding<Pel>(pPred[ uiX ] + pResi[ uiX ], bitDepthDelta), clipbd );
+#else
+      pReco    [ uiX ] = ClipBD( pPred[ uiX ] + pResi[ uiX ], clipbd );
+#endif
+      pRecIPred[ uiX ] = pReco[ uiX ];
+    }
+#if DEBUG_STRING
+    if (bDebugReco)
+    {
+      ss << " - reco: ";
+      for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+      {
+        ss << pReco[ uiX ] << ", ";
+      }
+    }
+
+    if (bDebugPred || bDebugResi || bDebugReco)
+    {
+      ss << "\n";
+    }
+#endif
+    pPred     += uiStride;
+    pResi     += uiStride;
+    pReco     += uiStride;
+    pRecIPred += uiRecIPredStride;
+  }
+}
+
+
+Void
+TDecCu::xReconIntraQT( TComDataCU* pcCU, UInt uiDepth )
+{
+  if (pcCU->getIPCMFlag(0))
+  {
+    xReconPCM( pcCU, uiDepth );
+    return;
+  }
+  const UInt numChType = pcCU->getPic()->getChromaFormat()!=CHROMA_400 ? 2 : 1;
+  for (UInt chType=CHANNEL_TYPE_LUMA; chType<numChType; chType++)
+  {
+    const ChannelType chanType=ChannelType(chType);
+    const Bool NxNPUHas4Parts = ::isChroma(chanType) ? enable4ChromaPUsInIntraNxNCU(pcCU->getPic()->getChromaFormat()) : true;
+    const UInt uiInitTrDepth = ( pcCU->getPartitionSize(0) != SIZE_2Nx2N && NxNPUHas4Parts ? 1 : 0 );
+
+    TComTURecurse tuRecurseCU(pcCU, 0);
+    TComTURecurse tuRecurseWithPU(tuRecurseCU, false, (uiInitTrDepth==0)?TComTU::DONT_SPLIT : TComTU::QUAD_SPLIT);
+
+    do
+    {
+      xIntraRecQT( m_ppcYuvReco[uiDepth], m_ppcYuvReco[uiDepth], m_ppcYuvResi[uiDepth], chanType, tuRecurseWithPU );
+    } while (tuRecurseWithPU.nextSection(tuRecurseCU));
+  }
