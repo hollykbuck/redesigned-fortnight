@@ -698,3 +698,103 @@ TDecCu::xReconIntraQT( TComDataCU* pcCU, UInt uiDepth )
       xIntraRecQT( m_ppcYuvReco[uiDepth], m_ppcYuvReco[uiDepth], m_ppcYuvResi[uiDepth], chanType, tuRecurseWithPU );
     } while (tuRecurseWithPU.nextSection(tuRecurseCU));
   }
+}
+
+
+
+/** Function for deriving reconstructed PU/CU chroma samples with QTree structure
+ * \param pcRecoYuv pointer to reconstructed sample arrays
+ * \param pcPredYuv pointer to prediction sample arrays
+ * \param pcResiYuv pointer to residue sample arrays
+ * \param chType    texture channel type (luma/chroma)
+ * \param rTu       reference to transform data
+ *
+ \ This function derives reconstructed PU/CU chroma samples with QTree recursive structure
+ */
+
+Void
+TDecCu::xIntraRecQT(TComYuv*    pcRecoYuv,
+                    TComYuv*    pcPredYuv,
+                    TComYuv*    pcResiYuv,
+                    const ChannelType chType,
+                    TComTU     &rTu)
+{
+  UInt uiTrDepth    = rTu.GetTransformDepthRel();
+  TComDataCU *pcCU  = rTu.getCU();
+  UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  UInt uiTrMode     = pcCU->getTransformIdx( uiAbsPartIdx );
+  if( uiTrMode == uiTrDepth )
+  {
+    if (isLuma(chType))
+    {
+      xIntraRecBlk( pcRecoYuv, pcPredYuv, pcResiYuv, COMPONENT_Y,  rTu );
+    }
+    else
+    {
+      const UInt numValidComp=getNumberValidComponents(rTu.GetChromaFormat());
+      for(UInt compID=COMPONENT_Cb; compID<numValidComp; compID++)
+      {
+        xIntraRecBlk( pcRecoYuv, pcPredYuv, pcResiYuv, ComponentID(compID), rTu );
+      }
+    }
+  }
+  else
+  {
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      xIntraRecQT( pcRecoYuv, pcPredYuv, pcResiYuv, chType, tuRecurseChild );
+    } while (tuRecurseChild.nextSection(rTu));
+  }
+}
+
+Void TDecCu::xCopyToPic( TComDataCU* pcCU, TComPic* pcPic, UInt uiZorderIdx, UInt uiDepth )
+{
+  UInt uiCtuRsAddr = pcCU->getCtuRsAddr();
+
+  m_ppcYuvReco[uiDepth]->copyToPicYuv  ( pcPic->getPicYuvRec (), uiCtuRsAddr, uiZorderIdx );
+
+  return;
+}
+
+Void TDecCu::xDecodeInterTexture ( TComDataCU* pcCU, UInt uiDepth )
+{
+
+  TComTURecurse tuRecur(pcCU, 0, uiDepth);
+
+  for(UInt ch=0; ch<pcCU->getPic()->getNumberValidComponents(); ch++)
+  {
+    const ComponentID compID=ComponentID(ch);
+    DEBUG_STRING_OUTPUT(std::cout, debug_reorder_data_inter_token[compID])
+
+    m_pcTrQuant->invRecurTransformNxN ( compID, m_ppcYuvResi[uiDepth], tuRecur );
+  }
+
+  DEBUG_STRING_OUTPUT(std::cout, debug_reorder_data_inter_token[MAX_NUM_COMPONENT])
+}
+
+/** Function for deriving reconstructed luma/chroma samples of a PCM mode CU.
+ * \param pcCU pointer to current CU
+ * \param uiPartIdx part index
+ * \param piPCM pointer to PCM code arrays
+ * \param piReco pointer to reconstructed sample arrays
+ * \param uiStride stride of reconstructed sample arrays
+ * \param uiWidth CU width
+ * \param uiHeight CU height
+ * \param compID colour component ID
+ * \returns Void
+ */
+Void TDecCu::xDecodePCMTexture( TComDataCU* pcCU, const UInt uiPartIdx, const Pel *piPCM, Pel* piReco, const UInt uiStride, const UInt uiWidth, const UInt uiHeight, const ComponentID compID)
+{
+        Pel* piPicReco         = pcCU->getPic()->getPicYuvRec()->getAddr(compID, pcCU->getCtuRsAddr(), pcCU->getZorderIdxInCtu()+uiPartIdx);
+  const UInt uiPicStride       = pcCU->getPic()->getPicYuvRec()->getStride(compID);
+  const TComSPS &sps           = *(pcCU->getSlice()->getSPS());
+  const UInt uiPcmLeftShiftBit = sps.getBitDepth(toChannelType(compID)) - sps.getPCMBitDepth(toChannelType(compID));
+
+  for(UInt uiY = 0; uiY < uiHeight; uiY++ )
+  {
+    for(UInt uiX = 0; uiX < uiWidth; uiX++ )
+    {
+      piReco[uiX] = (piPCM[uiX] << uiPcmLeftShiftBit);
+      piPicReco[uiX] = piReco[uiX];
+    }
