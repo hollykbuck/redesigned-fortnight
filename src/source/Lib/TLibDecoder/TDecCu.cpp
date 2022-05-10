@@ -798,3 +798,67 @@ Void TDecCu::xDecodePCMTexture( TComDataCU* pcCU, const UInt uiPartIdx, const Pe
       piReco[uiX] = (piPCM[uiX] << uiPcmLeftShiftBit);
       piPicReco[uiX] = piReco[uiX];
     }
+    piPCM += uiWidth;
+    piReco += uiStride;
+    piPicReco += uiPicStride;
+  }
+}
+
+/** Function for reconstructing a PCM mode CU.
+ * \param pcCU pointer to current CU
+ * \param uiDepth CU Depth
+ * \returns Void
+ */
+Void TDecCu::xReconPCM( TComDataCU* pcCU, UInt uiDepth )
+{
+  const UInt maxCuWidth     = pcCU->getSlice()->getSPS()->getMaxCUWidth();
+  const UInt maxCuHeight    = pcCU->getSlice()->getSPS()->getMaxCUHeight();
+  for (UInt ch=0; ch < pcCU->getPic()->getNumberValidComponents(); ch++)
+  {
+    const ComponentID compID = ComponentID(ch);
+    const UInt width  = (maxCuWidth >>(uiDepth+m_ppcYuvResi[uiDepth]->getComponentScaleX(compID)));
+    const UInt height = (maxCuHeight>>(uiDepth+m_ppcYuvResi[uiDepth]->getComponentScaleY(compID)));
+    const UInt stride = m_ppcYuvResi[uiDepth]->getStride(compID);
+    Pel * pPCMChannel = pcCU->getPCMSample(compID);
+    Pel * pRecChannel = m_ppcYuvReco[uiDepth]->getAddr(compID);
+    xDecodePCMTexture( pcCU, 0, pPCMChannel, pRecChannel, stride, width, height, compID );
+  }
+}
+
+/** Function for filling the PCM buffer of a CU using its reconstructed sample array
+ * \param pCU   pointer to current CU
+ * \param depth CU Depth
+ */
+Void TDecCu::xFillPCMBuffer(TComDataCU* pCU, UInt depth)
+{
+  const ChromaFormat format = pCU->getPic()->getChromaFormat();
+  const UInt numValidComp   = getNumberValidComponents(format);
+  const UInt maxCuWidth     = pCU->getSlice()->getSPS()->getMaxCUWidth();
+  const UInt maxCuHeight    = pCU->getSlice()->getSPS()->getMaxCUHeight();
+
+  for (UInt componentIndex = 0; componentIndex < numValidComp; componentIndex++)
+  {
+    const ComponentID component = ComponentID(componentIndex);
+
+    const UInt width  = maxCuWidth  >> (depth + getComponentScaleX(component, format));
+    const UInt height = maxCuHeight >> (depth + getComponentScaleY(component, format));
+
+    Pel *source      = m_ppcYuvReco[depth]->getAddr(component, 0, width);
+    Pel *destination = pCU->getPCMSample(component);
+
+    const UInt sourceStride = m_ppcYuvReco[depth]->getStride(component);
+
+    for (Int line = 0; line < height; line++)
+    {
+      for (Int column = 0; column < width; column++)
+      {
+        destination[column] = source[column];
+      }
+
+      source      += sourceStride;
+      destination += width;
+    }
+  }
+}
+
+//! \}
