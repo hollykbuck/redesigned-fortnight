@@ -98,3 +98,103 @@ struct LevelTierFeatures
   UInt64      maxLumaSr;
   UInt        maxBr[Level::NUMBER_OF_TIERS];     // in units of BrVclFactor or BrNalFactor bits/s
   UInt        minCrBase[Level::NUMBER_OF_TIERS];
+  UInt        getMaxPicWidthInLumaSamples()  const;
+  UInt        getMaxPicHeightInLumaSamples() const;
+};
+
+
+struct ProfileFeatures
+{
+  Profile::Name            profile;
+  const TChar            *pNameString;
+  UInt                     maxBitDepth;
+  ChromaFormat             maxChromaFormat;
+  Bool                     generalIntraConstraintFlag;
+  Bool                     generalOnePictureOnlyConstraintFlag;
+  TRISTATE                 generalLowerBitRateConstraint;
+  TRISTATE                 generalRExtToolsEnabled;
+  TRISTATE                 extendedPrecisionProcessingFlag;
+  TRISTATE                 chromaQpOffsetListEnabledFlag;
+  TRISTATE                 cabacBypassAlignmentEnabledFlag;
+  HBRFACTOREQN             hbrFactorEqn;
+  Bool                     bWavefrontsAndTilesCanBeUsedSimultaneously;
+
+  UInt                     minTileColumnWidthInLumaSamples;
+  UInt                     minTileRowHeightInLumaSamples;
+  Bool                     bCanUseLevel8p5;
+  UInt                     cpbVclFactor;
+  UInt                     cpbNalFactor;                // currently not used for checking
+  UInt                     formatCapabilityFactorx1000; // currently not used for checking
+  UInt                     minCrScaleFactorx10;         // currently not used for checking
+  const LevelTierFeatures *pLevelTiersListInfo;
+
+  Bool chromaFormatValid(ChromaFormat chFmt) const { return (profile == Profile::MAINREXT || profile == Profile::HIGHTHROUGHPUTREXT) ? chFmt<=maxChromaFormat : (chFmt == maxChromaFormat ); }
+  Bool onlyIRAPPictures()                    const { return generalIntraConstraintFlag; }
+  UInt getHbrFactor(Bool bLowerBitRateConstraintFlag) const    // currently not used for checking
+  {
+    return hbrFactorEqn==HBR_1_OR_2   ? (2-(bLowerBitRateConstraintFlag?1:0)) :
+          (hbrFactorEqn==HBR_12_OR_24 ? 12*(2-(bLowerBitRateConstraintFlag?1:0)) :
+                                        1);
+  }
+};
+
+
+class ProfileLevelTierFeatures
+{
+  private:
+    const ProfileFeatures   *m_pProfile;
+    const LevelTierFeatures *m_pLevelTier;
+    UInt                     m_hbrFactor;               // currently not used for checking
+    Level::Tier              m_tier;
+    UInt                     m_maxRawCtuBits;
+  public:
+    ProfileLevelTierFeatures() : m_pProfile(0), m_pLevelTier(0), m_hbrFactor(0), m_tier(Level::MAIN), m_maxRawCtuBits(0) { }
+
+    Void activate(const TComSPS &sps);
+
+    const ProfileFeatures     *getProfileFeatures()   const { return m_pProfile; }
+    const LevelTierFeatures   *getLevelTierFeatures() const { return m_pLevelTier; }
+    Level::Tier                getTier() const { return m_tier; }
+    UInt64 getCpbSizeInBits()            const { return (m_pLevelTier!=0 && m_pProfile!=0) ? UInt64(m_pProfile->cpbVclFactor) * m_pLevelTier->maxCpb[m_tier?1:0] : UInt64(0); }
+    Double getMinCr()                    const { return (m_pLevelTier!=0 && m_pProfile!=0) ? (m_pProfile->minCrScaleFactorx10 * m_pLevelTier->minCrBase[m_tier?1:0])/10.0 : 0.0 ; }   // currently not used for checking
+    UInt getMaxRawCtuBits()              const { return m_maxRawCtuBits; }
+};
+#endif
+
+
+class TDecConformanceCheck
+{
+private:
+#if MCTS_ENC_CHECK
+  Bool m_tmctsCheckEnabled;
+#endif
+#if DECODER_PARTIAL_CONFORMANCE_CHECK
+  UInt  m_numberOfSlicesInPicture;
+  UInt64 m_bytesInPicture;
+#endif
+  ProfileLevelTierFeatures m_activatedFeatures;
+
+public:
+
+  // Static member functions
+
+  static inline Bool doChecking()
+  {
+    return DECODER_PARTIAL_CONFORMANCE_CHECK != 0;
+  }
+
+  static UInt getMinLog2CtbSize(const TComPTL &ptl, UInt layerPlus1=0);
+  static UInt getMaxLog2CtbSize(const TComPTL &ptl, UInt layerPlus1=0);
+
+
+#if DECODER_PARTIAL_CONFORMANCE_CHECK == 0
+  static inline std::ostream &getStream()  { return std::cout; }
+
+  static inline Void finishWarningReport() { }
+
+  template <class T>
+  static Void checkRange(const T& , const TChar *, const T& , const T& ) { }
+
+#else
+
+
