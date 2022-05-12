@@ -198,3 +198,103 @@ Void SyntaxElementParser::xReadUvlc( UInt& rValue)
 
 #if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
 Void SyntaxElementParser::xReadSvlc( Int& rValue, const TChar *pSymbolName)
+#else
+Void SyntaxElementParser::xReadSvlc( Int& rValue)
+#endif
+{
+  UInt uiBits = 0;
+  m_pcBitstream->read( 1, uiBits );
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  UInt totalLen=1;
+#endif
+  if( 0 == uiBits )
+  {
+    UInt uiLength = 0;
+
+    while( ! ( uiBits & 1 ))
+    {
+      m_pcBitstream->read( 1, uiBits );
+      uiLength++;
+    }
+
+    m_pcBitstream->read( uiLength, uiBits );
+
+    uiBits += (1 << uiLength);
+    rValue = ( uiBits & 1) ? -(Int)(uiBits>>1) : (Int)(uiBits>>1);
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    totalLen+=uiLength+uiLength;
+#endif
+  }
+  else
+  {
+    rValue = 0;
+  }
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(pSymbolName, Int(totalLen), rValue);
+#endif
+
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "%8lld  ", g_nSymbolCounter++ );
+  fprintf( g_hTrace, "%-50s se(v) : %d\n", pSymbolName, rValue );
+  fflush ( g_hTrace );
+#endif
+
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+Void SyntaxElementParser::xReadFlag (UInt& rValue, const TChar *pSymbolName)
+#else
+Void SyntaxElementParser::xReadFlag (UInt& rValue)
+#endif
+{
+  m_pcBitstream->read( 1, rValue );
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(pSymbolName, 1, Int(rValue));
+#endif
+
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "%8lld  ", g_nSymbolCounter++ );
+  fprintf( g_hTrace, "%-50s u(1)  : %d\n", pSymbolName, rValue );
+  fflush ( g_hTrace );
+#endif
+}
+
+Void SyntaxElementParser::xReadRbspTrailingBits()
+{
+  UInt bit;
+  READ_FLAG( bit, "rbsp_stop_one_bit");
+  assert (bit==1);
+  Int cnt = 0;
+  while (m_pcBitstream->getNumBitsUntilByteAligned())
+  {
+    READ_FLAG( bit, "rbsp_alignment_zero_bit");
+    assert (bit==0);
+    cnt++;
+  }
+  assert(cnt<8);
+}
+
+Void AUDReader::parseAccessUnitDelimiter(TComInputBitstream* bs, UInt &picType)
+{
+  setBitstream(bs);
+
+#if ENC_DEC_TRACE
+  xTraceAccessUnitDelimiter();
+#endif
+
+  READ_CODE (3, picType, "pic_type");
+  xReadRbspTrailingBits();
+}
+
+Void FDReader::parseFillerData(TComInputBitstream* bs, UInt &fdSize)
+{
+  setBitstream(bs);
+#if ENC_DEC_TRACE
+  xTraceFillerData();
+#endif
+  UInt ffByte;
+  fdSize = 0;
+  while( m_pcBitstream->getNumBitsLeft() >8 )
+  {
+    READ_CODE (8, ffByte, "ff_byte");
+    assert (ffByte==0xff);
