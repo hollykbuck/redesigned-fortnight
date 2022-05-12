@@ -198,3 +198,74 @@ public:
 #else
 
 
+  static inline std::ostream &getStream()
+  {
+#if DECODER_PARTIAL_CONFORMANCE_CHECK == 1
+    std::cout << "WARNING: Conformance failure - ";
+    return std::cout;
+#else
+    std::cerr << "ERROR: Conformance failure - ";
+    return std::cerr;
+#endif
+  }
+
+  static inline Void finishWarningReport()
+  {
+#if DECODER_PARTIAL_CONFORMANCE_CHECK == 2
+    exit(1);
+#endif
+  }
+
+  template <class T>
+  static Void checkRange(const T& val, const TChar *name, const T& minValInclusive, const T& maxValInclusive)
+  {
+    if (val<minValInclusive || val>maxValInclusive)
+    {
+      getStream() << name << " must be in the range of " << minValInclusive << " to " << maxValInclusive << " (inclusive) - decoded value of " << val << "\n";
+      finishWarningReport();
+    }
+  }
+
+#endif
+
+
+  // Member functions
+
+  TDecConformanceCheck();
+
+#if DECODER_PARTIAL_CONFORMANCE_CHECK == 0
+  Void
+  checkSliceActivation(const TComSlice &/*slice*/,
+                       const InputNALUnit &/*nalu*/,
+                       const TComPic &/*pic*/,
+                       const Bool /*bFirstSliceInStream*/,
+                       const Bool /*bFirstSliceInSequence*/,
+                       const Bool /*bFirstSliceInPicture*/) { }
+
+  Void
+  checkCtuDecoding(const UInt numUsedBits) { }
+#else
+  Void
+  checkSliceActivation(const TComSlice &slice,
+                       const InputNALUnit &nalu,
+                       const TComPic &pic,
+                       const Bool bFirstSliceInStream,
+                       const Bool bFirstSliceInSequence,
+                       const Bool bFirstSliceInPicture);
+
+  Void
+  checkCtuDecoding(const UInt numUsedBits);
+#endif
+
+#if MCTS_ENC_CHECK
+  Void enableTMctsCheck(Bool enabled) { m_tmctsCheckEnabled = enabled; };
+  Bool getTMctsCheck() const { return m_tmctsCheckEnabled;  }
+  Void flagTMctsError(const char *error)
+  {
+    fprintf(stderr, "TMCTS check error: %s\n", error);
+  }
+#endif
+};
+
+
+#endif
