@@ -298,3 +298,11 @@ Void FDReader::parseFillerData(TComInputBitstream* bs, UInt &fdSize)
   {
     READ_CODE (8, ffByte, "ff_byte");
     assert (ffByte==0xff);
+    fdSize++;
+  }
+  xReadRbspTrailingBits();
+}
+
+
+//! \}
+
