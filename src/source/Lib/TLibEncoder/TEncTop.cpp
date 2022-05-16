@@ -98,3 +98,103 @@ Void TEncTop::create ()
   if (m_bUseSAO)
   {
     m_cEncSAO.create( getSourceWidth(), getSourceHeight(), m_chromaFormatIDC, m_maxCUWidth, m_maxCUHeight, m_maxTotalCUDepth, m_log2SaoOffsetScale[CHANNEL_TYPE_LUMA], m_log2SaoOffsetScale[CHANNEL_TYPE_CHROMA] );
+    m_cEncSAO.createEncData(getSaoCtuBoundary());
+  }
+#if ADAPTIVE_QP_SELECTION
+  if (m_bUseAdaptQpSelect)
+  {
+    m_cTrQuant.initSliceQpDelta();
+  }
+#endif
+
+  m_cLoopFilter.create( m_maxTotalCUDepth );
+
+  if ( m_RCEnableRateControl )
+  {
+#if JVET_Y0105_SW_AND_QDF
+    m_cRateCtrl.init( m_framesToBeEncoded, m_RCTargetBitrate, (Int)( (Double)m_iFrameRate/m_temporalSubsampleRatio + 0.5), m_iGOPSize, m_uiIntraPeriod, m_iSourceWidth, m_iSourceHeight,
+                      m_maxCUWidth, m_maxCUHeight,m_RCKeepHierarchicalBit, m_RCUseLCUSeparateModel, m_GOPList );
+#else
+    m_cRateCtrl.init( m_framesToBeEncoded, m_RCTargetBitrate, (Int)( (Double)m_iFrameRate/m_temporalSubsampleRatio + 0.5), m_iGOPSize, m_iSourceWidth, m_iSourceHeight,
+                      m_maxCUWidth, m_maxCUHeight,m_RCKeepHierarchicalBit, m_RCUseLCUSeparateModel, m_GOPList );
+#endif
+  }
+  
+
+  m_pppcRDSbacCoder = new TEncSbac** [m_maxTotalCUDepth+1];
+#if FAST_BIT_EST
+  m_pppcBinCoderCABAC = new TEncBinCABACCounter** [m_maxTotalCUDepth+1];
+#else
+  m_pppcBinCoderCABAC = new TEncBinCABAC** [m_maxTotalCUDepth+1];
+#endif
+
+  for ( Int iDepth = 0; iDepth < m_maxTotalCUDepth+1; iDepth++ )
+  {
+    m_pppcRDSbacCoder[iDepth] = new TEncSbac* [CI_NUM];
+#if FAST_BIT_EST
+    m_pppcBinCoderCABAC[iDepth] = new TEncBinCABACCounter* [CI_NUM];
+#else
+    m_pppcBinCoderCABAC[iDepth] = new TEncBinCABAC* [CI_NUM];
+#endif
+
+    for (Int iCIIdx = 0; iCIIdx < CI_NUM; iCIIdx ++ )
+    {
+      m_pppcRDSbacCoder[iDepth][iCIIdx] = new TEncSbac;
+#if FAST_BIT_EST
+      m_pppcBinCoderCABAC [iDepth][iCIIdx] = new TEncBinCABACCounter;
+#else
+      m_pppcBinCoderCABAC [iDepth][iCIIdx] = new TEncBinCABAC;
+#endif
+      m_pppcRDSbacCoder   [iDepth][iCIIdx]->init( m_pppcBinCoderCABAC [iDepth][iCIIdx] );
+    }
+  }
+}
+
+Void TEncTop::destroy ()
+{
+  // destroy processing unit classes
+  m_cGOPEncoder.        destroy();
+  m_cSliceEncoder.      destroy();
+  m_cCuEncoder.         destroy();
+  m_cEncSAO.            destroyEncData();
+  m_cEncSAO.            destroy();
+  m_cLoopFilter.        destroy();
+  m_cRateCtrl.          destroy();
+  m_cSearch.            destroy();
+  Int iDepth;
+  for ( iDepth = 0; iDepth < m_maxTotalCUDepth+1; iDepth++ )
+  {
+    for (Int iCIIdx = 0; iCIIdx < CI_NUM; iCIIdx ++ )
+    {
+      delete m_pppcRDSbacCoder[iDepth][iCIIdx];
+      delete m_pppcBinCoderCABAC[iDepth][iCIIdx];
+    }
+  }
+
+  for ( iDepth = 0; iDepth < m_maxTotalCUDepth+1; iDepth++ )
+  {
+    delete [] m_pppcRDSbacCoder[iDepth];
+    delete [] m_pppcBinCoderCABAC[iDepth];
+  }
+
+  delete [] m_pppcRDSbacCoder;
+  delete [] m_pppcBinCoderCABAC;
+
+  // destroy ROM
+  destroyROM();
+
+  return;
+}
+
+Void TEncTop::init(Bool isFieldCoding)
+{
+  TComSPS &sps0=*(m_spsMap.allocatePS(0)); // NOTE: implementations that use more than 1 SPS need to be aware of activation issues.
+  TComPPS &pps0=*(m_ppsMap.allocatePS(0));
+  // initialize SPS
+  xInitSPS(sps0);
+  xInitVPS(m_cVPS, sps0);
+
+  if (m_RCCpbSaturationEnabled)
+  {
+    m_cRateCtrl.initHrdParam(sps0.getVuiParameters()->getHrdParameters(), m_iFrameRate, m_RCInitialCpbFullness);
+  }
