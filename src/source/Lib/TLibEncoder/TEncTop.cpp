@@ -298,3 +298,103 @@ Void TEncTop::xInitScalingLists(TComSPS &sps, TComPPS &pps)
       }
     }
   }
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+Void TEncTop::deletePicBuffer()
+{
+  TComList<TComPic*>::iterator iterPic = m_cListPic.begin();
+  Int iSize = Int( m_cListPic.size() );
+
+  for ( Int i = 0; i < iSize; i++ )
+  {
+    TComPic* pcPic = *(iterPic++);
+
+    pcPic->destroy();
+    delete pcPic;
+    pcPic = NULL;
+  }
+}
+
+/**
+ - Application has picture buffer list with size of GOP + 1
+ - Picture buffer list acts like as ring buffer
+ - End of the list has the latest picture
+ .
+ \param   flush               cause encoder to encode a partial GOP
+ \param   pcPicYuvOrg         original YUV picture
+ \param   pcPicYuvTrueOrg     
+ \param   snrCSC
+ \retval  rcListPicYuvRecOut  list of reconstruction YUV pictures
+ \retval  accessUnitsOut      list of output access units
+ \retval  iNumEncoded         number of encoded pictures
+ */
+#if JVET_X0048_X0103_FILM_GRAIN
+Void TEncTop::encode(Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvTrueOrg, TComPicYuv* pcfilteredOrgPicForFG, const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, TComList<TComPicYuv*>& rcListPicYuvRecOut, std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded)
+#else
+Void TEncTop::encode( Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvTrueOrg, const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, TComList<TComPicYuv*>& rcListPicYuvRecOut, std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded )
+#endif
+{
+  if (pcPicYuvOrg != NULL)
+  {
+    // get original YUV
+    TComPic* pcPicCurr = NULL;
+
+    Int ppsID=-1; // Use default PPS ID
+    if (getWCGChromaQPControl().isEnabled())
+    {
+      ppsID=getdQPs()[ m_iPOCLast+1 ];
+    }
+    xGetNewPicBuffer( pcPicCurr, ppsID );
+    pcPicYuvOrg->copyToPic( pcPicCurr->getPicYuvOrg() );
+    pcPicYuvTrueOrg->copyToPic( pcPicCurr->getPicYuvTrueOrg() );
+#if JVET_X0048_X0103_FILM_GRAIN
+    if (m_fgcSEIAnalysisEnabled && m_fgcSEIExternalDenoised.empty())
+    {
+      pcfilteredOrgPicForFG->copyToPic(pcPicCurr->getPicFilteredFG());
+    }
+#endif
+
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+    if ( getShutterFilterFlag() )
+    {
+      pcPicCurr->xOutputPreFilteredPic(pcPicCurr, &m_cListPic);
+      pcPicCurr->getPicYuvOrg()->copyToPic(pcPicYuvOrg);
+    }
+#endif
+
+    // compute image characteristics
+    if ( getUseAdaptiveQP() )
+    {
+      m_cPreanalyzer.xPreanalyze( dynamic_cast<TEncPic*>( pcPicCurr ) );
+    }
+  }
+
+  if ((m_iNumPicRcvd == 0) || (!flush && (m_iPOCLast != 0) && (m_iNumPicRcvd != m_iGOPSize) && (m_iGOPSize != 0)))
+  {
+    iNumEncoded = 0;
+    return;
+  }
+
+  if ( m_RCEnableRateControl )
+  {
+    m_cRateCtrl.initRCGOP( m_iNumPicRcvd );
+  }
+
+  // compress GOP
+  m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, false, false, ipCSC, snrCSC, getOutputLogControl());
+
+  if ( m_RCEnableRateControl )
+  {
+    m_cRateCtrl.destroyRCGOP();
+  }
+
+  iNumEncoded         = m_iNumPicRcvd;
+  m_iNumPicRcvd       = 0;
+  m_uiNumAllPicCoded += iNumEncoded;
+}
+
+/**------------------------------------------------
