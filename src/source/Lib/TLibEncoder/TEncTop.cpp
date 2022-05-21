@@ -698,3 +698,103 @@ Void TEncTop::xInitSPS(TComSPS &sps)
 
   sps.setQuadtreeTULog2MaxSize( m_uiQuadtreeTULog2MaxSize );
   sps.setQuadtreeTULog2MinSize( m_uiQuadtreeTULog2MinSize );
+  sps.setQuadtreeTUMaxDepthInter( m_uiQuadtreeTUMaxDepthInter    );
+  sps.setQuadtreeTUMaxDepthIntra( m_uiQuadtreeTUMaxDepthIntra    );
+
+  sps.setSPSTemporalMVPEnabledFlag((getTMVPModeId() == 2 || getTMVPModeId() == 1));
+
+  sps.setMaxTrSize   ( 1 << m_uiQuadtreeTULog2MaxSize );
+
+  sps.setUseAMP ( m_useAMP );
+
+  for (UInt channelType = 0; channelType < MAX_NUM_CHANNEL_TYPE; channelType++)
+  {
+    sps.setBitDepth      (ChannelType(channelType), m_bitDepth[channelType] );
+#if O0043_BEST_EFFORT_DECODING
+    sps.setStreamBitDepth(ChannelType(channelType), m_bitDepth[channelType] );
+#endif
+    sps.setQpBDOffset  (ChannelType(channelType), (6 * (m_bitDepth[channelType] - 8)));
+    sps.setPCMBitDepth (ChannelType(channelType), m_PCMBitDepth[channelType]         );
+  }
+
+  sps.setUseSAO( m_bUseSAO );
+
+  sps.setMaxTLayers( m_maxTempLayer );
+  sps.setTemporalIdNestingFlag( ( m_maxTempLayer == 1 ) ? true : false );
+
+  for (Int i = 0; i < min(sps.getMaxTLayers(),(UInt) MAX_TLAYER); i++ )
+  {
+    sps.setMaxDecPicBuffering(m_maxDecPicBuffering[i], i);
+    sps.setNumReorderPics(m_numReorderPics[i], i);
+  }
+
+  sps.setPCMFilterDisableFlag  ( m_bPCMFilterDisableFlag );
+  sps.setScalingListFlag ( (m_useScalingListId == SCALING_LIST_OFF) ? 0 : 1 );
+  sps.setUseStrongIntraSmoothing( m_useStrongIntraSmoothing );
+  sps.setVuiParametersPresentFlag(getVuiParametersPresentFlag());
+
+  if (sps.getVuiParametersPresentFlag())
+  {
+    TComVUI* pcVUI = sps.getVuiParameters();
+    pcVUI->setAspectRatioInfoPresentFlag(getAspectRatioInfoPresentFlag());
+    pcVUI->setAspectRatioIdc(getAspectRatioIdc());
+    pcVUI->setSarWidth(getSarWidth());
+    pcVUI->setSarHeight(getSarHeight());
+    pcVUI->setOverscanInfoPresentFlag(getOverscanInfoPresentFlag());
+    pcVUI->setOverscanAppropriateFlag(getOverscanAppropriateFlag());
+    pcVUI->setVideoSignalTypePresentFlag(getVideoSignalTypePresentFlag());
+    pcVUI->setVideoFormat(getVideoFormat());
+    pcVUI->setVideoFullRangeFlag(getVideoFullRangeFlag());
+    pcVUI->setColourDescriptionPresentFlag(getColourDescriptionPresentFlag());
+    pcVUI->setColourPrimaries(getColourPrimaries());
+    pcVUI->setTransferCharacteristics(getTransferCharacteristics());
+    pcVUI->setMatrixCoefficients(getMatrixCoefficients());
+    pcVUI->setChromaLocInfoPresentFlag(getChromaLocInfoPresentFlag());
+    pcVUI->setChromaSampleLocTypeTopField(getChromaSampleLocTypeTopField());
+    pcVUI->setChromaSampleLocTypeBottomField(getChromaSampleLocTypeBottomField());
+    pcVUI->setNeutralChromaIndicationFlag(getNeutralChromaIndicationFlag());
+    pcVUI->setDefaultDisplayWindow(getDefaultDisplayWindow());
+    pcVUI->setFrameFieldInfoPresentFlag(getFrameFieldInfoPresentFlag());
+    pcVUI->setFieldSeqFlag(false);
+    pcVUI->setHrdParametersPresentFlag(false);
+    pcVUI->getTimingInfo()->setPocProportionalToTimingFlag(getPocProportionalToTimingFlag());
+    pcVUI->getTimingInfo()->setNumTicksPocDiffOneMinus1   (getNumTicksPocDiffOneMinus1()   );
+    pcVUI->setBitstreamRestrictionFlag(getBitstreamRestrictionFlag());
+    pcVUI->setTilesFixedStructureFlag(getTilesFixedStructureFlag());
+    pcVUI->setMotionVectorsOverPicBoundariesFlag(getMotionVectorsOverPicBoundariesFlag());
+    pcVUI->setMinSpatialSegmentationIdc(getMinSpatialSegmentationIdc());
+    pcVUI->setMaxBytesPerPicDenom(getMaxBytesPerPicDenom());
+    pcVUI->setMaxBitsPerMinCuDenom(getMaxBitsPerMinCuDenom());
+    pcVUI->setLog2MaxMvLengthHorizontal(getLog2MaxMvLengthHorizontal());
+    pcVUI->setLog2MaxMvLengthVertical(getLog2MaxMvLengthVertical());
+  }
+  sps.setNumLongTermRefPicSPS(NUM_LONG_TERM_REF_PIC_SPS);
+  assert (NUM_LONG_TERM_REF_PIC_SPS <= MAX_NUM_LONG_TERM_REF_PICS);
+  for (Int k = 0; k < NUM_LONG_TERM_REF_PIC_SPS; k++)
+  {
+    sps.setLtRefPicPocLsbSps(k, 0);
+    sps.setUsedByCurrPicLtSPSFlag(k, 0);
+  }
+
+  if( getPictureTimingSEIEnabled() || getDecodingUnitInfoSEIEnabled() || getCpbSaturationEnabled() )
+  {
+    xInitHrdParameters(sps);
+  }
+  if( getBufferingPeriodSEIEnabled() || getPictureTimingSEIEnabled() || getDecodingUnitInfoSEIEnabled() )
+  {
+    sps.getVuiParameters()->setHrdParametersPresentFlag( true );
+  }
+
+  // Set up SPS range extension settings
+  sps.getSpsRangeExtension().setTransformSkipRotationEnabledFlag(m_transformSkipRotationEnabledFlag);
+  sps.getSpsRangeExtension().setTransformSkipContextEnabledFlag(m_transformSkipContextEnabledFlag);
+  for (UInt signallingModeIndex = 0; signallingModeIndex < NUMBER_OF_RDPCM_SIGNALLING_MODES; signallingModeIndex++)
+  {
+    sps.getSpsRangeExtension().setRdpcmEnabledFlag(RDPCMSignallingMode(signallingModeIndex), m_rdpcmEnabledFlag[signallingModeIndex]);
+  }
+  sps.getSpsRangeExtension().setExtendedPrecisionProcessingFlag(m_extendedPrecisionProcessingFlag);
+  sps.getSpsRangeExtension().setIntraSmoothingDisabledFlag( m_intraSmoothingDisabledFlag );
+  sps.getSpsRangeExtension().setHighPrecisionOffsetsEnabledFlag(m_highPrecisionOffsetsEnabledFlag);
+  sps.getSpsRangeExtension().setPersistentRiceAdaptationEnabledFlag(m_persistentRiceAdaptationEnabledFlag);
+  sps.getSpsRangeExtension().setCabacBypassAlignmentEnabledFlag(m_cabacBypassAlignmentEnabledFlag);
+}
