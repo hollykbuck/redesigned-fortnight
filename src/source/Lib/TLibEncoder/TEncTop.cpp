@@ -898,3 +898,103 @@ Void TEncTop::xInitHrdParameters(TComSPS &sps)
 
   if (calcScale(cpbSize) <= 4)
   {
+    hrd->setCpbSizeScale(0);
+  }
+  else
+  {
+    hrd->setCpbSizeScale(calcScale(cpbSize) - 4);
+  }
+
+  hrd->setDuCpbSizeScale( 6 );                                     // in units of 2^( 4 + 6 ) = 1,024 bit
+
+  hrd->setInitialCpbRemovalDelayLengthMinus1(15);                  // assuming 0.5 sec, log2( 90,000 * 0.5 ) = 16-bit
+  if( isRandomAccess )
+  {
+    hrd->setCpbRemovalDelayLengthMinus1(5);                        // 32 = 2^5 (plus 1)
+    hrd->setDpbOutputDelayLengthMinus1 (5);                        // 32 + 3 = 2^6
+  }
+  else
+  {
+    hrd->setCpbRemovalDelayLengthMinus1(9);                        // max. 2^10
+    hrd->setDpbOutputDelayLengthMinus1 (9);                        // max. 2^10
+  }
+
+  // Note: parameters for all temporal layers are initialized with the same values
+  Int i, j;
+  UInt bitrateValue, cpbSizeValue;
+  UInt duCpbSizeValue;
+  UInt duBitRateValue = 0;
+
+  for( i = 0; i < MAX_TLAYER; i ++ )
+  {
+    hrd->setFixedPicRateFlag( i, 1 );
+    hrd->setPicDurationInTcMinus1( i, 0 );
+    hrd->setLowDelayHrdFlag( i, 0 );
+    hrd->setCpbCntMinus1( i, 0 );
+
+    //! \todo check for possible PTL violations
+    // BitRate[ i ] = ( bit_rate_value_minus1[ i ] + 1 ) * 2^( 6 + bit_rate_scale )
+    bitrateValue = bitRate / (1 << (6 + hrd->getBitRateScale()) );      // bitRate is in bits, so it needs to be scaled down
+    // CpbSize[ i ] = ( cpb_size_value_minus1[ i ] + 1 ) * 2^( 4 + cpb_size_scale )
+    cpbSizeValue = cpbSize / (1 << (4 + hrd->getCpbSizeScale()) );      // using bitRate results in 1 second CPB size
+
+    // DU CPB size could be smaller (i.e. bitrateValue / number of DUs), but we don't know 
+    // in how many DUs the slice segment settings will result 
+    duCpbSizeValue = bitrateValue;
+    duBitRateValue = cpbSizeValue;
+
+    for( j = 0; j < ( hrd->getCpbCntMinus1( i ) + 1 ); j ++ )
+    {
+      hrd->setBitRateValueMinus1( i, j, 0, ( bitrateValue - 1 ) );
+      hrd->setCpbSizeValueMinus1( i, j, 0, ( cpbSizeValue - 1 ) );
+      hrd->setDuCpbSizeValueMinus1( i, j, 0, ( duCpbSizeValue - 1 ) );
+      hrd->setDuBitRateValueMinus1( i, j, 0, ( duBitRateValue - 1 ) );
+      hrd->setCbrFlag( i, j, 0, false );
+
+      hrd->setBitRateValueMinus1( i, j, 1, ( bitrateValue - 1) );
+      hrd->setCpbSizeValueMinus1( i, j, 1, ( cpbSizeValue - 1 ) );
+      hrd->setDuCpbSizeValueMinus1( i, j, 1, ( duCpbSizeValue - 1 ) );
+      hrd->setDuBitRateValueMinus1( i, j, 1, ( duBitRateValue - 1 ) );
+      hrd->setCbrFlag( i, j, 1, false );
+    }
+  }
+}
+
+Void TEncTop::xInitPPS(TComPPS &pps, const TComSPS &sps)
+{
+  // pps ID already initialised.
+  pps.setSPSId(sps.getSPSId());
+
+  pps.setConstrainedIntraPred( m_bUseConstrainedIntraPred );
+  Bool bUseDQP = (getMaxCuDQPDepth() > 0)? true : false;
+
+  if((getMaxDeltaQP() != 0 )|| getUseAdaptiveQP())
+  {
+    bUseDQP = true;
+  }
+
+  if ( getLumaLevelToDeltaQPMapping().isEnabled() )
+  {
+    bUseDQP = true;
+  }
+
+#if JVET_V0078
+  if (getSmoothQPReductionEnable())
+  {
+    bUseDQP = true;
+  }
+#endif
+#if JVET_Y0077_BIM
+  if (m_bimEnabled)
+  {
+    bUseDQP = true;
+  }
+#endif
+
+  if (m_costMode==COST_SEQUENCE_LEVEL_LOSSLESS || m_costMode==COST_LOSSLESS_CODING)
+  {
+    bUseDQP=false;
+  }
+
+
+  if ( m_RCEnableRateControl )
