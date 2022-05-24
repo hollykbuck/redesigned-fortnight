@@ -1098,3 +1098,103 @@ Void TEncTop::xInitPPS(TComPPS &pps, const TComSPS &sps)
                                                   pps.getDeblockingFilterTcOffsetDiv2() != 0;
 
   pps.setDeblockingFilterControlPresentFlag(deblockingFilterControlPresentFlag);
+
+  pps.setLog2ParallelMergeLevelMinus2   (m_log2ParallelMergeLevelMinus2 );
+  pps.setCabacInitPresentFlag(CABAC_INIT_PRESENT_FLAG);
+  pps.setLoopFilterAcrossSlicesEnabledFlag( m_bLFCrossSliceBoundaryFlag );
+
+
+  Int histogram[MAX_NUM_REF + 1];
+  for( Int i = 0; i <= MAX_NUM_REF; i++ )
+  {
+    histogram[i]=0;
+  }
+  for( Int i = 0; i < getGOPSize(); i++)
+  {
+    assert(getGOPEntry(i).m_numRefPicsActive >= 0 && getGOPEntry(i).m_numRefPicsActive <= MAX_NUM_REF);
+    histogram[getGOPEntry(i).m_numRefPicsActive]++;
+  }
+
+  Int maxHist=-1;
+  Int bestPos=0;
+  for( Int i = 0; i <= MAX_NUM_REF; i++ )
+  {
+    if(histogram[i]>maxHist)
+    {
+      maxHist=histogram[i];
+      bestPos=i;
+    }
+  }
+  assert(bestPos <= 15);
+  pps.setNumRefIdxL0DefaultActive(bestPos);
+  pps.setNumRefIdxL1DefaultActive(bestPos);
+  pps.setTransquantBypassEnabledFlag(getTransquantBypassEnabledFlag());
+  pps.setUseTransformSkip( m_useTransformSkip );
+  pps.getPpsRangeExtension().setLog2MaxTransformSkipBlockSize( m_log2MaxTransformSkipBlockSize  );
+
+  if (m_sliceSegmentMode != NO_SLICES)
+  {
+    pps.setDependentSliceSegmentsEnabledFlag( true );
+  }
+
+  xInitPPSforTiles(pps);
+}
+
+//Function for initializing m_RPSList, a list of TComReferencePictureSet, based on the GOPEntry objects read from the config file.
+Void TEncTop::xInitRPS(TComSPS &sps, Bool isFieldCoding)
+{
+  TComReferencePictureSet*      rps;
+
+  sps.createRPSList(getGOPSize() + m_extraRPSs + 1);
+  TComRPSList* rpsList = sps.getRPSList();
+
+  for( Int i = 0; i < getGOPSize()+m_extraRPSs; i++)
+  {
+    const GOPEntry &ge = getGOPEntry(i);
+    rps = rpsList->getReferencePictureSet(i);
+    rps->setNumberOfPictures(ge.m_numRefPics);
+    rps->setNumRefIdc(ge.m_numRefIdc);
+    Int numNeg = 0;
+    Int numPos = 0;
+    for( Int j = 0; j < ge.m_numRefPics; j++)
+    {
+      rps->setDeltaPOC(j,ge.m_referencePics[j]);
+      rps->setUsed(j,ge.m_usedByCurrPic[j]);
+      if(ge.m_referencePics[j]>0)
+      {
+        numPos++;
+      }
+      else
+      {
+        numNeg++;
+      }
+    }
+    rps->setNumberOfNegativePictures(numNeg);
+    rps->setNumberOfPositivePictures(numPos);
+
+    // handle inter RPS intialization from the config file.
+    rps->setInterRPSPrediction(ge.m_interRPSPrediction > 0);  // not very clean, converting anything > 0 to true.
+    rps->setDeltaRIdxMinus1(0);                               // index to the Reference RPS is always the previous one.
+    TComReferencePictureSet*     RPSRef = i>0 ? rpsList->getReferencePictureSet(i-1): NULL;  // get the reference RPS
+
+    if (ge.m_interRPSPrediction == 2)  // Automatic generation of the inter RPS idc based on the RIdx provided.
+    {
+      assert (RPSRef!=NULL);
+      Int deltaRPS = getGOPEntry(i-1).m_POC - ge.m_POC;  // the ref POC - current POC
+      Int numRefDeltaPOC = RPSRef->getNumberOfPictures();
+
+      rps->setDeltaRPS(deltaRPS);           // set delta RPS
+      rps->setNumRefIdc(numRefDeltaPOC+1);  // set the numRefIdc to the number of pictures in the reference RPS + 1.
+      Int count=0;
+      for (Int j = 0; j <= numRefDeltaPOC; j++ ) // cycle through pics in reference RPS.
+      {
+        Int RefDeltaPOC = (j<numRefDeltaPOC)? RPSRef->getDeltaPOC(j): 0;  // if it is the last decoded picture, set RefDeltaPOC = 0
+        rps->setRefIdc(j, 0);
+        for (Int k = 0; k < rps->getNumberOfPictures(); k++ )  // cycle through pics in current RPS.
+        {
+          if (rps->getDeltaPOC(k) == ( RefDeltaPOC + deltaRPS))  // if the current RPS has a same picture as the reference RPS.
+          {
+              rps->setRefIdc(j, (rps->getUsed(k)?1:2));
+              count++;
+              break;
+          }
