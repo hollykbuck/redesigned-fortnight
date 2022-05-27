@@ -1298,3 +1298,103 @@ Void TEncTop::selectReferencePictureSet(TComSlice* slice, Int POCCurr, Int GOPid
 
   for(Int extraNum=m_iGOPSize; extraNum<m_extraRPSs+m_iGOPSize; extraNum++)
   {
+    if(m_uiIntraPeriod > 0 && getDecodingRefreshType() > 0)
+    {
+      Int POCIndex = POCCurr%m_uiIntraPeriod;
+      if(POCIndex == 0)
+      {
+        POCIndex = m_uiIntraPeriod;
+      }
+      if(POCIndex == m_GOPList[extraNum].m_POC)
+      {
+        slice->setRPSidx(extraNum);
+      }
+    }
+    else
+    {
+      if(POCCurr==m_GOPList[extraNum].m_POC)
+      {
+        slice->setRPSidx(extraNum);
+      }
+    }
+  }
+
+  if(POCCurr == 1 && slice->getPic()->isField())
+  {
+    slice->setRPSidx(m_iGOPSize+m_extraRPSs);
+  }
+
+  const TComReferencePictureSet *rps = (slice->getSPS()->getRPSList()->getReferencePictureSet(slice->getRPSidx()));
+  slice->setRPS(rps);
+}
+
+Int TEncTop::getReferencePictureSetIdxForSOP(Int POCCurr, Int GOPid )
+{
+  Int rpsIdx = GOPid;
+
+  for(Int extraNum=m_iGOPSize; extraNum<m_extraRPSs+m_iGOPSize; extraNum++)
+  {
+    if(m_uiIntraPeriod > 0 && getDecodingRefreshType() > 0)
+    {
+      Int POCIndex = POCCurr%m_uiIntraPeriod;
+      if(POCIndex == 0)
+      {
+        POCIndex = m_uiIntraPeriod;
+      }
+      if(POCIndex == m_GOPList[extraNum].m_POC)
+      {
+        rpsIdx = extraNum;
+      }
+    }
+    else
+    {
+      if(POCCurr==m_GOPList[extraNum].m_POC)
+      {
+        rpsIdx = extraNum;
+      }
+    }
+  }
+
+  return rpsIdx;
+}
+
+Void  TEncTop::xInitPPSforTiles(TComPPS &pps)
+{
+  pps.setTileUniformSpacingFlag( m_tileUniformSpacingFlag );
+  pps.setNumTileColumnsMinus1( m_iNumColumnsMinus1 );
+  pps.setNumTileRowsMinus1( m_iNumRowsMinus1 );
+  if( !m_tileUniformSpacingFlag )
+  {
+    pps.setTileColumnWidth( m_tileColumnWidth );
+    pps.setTileRowHeight( m_tileRowHeight );
+  }
+  pps.setLoopFilterAcrossTilesEnabledFlag( m_loopFilterAcrossTilesEnabledFlag );
+
+  // # substreams is "per tile" when tiles are independent.
+}
+
+Void  TEncCfg::xCheckGSParameters()
+{
+  Int   iWidthInCU = ( m_iSourceWidth%m_maxCUWidth ) ? m_iSourceWidth/m_maxCUWidth + 1 : m_iSourceWidth/m_maxCUWidth;
+  Int   iHeightInCU = ( m_iSourceHeight%m_maxCUHeight ) ? m_iSourceHeight/m_maxCUHeight + 1 : m_iSourceHeight/m_maxCUHeight;
+  UInt  uiCummulativeColumnWidth = 0;
+  UInt  uiCummulativeRowHeight = 0;
+
+  //check the column relative parameters
+  if( m_iNumColumnsMinus1 >= (1<<(LOG2_MAX_NUM_COLUMNS_MINUS1+1)) )
+  {
+    printf( "The number of columns is larger than the maximum allowed number of columns.\n" );
+    exit( EXIT_FAILURE );
+  }
+
+  if( m_iNumColumnsMinus1 >= iWidthInCU )
+  {
+    printf( "The current picture can not have so many columns.\n" );
+    exit( EXIT_FAILURE );
+  }
+
+  if( m_iNumColumnsMinus1 && !m_tileUniformSpacingFlag )
+  {
+    for(Int i=0; i<m_iNumColumnsMinus1; i++)
+    {
+      uiCummulativeColumnWidth += m_tileColumnWidth[i];
