@@ -1498,3 +1498,16 @@ Int TEncCfg::getQPForPicture(const UInt gopIndex, const TComSlice *pSlice) const
         // adjust QP according to the QP offset for the GOP entry.
         qp +=gopEntry.m_QPOffset;
 
+        // adjust QP according to QPOffsetModel for the GOP entry.
+        Double dqpOffset=qp*gopEntry.m_QPOffsetModelScale+gopEntry.m_QPOffsetModelOffset+0.5;
+        Int qpOffset = (Int)floor(Clip3<Double>(0.0, 3.0, dqpOffset));
+        qp += qpOffset ;
+      }
+    }
+
+  }
+  qp = Clip3( -lumaQpBDOffset, MAX_QP, qp );
+  return qp;
+}
+
+//! \}
