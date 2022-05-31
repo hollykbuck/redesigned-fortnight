@@ -98,3 +98,103 @@ Void TEncSampleAdaptiveOffset::createEncData(Bool isPreDBFSamplesUsed)
   m_statData = new SAOStatData**[m_numCTUsPic];
   for(Int i=0; i< m_numCTUsPic; i++)
   {
+    m_statData[i] = new SAOStatData*[MAX_NUM_COMPONENT];
+    for(Int compIdx=0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+    {
+      m_statData[i][compIdx] = new SAOStatData[NUM_SAO_NEW_TYPES];
+    }
+  }
+  if(isPreDBFSamplesUsed)
+  {
+    m_preDBFstatData = new SAOStatData**[m_numCTUsPic];
+    for(Int i=0; i< m_numCTUsPic; i++)
+    {
+      m_preDBFstatData[i] = new SAOStatData*[MAX_NUM_COMPONENT];
+      for(Int compIdx=0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+      {
+        m_preDBFstatData[i][compIdx] = new SAOStatData[NUM_SAO_NEW_TYPES];
+      }
+    }
+
+  }
+
+  ::memset(m_saoDisabledRate, 0, sizeof(m_saoDisabledRate));
+
+  for(Int typeIdc=0; typeIdc < NUM_SAO_NEW_TYPES; typeIdc++)
+  {
+    m_skipLinesR[COMPONENT_Y ][typeIdc]= 5;
+    m_skipLinesR[COMPONENT_Cb][typeIdc]= m_skipLinesR[COMPONENT_Cr][typeIdc]= 3;
+
+    m_skipLinesB[COMPONENT_Y ][typeIdc]= 4;
+    m_skipLinesB[COMPONENT_Cb][typeIdc]= m_skipLinesB[COMPONENT_Cr][typeIdc]= 2;
+
+    if(isPreDBFSamplesUsed)
+    {
+      switch(typeIdc)
+      {
+      case SAO_TYPE_EO_0:
+        {
+          m_skipLinesR[COMPONENT_Y ][typeIdc]= 5;
+          m_skipLinesR[COMPONENT_Cb][typeIdc]= m_skipLinesR[COMPONENT_Cr][typeIdc]= 3;
+
+          m_skipLinesB[COMPONENT_Y ][typeIdc]= 3;
+          m_skipLinesB[COMPONENT_Cb][typeIdc]= m_skipLinesB[COMPONENT_Cr][typeIdc]= 1;
+        }
+        break;
+      case SAO_TYPE_EO_90:
+        {
+          m_skipLinesR[COMPONENT_Y ][typeIdc]= 4;
+          m_skipLinesR[COMPONENT_Cb][typeIdc]= m_skipLinesR[COMPONENT_Cr][typeIdc]= 2;
+
+          m_skipLinesB[COMPONENT_Y ][typeIdc]= 4;
+          m_skipLinesB[COMPONENT_Cb][typeIdc]= m_skipLinesB[COMPONENT_Cr][typeIdc]= 2;
+        }
+        break;
+      case SAO_TYPE_EO_135:
+      case SAO_TYPE_EO_45:
+        {
+          m_skipLinesR[COMPONENT_Y ][typeIdc]= 5;
+          m_skipLinesR[COMPONENT_Cb][typeIdc]= m_skipLinesR[COMPONENT_Cr][typeIdc]= 3;
+
+          m_skipLinesB[COMPONENT_Y ][typeIdc]= 4;
+          m_skipLinesB[COMPONENT_Cb][typeIdc]= m_skipLinesB[COMPONENT_Cr][typeIdc]= 2;
+        }
+        break;
+      case SAO_TYPE_BO:
+        {
+          m_skipLinesR[COMPONENT_Y ][typeIdc]= 4;
+          m_skipLinesR[COMPONENT_Cb][typeIdc]= m_skipLinesR[COMPONENT_Cr][typeIdc]= 2;
+
+          m_skipLinesB[COMPONENT_Y ][typeIdc]= 3;
+          m_skipLinesB[COMPONENT_Cb][typeIdc]= m_skipLinesB[COMPONENT_Cr][typeIdc]= 1;
+        }
+        break;
+      default:
+        {
+          printf("Not a supported type");
+          assert(0);
+          exit(-1);
+        }
+      }
+    }
+  }
+
+}
+
+Void TEncSampleAdaptiveOffset::destroyEncData()
+{
+  if(m_pppcRDSbacCoder != NULL)
+  {
+    for (Int cs = 0; cs < NUM_SAO_CABACSTATE_LABELS; cs ++ )
+    {
+      delete m_pppcRDSbacCoder[cs];
+    }
+    delete[] m_pppcRDSbacCoder; m_pppcRDSbacCoder = NULL;
+  }
+
+  if(m_pppcBinCoderCABAC != NULL)
+  {
+    for (Int cs = 0; cs < NUM_SAO_CABACSTATE_LABELS; cs ++ )
+    {
+      delete m_pppcBinCoderCABAC[cs];
+    }
