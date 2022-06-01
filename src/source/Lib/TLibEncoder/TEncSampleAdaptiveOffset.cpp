@@ -198,3 +198,103 @@ Void TEncSampleAdaptiveOffset::destroyEncData()
     {
       delete m_pppcBinCoderCABAC[cs];
     }
+    delete[] m_pppcBinCoderCABAC; m_pppcBinCoderCABAC = NULL;
+  }
+
+  if(m_statData != NULL)
+  {
+    for(Int i=0; i< m_numCTUsPic; i++)
+    {
+      for(Int compIdx=0; compIdx< MAX_NUM_COMPONENT; compIdx++)
+      {
+        delete[] m_statData[i][compIdx];
+      }
+      delete[] m_statData[i];
+    }
+    delete[] m_statData; m_statData = NULL;
+  }
+  if(m_preDBFstatData != NULL)
+  {
+    for(Int i=0; i< m_numCTUsPic; i++)
+    {
+      for(Int compIdx=0; compIdx< MAX_NUM_COMPONENT; compIdx++)
+      {
+        delete[] m_preDBFstatData[i][compIdx];
+      }
+      delete[] m_preDBFstatData[i];
+    }
+    delete[] m_preDBFstatData; m_preDBFstatData = NULL;
+  }
+}
+
+Void TEncSampleAdaptiveOffset::initRDOCabacCoder(TEncSbac* pcRDGoOnSbacCoder, TComSlice* pcSlice)
+{
+  m_pcRDGoOnSbacCoder = pcRDGoOnSbacCoder;
+  m_pcRDGoOnSbacCoder->resetEntropy(pcSlice);
+  m_pcRDGoOnSbacCoder->resetBits();
+
+  m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[SAO_CABACSTATE_PIC_INIT]);
+}
+
+
+Void TEncSampleAdaptiveOffset::SAOProcess(TComPic* pPic, Bool* sliceEnabled, const Double *lambdas, const Bool bTestSAODisableAtPictureLevel, const Double saoEncodingRate, const Double saoEncodingRateChroma, const Bool isPreDBFSamplesUsed )
+{
+  TComPicYuv* orgYuv= pPic->getPicYuvOrg();
+  TComPicYuv* resYuv= pPic->getPicYuvRec();
+  memcpy(m_lambda, lambdas, sizeof(m_lambda));
+  TComPicYuv* srcYuv = m_tempPicYuv;
+  resYuv->copyToPic(srcYuv);
+  srcYuv->setBorderExtension(false);
+  srcYuv->extendPicBorder();
+
+  //collect statistics
+  getStatistics(m_statData, orgYuv, srcYuv, pPic);
+  if(isPreDBFSamplesUsed)
+  {
+    addPreDBFStatistics(m_statData);
+  }
+
+  //slice on/off
+  decidePicParams(sliceEnabled, pPic, saoEncodingRate, saoEncodingRateChroma);
+  //block on/off
+  SAOBlkParam* reconParams = new SAOBlkParam[m_numCTUsPic]; //temporary parameter buffer for storing reconstructed SAO parameters
+  decideBlkParams(pPic, sliceEnabled, m_statData, srcYuv, resYuv, reconParams, pPic->getPicSym()->getSAOBlkParam(), bTestSAODisableAtPictureLevel, saoEncodingRate, saoEncodingRateChroma);
+  delete[] reconParams;
+}
+
+Void TEncSampleAdaptiveOffset::getPreDBFStatistics(TComPic* pPic)
+{
+  getStatistics(m_preDBFstatData, pPic->getPicYuvOrg(), pPic->getPicYuvRec(), pPic, true);
+}
+
+Void TEncSampleAdaptiveOffset::addPreDBFStatistics(SAOStatData*** blkStats)
+{
+  for(Int n=0; n< m_numCTUsPic; n++)
+  {
+    for(Int compIdx=0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+    {
+      for(Int typeIdc=0; typeIdc < NUM_SAO_NEW_TYPES; typeIdc++)
+      {
+        blkStats[n][compIdx][typeIdc] += m_preDBFstatData[n][compIdx][typeIdc];
+      }
+    }
+  }
+}
+
+Void TEncSampleAdaptiveOffset::getStatistics(SAOStatData*** blkStats, TComPicYuv* orgYuv, TComPicYuv* srcYuv, TComPic* pPic, Bool isCalculatePreDeblockSamples)
+{
+  Bool isLeftAvail,isRightAvail,isAboveAvail,isBelowAvail,isAboveLeftAvail,isAboveRightAvail,isBelowLeftAvail,isBelowRightAvail;
+
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+
+  for(Int ctuRsAddr= 0; ctuRsAddr < m_numCTUsPic; ctuRsAddr++)
+  {
+    Int yPos   = (ctuRsAddr / m_numCTUInWidth)*m_maxCUHeight;
+    Int xPos   = (ctuRsAddr % m_numCTUInWidth)*m_maxCUWidth;
+    Int height = (yPos + m_maxCUHeight > m_picHeight)?(m_picHeight- yPos):m_maxCUHeight;
+    Int width  = (xPos + m_maxCUWidth  > m_picWidth )?(m_picWidth - xPos):m_maxCUWidth;
+
+    pPic->getPicSym()->deriveLoopFilterBoundaryAvailibility(ctuRsAddr, isLeftAvail,isRightAvail,isAboveAvail,isBelowAvail,isAboveLeftAvail,isAboveRightAvail,isBelowLeftAvail,isBelowRightAvail);
+
+    //NOTE: The number of skipped lines during gathering CTU statistics depends on the slice boundary availabilities.
+    //For simplicity, here only picture boundaries are considered.
