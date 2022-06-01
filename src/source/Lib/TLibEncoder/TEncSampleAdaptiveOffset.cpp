@@ -298,3 +298,103 @@ Void TEncSampleAdaptiveOffset::getStatistics(SAOStatData*** blkStats, TComPicYuv
 
     //NOTE: The number of skipped lines during gathering CTU statistics depends on the slice boundary availabilities.
     //For simplicity, here only picture boundaries are considered.
+
+    isRightAvail      = (xPos + m_maxCUWidth  < m_picWidth );
+    isBelowAvail      = (yPos + m_maxCUHeight < m_picHeight);
+    isBelowRightAvail = (isRightAvail && isBelowAvail);
+    isBelowLeftAvail  = ((xPos > 0) && (isBelowAvail));
+    isAboveRightAvail = ((yPos > 0) && (isRightAvail));
+
+    for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+    {
+      const ComponentID component = ComponentID(compIdx);
+
+      const UInt componentScaleX = getComponentScaleX(component, pPic->getChromaFormat());
+      const UInt componentScaleY = getComponentScaleY(component, pPic->getChromaFormat());
+
+      Int  srcStride  = srcYuv->getStride(component);
+      Pel* srcBlk     = srcYuv->getAddr(component) + ((yPos >> componentScaleY) * srcStride) + (xPos >> componentScaleX);
+
+      Int  orgStride  = orgYuv->getStride(component);
+      Pel* orgBlk     = orgYuv->getAddr(component) + ((yPos >> componentScaleY) * orgStride) + (xPos >> componentScaleX);
+
+      getBlkStats(component, pPic->getPicSym()->getSPS().getBitDepth(toChannelType(component)), blkStats[ctuRsAddr][component]
+                , srcBlk, orgBlk, srcStride, orgStride, (width  >> componentScaleX), (height >> componentScaleY)
+                , isLeftAvail,  isRightAvail, isAboveAvail, isBelowAvail, isAboveLeftAvail, isAboveRightAvail
+                , isCalculatePreDeblockSamples
+                );
+
+    }
+  }
+}
+
+Void TEncSampleAdaptiveOffset::resetEncoderDecisions()
+{
+  for (Int compIdx = 0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+  {
+    for (Int tempLayer = 1; tempLayer < MAX_TLAYER; tempLayer++)
+    {
+      m_saoDisabledRate[compIdx][tempLayer] = 0.0;
+    }
+  }
+}
+
+Void TEncSampleAdaptiveOffset::decidePicParams(Bool* sliceEnabled, const TComPic* pic, const Double saoEncodingRate, const Double saoEncodingRateChroma)
+{
+  const Int picTempLayer = pic->getSlice(0)->getDepth();
+
+  //decide sliceEnabled[compIdx]
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+  for (Int compIdx = 0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+  {
+    sliceEnabled[compIdx] = false;
+  }
+
+  for (Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+  {
+    // reset flags & counters
+    sliceEnabled[compIdx] = true;
+
+    if (saoEncodingRate>0.0)
+    {
+      if (saoEncodingRateChroma>0.0)
+      {
+        // decide slice-level on/off based on previous results
+        if( (picTempLayer > 0)
+          && (m_saoDisabledRate[compIdx][picTempLayer-1] > ((compIdx==COMPONENT_Y) ? saoEncodingRate : saoEncodingRateChroma)) )
+        {
+          sliceEnabled[compIdx] = false;
+        }
+      }
+      else
+      {
+        // decide slice-level on/off based on previous results
+        if( (picTempLayer > 0)
+          && (m_saoDisabledRate[COMPONENT_Y][0] > saoEncodingRate) )
+        {
+          sliceEnabled[compIdx] = false;
+        }
+      }
+    }
+  }
+}
+
+Int64 TEncSampleAdaptiveOffset::getDistortion(const Int channelBitDepth, Int typeIdc, Int typeAuxInfo, Int* invQuantOffset, SAOStatData& statData)
+{
+  Int64 dist        = 0;
+  Int shift         = 2 * DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth - 8);
+
+  switch(typeIdc)
+  {
+    case SAO_TYPE_EO_0:
+    case SAO_TYPE_EO_90:
+    case SAO_TYPE_EO_135:
+    case SAO_TYPE_EO_45:
+      {
+        for (Int offsetIdx=0; offsetIdx<NUM_SAO_EO_CLASSES; offsetIdx++)
+        {
+          dist += estSaoDist( statData.count[offsetIdx], invQuantOffset[offsetIdx], statData.diff[offsetIdx], shift);
+        }
+      }
+      break;
+    case SAO_TYPE_BO:
