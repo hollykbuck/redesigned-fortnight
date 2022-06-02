@@ -298,3 +298,103 @@ ProfileLevelTierFeatures::activate(const TComSPS &sps)
     }
   }
 
+  {
+    const UInt ctbSizeY   = sps.getMaxCUWidth();
+    const UInt bitDepthY  = sps.getBitDepth(CHANNEL_TYPE_LUMA);
+    const UInt ctbWidthC  = ctbSizeY >> getChannelTypeScaleX(CHANNEL_TYPE_CHROMA, sps.getChromaFormatIdc());
+    const UInt ctbHeightC = ctbSizeY >> getChannelTypeScaleY(CHANNEL_TYPE_CHROMA, sps.getChromaFormatIdc());
+    const UInt bitDepthC  = sps.getBitDepth(CHANNEL_TYPE_LUMA);
+
+    const UInt rawCtuBits = ctbSizeY*ctbSizeY*bitDepthY+2*(ctbWidthC*ctbHeightC)*bitDepthC;
+    m_maxRawCtuBits=(rawCtuBits*5)/3;
+  }
+
+}
+#endif
+
+
+static Void
+checkToolAvailability(const TComSPS &sps,
+                      const TComPPS &pps,
+                      const ProfileLevelTierFeatures &features)
+{
+#if DPB_ENCODER_USAGE_CHECK
+  const ProfileFeatures::TRISTATE rextToolsEnabled = features.getProfileFeatures()->generalRExtToolsEnabled;
+  if ( rextToolsEnabled != ProfileFeatures::OPTIONAL)
+  {
+    const Bool bWantedFlagState = rextToolsEnabled == ProfileFeatures::ENABLED;
+#else
+  const TRISTATE rextToolsEnabled = features.getProfileFeatures()->generalRExtToolsEnabled;
+  if ( rextToolsEnabled != OPTIONAL)
+  {
+    const Bool bWantedFlagState = rextToolsEnabled == ENABLED;
+#endif
+    std::string flags;
+    if (sps.getSpsRangeExtension().getTransformSkipRotationEnabledFlag()      != bWantedFlagState) flags+=", transform_skip_rotation_enabled_flag";
+    if (sps.getSpsRangeExtension().getTransformSkipContextEnabledFlag()       != bWantedFlagState) flags+=", transform_skip_context_enabled_flag";
+    if (sps.getSpsRangeExtension().getRdpcmEnabledFlag(RDPCM_SIGNAL_IMPLICIT) != bWantedFlagState) flags+=", implicit_rdpcm_enabled_flag";
+    if (sps.getSpsRangeExtension().getRdpcmEnabledFlag(RDPCM_SIGNAL_EXPLICIT) != bWantedFlagState) flags+=", explicit_rdpcm_enabled_flag";
+    if (sps.getSpsRangeExtension().getIntraSmoothingDisabledFlag()            != bWantedFlagState) flags+=", intra_smoothing_disabled_flag";
+    if (sps.getSpsRangeExtension().getPersistentRiceAdaptationEnabledFlag()   != bWantedFlagState) flags+=", persistent_rice_adaptation_enabled_flag";
+#if DPB_ENCODER_USAGE_CHECK
+    if (pps.getPpsRangeExtension().getLog2MaxTransformSkipBlockSize()         != 2 && rextToolsEnabled==ProfileFeatures::DISABLED ) flags+=", log2_max_transform_skip_block_size_minus2";
+#else
+    if (pps.getPpsRangeExtension().getLog2MaxTransformSkipBlockSize()         != 2 && rextToolsEnabled==DISABLED ) flags+=", log2_max_transform_skip_block_size_minus2";
+#endif
+
+    if (!flags.empty())
+    {
+      TDecConformanceCheck::getStream() << "the following flags must all be " << (bWantedFlagState ? "1" : "0") << " in the profile '" << features.getProfileFeatures()->pNameString << "' conformance point: " + flags.substr(2) + "\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+  }
+  else
+  {
+    TDecConformanceCheck::checkRange<UInt>(pps.getPpsRangeExtension().getLog2MaxTransformSkipBlockSize()-2, "log2_max_transform_skip_block_size_minus2", 0, sps.getQuadtreeTULog2MaxSize()-2);
+  }
+
+#if DPB_ENCODER_USAGE_CHECK
+  if (features.getProfileFeatures()->extendedPrecisionProcessingFlag != ProfileFeatures::OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->extendedPrecisionProcessingFlag == ProfileFeatures::ENABLED;
+#else
+  if (features.getProfileFeatures()->extendedPrecisionProcessingFlag != OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->extendedPrecisionProcessingFlag == ENABLED;
+#endif
+    if (sps.getSpsRangeExtension().getExtendedPrecisionProcessingFlag() != bWantedFlagState)
+    {
+      TDecConformanceCheck::getStream() << "extended_precision_processing_flag must be " << (bWantedFlagState ? "1" : "0") << " in the profile '" << features.getProfileFeatures()->pNameString << "' conformance point\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+  }
+
+#if DPB_ENCODER_USAGE_CHECK
+  if (features.getProfileFeatures()->chromaQpOffsetListEnabledFlag != ProfileFeatures::OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->chromaQpOffsetListEnabledFlag == ProfileFeatures::ENABLED;
+#else
+  if (features.getProfileFeatures()->chromaQpOffsetListEnabledFlag != OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->chromaQpOffsetListEnabledFlag == ENABLED;
+#endif
+    if (pps.getPpsRangeExtension().getChromaQpOffsetListEnabledFlag() != bWantedFlagState)
+    {
+      TDecConformanceCheck::getStream() << "chroma_qp_offset_list_enabled_flag must be " << (bWantedFlagState ? "1" : "0") << " in the profile '" << features.getProfileFeatures()->pNameString << "' conformance point\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+  }
+  else if (pps.getPpsRangeExtension().getChromaQpOffsetListEnabledFlag())
+  {
+    TDecConformanceCheck::checkRange<UInt>(pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth(), "diff_cu_chroma_qp_offset_depth", 0, sps.getLog2DiffMaxMinCodingBlockSize());
+  }
+
+#if DPB_ENCODER_USAGE_CHECK
+  if (features.getProfileFeatures()->cabacBypassAlignmentEnabledFlag != ProfileFeatures::OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->cabacBypassAlignmentEnabledFlag == ProfileFeatures::ENABLED;
+#else
+  if (features.getProfileFeatures()->cabacBypassAlignmentEnabledFlag != OPTIONAL)
+  {
+    const Bool bWantedFlagState = features.getProfileFeatures()->cabacBypassAlignmentEnabledFlag == ENABLED;
+#endif
