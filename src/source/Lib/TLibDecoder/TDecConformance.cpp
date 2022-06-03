@@ -398,3 +398,89 @@ checkToolAvailability(const TComSPS &sps,
   {
     const Bool bWantedFlagState = features.getProfileFeatures()->cabacBypassAlignmentEnabledFlag == ENABLED;
 #endif
+    if (sps.getSpsRangeExtension().getCabacBypassAlignmentEnabledFlag() != bWantedFlagState)
+    {
+      TDecConformanceCheck::getStream() << "cabac_bypass_alignment_enabled_flag must be " << (bWantedFlagState ? "1" : "0") << " in the profile '" << features.getProfileFeatures()->pNameString << "' conformance point\n";
+      TDecConformanceCheck::finishWarningReport();
+    }
+  }
+}
+
+
+Void
+TDecConformanceCheck::checkSliceActivation(const TComSlice &slice,
+                                           const InputNALUnit &nalu,
+                                           const TComPic &pic,
+                                           const Bool bFirstSliceInStream,
+                                           const Bool bFirstSliceInSequence,
+                                           const Bool bFirstSliceInPicture)
+{
+  const TComSPS &sps=*(slice.getSPS());
+  const TComPPS &pps=*(slice.getPPS());
+
+  if (!doChecking()) return;
+
+  m_activatedFeatures.activate(sps);
+
+  if (m_activatedFeatures.getProfileFeatures() == 0 || m_activatedFeatures.getLevelTierFeatures() == 0)
+  {
+    if (m_activatedFeatures.getProfileFeatures() == 0)
+    {
+      getStream() << "Unknown profile/constraint flag combination discovered\n";
+    }
+    else
+    {
+      getStream() << "Unknown level IDC discovered\n";
+    }
+    finishWarningReport();
+  }
+  else
+  {
+    // Most of the parameters have been individually checked prior to this as they were decoded.
+    checkSPS(sps, m_activatedFeatures);           // checks SPS limits
+    checkPPS(sps, pps, pic, m_activatedFeatures); // checks PPS limits
+    checkToolAvailability(sps, pps, m_activatedFeatures);
+
+    if (m_activatedFeatures.getProfileFeatures()->onlyIRAPPictures() && (nalu.m_nalUnitType < NAL_UNIT_CODED_SLICE_BLA_W_LP || nalu.m_nalUnitType> NAL_UNIT_RESERVED_IRAP_VCL23))
+    {
+      getStream() << "Bad NALU for an intra constrained profile\n";
+      finishWarningReport();
+    }
+
+    if (bFirstSliceInStream || bFirstSliceInSequence || bFirstSliceInPicture)
+    {
+      m_numberOfSlicesInPicture=1;
+      m_bytesInPicture=0;
+    }
+    else
+    {
+      m_numberOfSlicesInPicture++;
+      if (m_numberOfSlicesInPicture > m_activatedFeatures.getLevelTierFeatures()->maxSliceSegmentsPerPicture)
+      {
+        getStream() << "Too many slice segments in the picture\n";
+        finishWarningReport();
+      }
+    }
+
+    // Currently no HRD analysis is made. For now, just ensure access unit fits within the CPB.
+    m_bytesInPicture+=nalu.getBitstream().getFifo().size();
+    if (m_bytesInPicture*8 > m_activatedFeatures.getCpbSizeInBits())
+    {
+      getStream() << "Entire access unit must fit within the CPB even if split into multiple decoding units (section C.2.2 Timing of decoding unit arrival)\n";
+      finishWarningReport();
+    }
+  }
+}
+
+
+Void
+TDecConformanceCheck::checkCtuDecoding(const UInt numUsedBits)
+{
+  if (numUsedBits > m_activatedFeatures.getMaxRawCtuBits())
+  {
+    getStream() << "CTU exceeds maximum RAW CTU bits limits.\n";
+    finishWarningReport();
+  }
+}
+
+#endif
