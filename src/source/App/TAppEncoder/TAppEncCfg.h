@@ -98,3 +98,103 @@ protected:
   Bool      m_isField;                                        ///< enable field coding
   Bool      m_isTopFieldFirst;
   Bool      m_bEfficientFieldIRAPEnabled;                     ///< enable an efficient field IRAP structure.
+  Bool      m_bHarmonizeGopFirstFieldCoupleEnabled;
+
+  Int       m_conformanceWindowMode;
+  Int       m_confWinLeft;
+  Int       m_confWinRight;
+  Int       m_confWinTop;
+  Int       m_confWinBottom;
+  Int       m_sourcePadding[2];                               ///< number of padded pixels for width and height
+  Int       m_framesToBeEncoded;                              ///< number of encoded frames
+  Bool      m_AccessUnitDelimiter;                            ///< add Access Unit Delimiter NAL units
+  InputColourSpaceConversion m_inputColourSpaceConvert;       ///< colour space conversion to apply to input video
+  Bool      m_snrInternalColourSpace;                       ///< if true, then no colour space conversion is applied for snr calculation, otherwise inverse of input is applied.
+  Bool      m_outputInternalColourSpace;                    ///< if true, then no colour space conversion is applied for reconstructed video, otherwise inverse of input is applied.
+  ChromaFormat m_InputChromaFormatIDC;
+
+  Bool      m_printMSEBasedSequencePSNR;
+  Bool      m_printHexPsnr;
+  Bool      m_printFrameMSE;
+  Bool      m_printSequenceMSE;
+  Bool      m_printMSSSIM;
+
+  Bool      m_bXPSNREnableFlag;                              ///< xPSNR enable flag
+  Double    m_dXPSNRWeight[MAX_NUM_COMPONENT];               ///< xPSNR per component weights
+
+  Bool      m_cabacZeroWordPaddingEnabled;
+  Bool      m_bClipInputVideoToRec709Range;
+  Bool      m_bClipOutputVideoToRec709Range;
+
+  // profile/level
+  Profile::Name m_profile;
+  Level::Tier   m_levelTier;
+  Level::Name   m_level;
+  UInt          m_bitDepthConstraint;
+  ChromaFormat  m_chromaFormatConstraint;
+  Bool          m_intraConstraintFlag;
+  Bool          m_onePictureOnlyConstraintFlag;
+  Bool          m_lowerBitRateConstraintFlag;
+  Bool m_progressiveSourceFlag;
+  Bool m_interlacedSourceFlag;
+  Bool m_nonPackedConstraintFlag;
+  Bool m_frameOnlyConstraintFlag;
+
+  // coding structure
+  Int       m_iIntraPeriod;                                   ///< period of I-slice (random access period)
+  Int       m_iDecodingRefreshType;                           ///< random access type
+  Int       m_iGOPSize;                                       ///< GOP size of hierarchical structure
+  Bool      m_bReWriteParamSetsFlag;                          ///< Flag to enable rewriting of parameter sets at random access points
+  Int       m_extraRPSs;                                      ///< extra RPSs added to handle CRA
+  GOPEntry  m_GOPList[MAX_GOP];                               ///< the coding structure entries from the config file
+  Int       m_numReorderPics[MAX_TLAYER];                     ///< total number of reorder pictures
+  Int       m_maxDecPicBuffering[MAX_TLAYER];                 ///< total number of pictures in the decoded picture buffer
+  Bool      m_crossComponentPredictionEnabledFlag;            ///< flag enabling the use of cross-component prediction
+  Bool      m_reconBasedCrossCPredictionEstimate;             ///< causes the alpha calculation in encoder search to be based on the decoded residual rather than the pre-transform encoder-side residual
+  UInt      m_log2SaoOffsetScale[MAX_NUM_CHANNEL_TYPE];       ///< number of bits for the upward bit shift operation on the decoded SAO offsets
+  Bool      m_useTransformSkip;                               ///< flag for enabling intra transform skipping
+  Bool      m_useTransformSkipFast;                           ///< flag for enabling fast intra transform skipping
+  UInt      m_log2MaxTransformSkipBlockSize;                  ///< transform-skip maximum size (minimum of 2)
+  Bool      m_transformSkipRotationEnabledFlag;               ///< control flag for transform-skip/transquant-bypass residual rotation
+  Bool      m_transformSkipContextEnabledFlag;                ///< control flag for transform-skip/transquant-bypass single significance map context
+  Bool      m_rdpcmEnabledFlag[NUMBER_OF_RDPCM_SIGNALLING_MODES];///< control flags for residual DPCM
+  Bool      m_enableAMP;
+  Bool      m_persistentRiceAdaptationEnabledFlag;            ///< control flag for Golomb-Rice parameter adaptation over each slice
+  Bool      m_cabacBypassAlignmentEnabledFlag;
+
+  // coding quality
+  OptionalValue<UInt> m_qpIncrementAtSourceFrame;             ///< Optional source frame number at which all subsequent frames are to use an increased internal QP.
+  Int       m_iQP;                                            ///< QP value of key-picture (integer)
+  Int       m_intraQPOffset;                                  ///< QP offset for intra slice (integer)
+  Bool      m_lambdaFromQPEnable;                             ///< enable flag for QP:lambda fix
+  std::string m_dQPFileName;                                  ///< QP offset for each slice (initialized from external file)
+  Int*      m_aidQP;                                          ///< array of slice QP values
+  Int       m_iMaxDeltaQP;                                    ///< max. |delta QP|
+  UInt      m_uiDeltaQpRD;                                    ///< dQP range for multi-pass slice QP optimization
+  Int       m_iMaxCuDQPDepth;                                 ///< Max. depth for a minimum CuDQPSize (0:default)
+  Int       m_diffCuChromaQpOffsetDepth;                      ///< If negative, then do not apply chroma qp offsets.
+  Bool      m_bFastDeltaQP;                                   ///< Fast Delta QP (false:default)
+
+  Int       m_cbQpOffset;                                     ///< Chroma Cb QP Offset (0:default)
+  Int       m_crQpOffset;                                     ///< Chroma Cr QP Offset (0:default)
+  WCGChromaQPControl m_wcgChromaQpControl;                    ///< Wide-colour-gamut chroma QP control.
+  UInt      m_sliceChromaQpOffsetPeriodicity;                 ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
+  Int       m_sliceChromaQpOffsetIntraOrPeriodic[2/*Cb,Cr*/]; ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
+  LumaLevelToDeltaQPMapping m_lumaLevelToDeltaQPMapping;      ///< mapping from luma level to Delta QP.
+#if ADAPTIVE_QP_SELECTION
+  Bool      m_bUseAdaptQpSelect;
+#endif
+#if JVET_V0078
+  Bool      m_bSmoothQPReductionEnable;
+  Double    m_dSmoothQPReductionThreshold;
+  Double    m_dSmoothQPReductionModelScale;
+  Double    m_dSmoothQPReductionModelOffset;
+  Int       m_iSmoothQPReductionPeriodicity;
+  Int       m_iSmoothQPReductionLimit;
+#endif
+  TComSEIMasteringDisplay m_masteringDisplay;
+
+  Bool      m_bUseAdaptiveQP;                                 ///< Flag for enabling QP adaptation based on a psycho-visual model
+  Int       m_iQPAdaptationRange;                             ///< dQP range by QP adaptation
+
+  Int       m_maxTempLayer;                                  ///< Max temporal layer
