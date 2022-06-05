@@ -198,3 +198,103 @@ protected:
   Int       m_iQPAdaptationRange;                             ///< dQP range by QP adaptation
 
   Int       m_maxTempLayer;                                  ///< Max temporal layer
+
+  // coding unit (CU) definition
+  // TODO: Remove MaxCUWidth/MaxCUHeight and replace with MaxCUSize.
+  UInt      m_uiMaxCUWidth;                                   ///< max. CU width in pixel
+  UInt      m_uiMaxCUHeight;                                  ///< max. CU height in pixel
+  UInt      m_uiMaxCUDepth;                                   ///< max. CU depth (as specified by command line)
+  UInt      m_uiMaxTotalCUDepth;                              ///< max. total CU depth - includes depth of transform-block structure
+  UInt      m_uiLog2DiffMaxMinCodingBlockSize;                ///< difference between largest and smallest CU depth
+
+  // transfom unit (TU) definition
+  UInt      m_uiQuadtreeTULog2MaxSize;
+  UInt      m_uiQuadtreeTULog2MinSize;
+
+  UInt      m_uiQuadtreeTUMaxDepthInter;
+  UInt      m_uiQuadtreeTUMaxDepthIntra;
+
+  // coding tools (bit-depth)
+  Int       m_inputBitDepth   [MAX_NUM_CHANNEL_TYPE];         ///< bit-depth of input file
+  Int       m_outputBitDepth  [MAX_NUM_CHANNEL_TYPE];         ///< bit-depth of output file
+  Int       m_MSBExtendedBitDepth[MAX_NUM_CHANNEL_TYPE];      ///< bit-depth of input samples after MSB extension
+  Int       m_internalBitDepth[MAX_NUM_CHANNEL_TYPE];         ///< bit-depth codec operates at (input/output files will be converted)
+  Bool      m_extendedPrecisionProcessingFlag;
+  Bool      m_highPrecisionOffsetsEnabledFlag;
+
+  //coding tools (chroma format)
+  ChromaFormat m_chromaFormatIDC;
+
+  // coding tools (PCM bit-depth)
+  Bool      m_bPCMInputBitDepthFlag;                          ///< 0: PCM bit-depth is internal bit-depth. 1: PCM bit-depth is input bit-depth.
+
+  // coding tool (SAO)
+  Bool      m_bUseSAO;
+  Bool      m_bTestSAODisableAtPictureLevel;
+  Double    m_saoEncodingRate;                                ///< When >0 SAO early picture termination is enabled for luma and chroma
+  Double    m_saoEncodingRateChroma;                          ///< The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
+  Int       m_maxNumOffsetsPerPic;                            ///< SAO maximun number of offset per picture
+  Bool      m_saoCtuBoundary;                                 ///< SAO parameter estimation using non-deblocked pixels for CTU bottom and right boundary areas
+  Bool      m_resetEncoderStateAfterIRAP;                     ///< When true, encoder state will be reset following an IRAP.
+  // coding tools (loop filter)
+  Bool      m_bLoopFilterDisable;                             ///< flag for using deblocking filter
+  Bool      m_loopFilterOffsetInPPS;                          ///< offset for deblocking filter in 0 = slice header, 1 = PPS
+  Int       m_loopFilterBetaOffsetDiv2;                       ///< beta offset for deblocking filter
+  Int       m_loopFilterTcOffsetDiv2;                         ///< tc offset for deblocking filter
+  Int       m_deblockingFilterMetric;                         ///< blockiness metric in encoder
+  // coding tools (PCM)
+  Bool      m_usePCM;                                         ///< flag for using IPCM
+  UInt      m_pcmLog2MaxSize;                                 ///< log2 of maximum PCM block size
+  UInt      m_uiPCMLog2MinSize;                               ///< log2 of minimum PCM block size
+  Bool      m_bPCMFilterDisableFlag;                          ///< PCM filter disable flag
+  Bool      m_enableIntraReferenceSmoothing;                  ///< flag for enabling(default)/disabling intra reference smoothing/filtering
+
+  // coding tools (encoder-only parameters)
+  Bool      m_bUseASR;                                        ///< flag for using adaptive motion search range
+  Bool      m_bUseHADME;                                      ///< flag for using HAD in sub-pel ME
+  Bool      m_useRDOQ;                                        ///< flag for using RD optimized quantization
+  Bool      m_useRDOQTS;                                      ///< flag for using RD optimized quantization for transform skip
+  Bool      m_useSelectiveRDOQ;                               ///< flag for using selective RDOQ
+  Int       m_rdPenalty;                                      ///< RD-penalty for 32x32 TU for intra in non-intra slices (0: no RD-penalty, 1: RD-penalty, 2: maximum RD-penalty)
+  Bool      m_bDisableIntraPUsInInterSlices;                  ///< Flag for disabling intra predicted PUs in inter slices.
+  MESearchMethod m_motionEstimationSearchMethod;
+  Bool      m_bRestrictMESampling;                            ///< Restrict sampling for the Selective ME
+  Int       m_iSearchRange;                                   ///< ME search range
+  Int       m_bipredSearchRange;                              ///< ME search range for bipred refinement
+  Int       m_minSearchWindow;                                ///< ME minimum search window size for the Adaptive Window ME
+  Bool      m_bClipForBiPredMeEnabled;                        ///< Enables clipping for Bi-Pred ME.
+  Bool      m_bFastMEAssumingSmootherMVEnabled;               ///< Enables fast ME assuming a smoother MV.
+  FastInterSearchMode m_fastInterSearchMode;                  ///< Parameter that controls fast encoder settings
+  Bool      m_bUseEarlyCU;                                    ///< flag for using Early CU setting
+  Bool      m_useFastDecisionForMerge;                        ///< flag for using Fast Decision Merge RD-Cost
+  Bool      m_bUseCbfFastMode;                                ///< flag for using Cbf Fast PU Mode Decision
+  Bool      m_useEarlySkipDetection;                          ///< flag for using Early SKIP Detection
+  SliceConstraint m_sliceMode;
+  Int             m_sliceArgument;                            ///< argument according to selected slice mode
+  SliceConstraint m_sliceSegmentMode;
+  Int             m_sliceSegmentArgument;                     ///< argument according to selected slice segment mode
+
+  Bool      m_bLFCrossSliceBoundaryFlag;  ///< 1: filter across slice boundaries 0: do not filter across slice boundaries
+  Bool      m_bLFCrossTileBoundaryFlag;   ///< 1: filter across tile boundaries  0: do not filter across tile boundaries
+  Bool      m_tileUniformSpacingFlag;
+  Int       m_numTileColumnsMinus1;
+  Int       m_numTileRowsMinus1;
+  std::vector<Int> m_tileColumnWidth;
+  std::vector<Int> m_tileRowHeight;
+  Bool      m_entropyCodingSyncEnabledFlag;
+
+  Bool      m_bUseConstrainedIntraPred;                       ///< flag for using constrained intra prediction
+  Bool      m_bFastUDIUseMPMEnabled;
+  Bool      m_bFastMEForGenBLowDelayEnabled;
+  Bool      m_bUseBLambdaForNonKeyLowDelayPictures;
+
+  HashType  m_decodedPictureHashSEIType;                      ///< Checksum mode for decoded picture hash SEI message
+  Bool      m_recoveryPointSEIEnabled;
+  Bool      m_bufferingPeriodSEIEnabled;
+  Bool      m_pictureTimingSEIEnabled;
+  Bool      m_toneMappingInfoSEIEnabled;
+  Bool      m_chromaResamplingFilterSEIenabled;
+  Int       m_chromaResamplingHorFilterIdc;
+  Int       m_chromaResamplingVerFilterIdc;
+  Int       m_toneMapId;
+  Bool      m_toneMapCancelFlag;
