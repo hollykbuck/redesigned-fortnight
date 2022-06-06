@@ -298,3 +298,103 @@ protected:
   Int       m_chromaResamplingVerFilterIdc;
   Int       m_toneMapId;
   Bool      m_toneMapCancelFlag;
+  Bool      m_toneMapPersistenceFlag;
+  Int       m_toneMapCodedDataBitDepth;
+  Int       m_toneMapTargetBitDepth;
+  Int       m_toneMapModelId;
+  Int       m_toneMapMinValue;
+  Int       m_toneMapMaxValue;
+  Int       m_sigmoidMidpoint;
+  Int       m_sigmoidWidth;
+  Int       m_numPivots;
+  Int       m_cameraIsoSpeedIdc;
+  Int       m_cameraIsoSpeedValue;
+  Int       m_exposureIndexIdc;
+  Int       m_exposureIndexValue;
+  Bool      m_exposureCompensationValueSignFlag;
+  Int       m_exposureCompensationValueNumerator;
+  Int       m_exposureCompensationValueDenomIdc;
+  Int       m_refScreenLuminanceWhite;
+  Int       m_extendedRangeWhiteLevel;
+  Int       m_nominalBlackLevelLumaCodeValue;
+  Int       m_nominalWhiteLevelLumaCodeValue;
+  Int       m_extendedWhiteLevelLumaCodeValue;
+  Int*      m_startOfCodedInterval;
+  Int*      m_codedPivotValue;
+  Int*      m_targetPivotValue;
+  Bool      m_framePackingSEIEnabled;
+  Int       m_framePackingSEIType;
+  Int       m_framePackingSEIId;
+  Int       m_framePackingSEIQuincunx;
+  Int       m_framePackingSEIInterpretation;
+  Bool      m_segmentedRectFramePackingSEIEnabled;
+  Bool      m_segmentedRectFramePackingSEICancel;
+  Int       m_segmentedRectFramePackingSEIType;
+  Bool      m_segmentedRectFramePackingSEIPersistence;
+  Int       m_displayOrientationSEIAngle;
+  Bool      m_temporalLevel0IndexSEIEnabled;
+  Bool      m_gradualDecodingRefreshInfoEnabled;
+  Int       m_noDisplaySEITLayer;
+  Bool      m_decodingUnitInfoSEIEnabled;
+  Bool      m_SOPDescriptionSEIEnabled;
+  Bool      m_scalableNestingSEIEnabled;
+  Bool      m_tmctsSEIEnabled;
+#if MCTS_ENC_CHECK
+  Bool      m_tmctsSEITileConstraint;
+#endif
+#if MCTS_EXTRACTION
+  Bool      m_tmctsExtractionSEIEnabled;
+#endif
+  Bool      m_timeCodeSEIEnabled;
+  Int       m_timeCodeSEINumTs;
+  TComSEITimeSet m_timeSetArray[MAX_TIMECODE_SEI_SETS];
+  Bool      m_kneeSEIEnabled;
+  TEncCfg::TEncSEIKneeFunctionInformation m_kneeFunctionInformationSEI;
+  Int       m_preferredTransferCharacteristics;
+  UInt      m_greenMetadataType;
+  UInt      m_xsdMetricType;
+  Bool    m_ccvSEIEnabled;
+  Bool    m_ccvSEICancelFlag;
+  Bool    m_ccvSEIPersistenceFlag;
+  Bool    m_ccvSEIPrimariesPresentFlag;
+  Bool    m_ccvSEIMinLuminanceValuePresentFlag;
+  Bool    m_ccvSEIMaxLuminanceValuePresentFlag;
+  Bool    m_ccvSEIAvgLuminanceValuePresentFlag;
+  Double  m_ccvSEIPrimariesX[MAX_NUM_COMPONENT]; // Int(32)
+  Double  m_ccvSEIPrimariesY[MAX_NUM_COMPONENT]; // Int(32)
+  Double  m_ccvSEIMinLuminanceValue;             // UInt(32)
+  Double  m_ccvSEIMaxLuminanceValue;             // UInt(32)
+  Double  m_ccvSEIAvgLuminanceValue;             // UInt(32)
+  Bool      m_erpSEIEnabled;          
+  Bool      m_erpSEICancelFlag;
+  Bool      m_erpSEIPersistenceFlag;
+  Bool      m_erpSEIGuardBandFlag;
+  UInt      m_erpSEIGuardBandType;
+  UInt      m_erpSEILeftGuardBandWidth;
+  UInt      m_erpSEIRightGuardBandWidth;
+
+  Bool      m_sphereRotationSEIEnabled;          
+  Bool      m_sphereRotationSEICancelFlag;
+  Bool      m_sphereRotationSEIPersistenceFlag;
+  Int       m_sphereRotationSEIYaw;
+  Int       m_sphereRotationSEIPitch;
+  Int       m_sphereRotationSEIRoll;
+
+  Bool      m_omniViewportSEIEnabled;          
+  UInt      m_omniViewportSEIId;
+  Bool      m_omniViewportSEICancelFlag;
+  Bool      m_omniViewportSEIPersistenceFlag;
+  UInt      m_omniViewportSEICntMinus1;
+  std::vector<Int>  m_omniViewportSEIAzimuthCentre;
+  std::vector<Int>  m_omniViewportSEIElevationCentre;
+  std::vector<Int>  m_omniViewportSEITiltCentre;
+  std::vector<UInt> m_omniViewportSEIHorRange;
+  std::vector<UInt> m_omniViewportSEIVerRange;  
+  Bool                  m_cmpSEIEnabled;
+  Bool                  m_cmpSEICmpCancelFlag;
+  Bool                  m_cmpSEICmpPersistenceFlag;
+  Bool                  m_rwpSEIEnabled;
+  Bool                  m_rwpSEIRwpCancelFlag;
+  Bool                  m_rwpSEIRwpPersistenceFlag;
+  Bool                  m_rwpSEIConstituentPictureMatchingFlag;
+  Int                   m_rwpSEINumPackedRegions;
