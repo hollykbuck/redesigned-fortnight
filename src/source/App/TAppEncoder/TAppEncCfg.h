@@ -398,3 +398,103 @@ protected:
   Bool                  m_rwpSEIRwpPersistenceFlag;
   Bool                  m_rwpSEIConstituentPictureMatchingFlag;
   Int                   m_rwpSEINumPackedRegions;
+  Int                   m_rwpSEIProjPictureWidth;
+  Int                   m_rwpSEIProjPictureHeight;
+  Int                   m_rwpSEIPackedPictureWidth;
+  Int                   m_rwpSEIPackedPictureHeight;
+  std::vector<UChar>    m_rwpSEIRwpTransformType;
+  std::vector<Bool>     m_rwpSEIRwpGuardBandFlag;
+  std::vector<UInt>     m_rwpSEIProjRegionWidth;
+  std::vector<UInt>     m_rwpSEIProjRegionHeight;
+  std::vector<UInt>     m_rwpSEIRwpSEIProjRegionTop;
+  std::vector<UInt>     m_rwpSEIProjRegionLeft;
+  std::vector<UShort>   m_rwpSEIPackedRegionWidth;
+  std::vector<UShort>   m_rwpSEIPackedRegionHeight;
+  std::vector<UShort>   m_rwpSEIPackedRegionTop;
+  std::vector<UShort>   m_rwpSEIPackedRegionLeft;
+  std::vector<UChar>    m_rwpSEIRwpLeftGuardBandWidth;
+  std::vector<UChar>    m_rwpSEIRwpRightGuardBandWidth;
+  std::vector<UChar>    m_rwpSEIRwpTopGuardBandHeight;
+  std::vector<UChar>    m_rwpSEIRwpBottomGuardBandHeight;
+  std::vector<Bool>     m_rwpSEIRwpGuardBandNotUsedForPredFlag;
+  std::vector<UChar>    m_rwpSEIRwpGuardBandType;
+  Bool                  m_gopBasedTemporalFilterEnabled;               ///< GOP-based Temporal Filter enable/disable
+  Int                   m_gopBasedTemporalFilterPastRefs;
+  Int                   m_gopBasedTemporalFilterFutureRefs;
+  Int                   m_firstValidFrame;
+  Int                   m_lastValidFrame;
+  std::map<Int, Double> m_gopBasedTemporalFilterStrengths;             ///< Filter strength per frame for the GOP-based Temporal Filter
+#if JVET_Y0077_BIM
+  Bool                  m_bimEnabled;
+#endif
+
+  std::string           m_arSEIFileRoot;
+  Bool                    m_fisheyeVIdeoInfoSEIEnabled;
+  TComSEIFisheyeVideoInfo m_fisheyeVideoInfoSEI;
+  // weighted prediction
+  Bool      m_useWeightedPred;                    ///< Use of weighted prediction in P slices
+  Bool      m_useWeightedBiPred;                  ///< Use of bi-directional weighted prediction in B slices
+  WeightedPredictionMethod m_weightedPredictionMethod;
+
+  UInt      m_log2ParallelMergeLevel;                         ///< Parallel merge estimation region
+  UInt      m_maxNumMergeCand;                                ///< Max number of merge candidates
+
+  Int       m_TMVPModeId;
+  Bool      m_signDataHidingEnabledFlag;
+  Bool      m_RCEnableRateControl;                ///< enable rate control or not
+  Int       m_RCTargetBitrate;                    ///< target bitrate when rate control is enabled
+  Int       m_RCKeepHierarchicalBit;              ///< 0: equal bit allocation; 1: fixed ratio bit allocation; 2: adaptive ratio bit allocation
+  Bool      m_RCLCULevelRC;                       ///< true: LCU level rate control; false: picture level rate control NOTE: code-tidy - rename to m_RCCtuLevelRC
+  Bool      m_RCUseLCUSeparateModel;              ///< use separate R-lambda model at LCU level                        NOTE: code-tidy - rename to m_RCUseCtuSeparateModel
+  Int       m_RCInitialQP;                        ///< inital QP for rate control
+  Bool      m_RCForceIntraQP;                     ///< force all intra picture to use initial QP or not
+  Bool      m_RCCpbSaturationEnabled;             ///< enable target bits saturation to avoid CPB overflow and underflow
+  UInt      m_RCCpbSize;                          ///< CPB size
+  Double    m_RCInitialCpbFullness;               ///< initial CPB fullness 
+  ScalingListMode m_useScalingListId;                         ///< using quantization matrix
+  std::string m_scalingListFileName;                          ///< quantization matrix file name
+
+  Bool      m_TransquantBypassEnabledFlag;                    ///< transquant_bypass_enabled_flag setting in PPS.
+  Bool      m_CUTransquantBypassFlagForce;                    ///< if transquant_bypass_enabled_flag, then, if true, all CU transquant bypass flags will be set to true.
+  CostMode  m_costMode;                                       ///< Cost mode to use
+
+  Bool      m_recalculateQPAccordingToLambda;                 ///< recalculate QP value according to the lambda value
+  Bool      m_useStrongIntraSmoothing;                        ///< enable strong intra smoothing for 32x32 blocks where the reference samples are flat
+  Int       m_activeParameterSetsSEIEnabled;
+
+  Bool      m_vuiParametersPresentFlag;                       ///< enable generation of VUI parameters
+  Bool      m_aspectRatioInfoPresentFlag;                     ///< Signals whether aspect_ratio_idc is present
+  Int       m_aspectRatioIdc;                                 ///< aspect_ratio_idc
+  Int       m_sarWidth;                                       ///< horizontal size of the sample aspect ratio
+  Int       m_sarHeight;                                      ///< vertical size of the sample aspect ratio
+  Bool      m_overscanInfoPresentFlag;                        ///< Signals whether overscan_appropriate_flag is present
+  Bool      m_overscanAppropriateFlag;                        ///< Indicates whether conformant decoded pictures are suitable for display using overscan
+  Bool      m_videoSignalTypePresentFlag;                     ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  Int       m_videoFormat;                                    ///< Indicates representation of pictures
+  Bool      m_videoFullRangeFlag;                             ///< Indicates the black level and range of luma and chroma signals
+  Bool      m_colourDescriptionPresentFlag;                   ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
+  Int       m_colourPrimaries;                                ///< Indicates chromaticity coordinates of the source primaries
+  Int       m_transferCharacteristics;                        ///< Indicates the opto-electronic transfer characteristics of the source
+  Int       m_matrixCoefficients;                             ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
+  Bool      m_chromaLocInfoPresentFlag;                       ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
+  Int       m_chromaSampleLocTypeTopField;                    ///< Specifies the location of chroma samples for top field
+  Int       m_chromaSampleLocTypeBottomField;                 ///< Specifies the location of chroma samples for bottom field
+  Bool      m_neutralChromaIndicationFlag;                    ///< Indicates that the value of all decoded chroma samples is equal to 1<<(BitDepthCr-1)
+  Bool      m_defaultDisplayWindowFlag;                       ///< Indicates the presence of the default window parameters
+  Int       m_defDispWinLeftOffset;                           ///< Specifies the left offset from the conformance window of the default window
+  Int       m_defDispWinRightOffset;                          ///< Specifies the right offset from the conformance window of the default window
+  Int       m_defDispWinTopOffset;                            ///< Specifies the top offset from the conformance window of the default window
+  Int       m_defDispWinBottomOffset;                         ///< Specifies the bottom offset from the conformance window of the default window
+  Bool      m_frameFieldInfoPresentFlag;                      ///< Indicates that pic_struct values are present in picture timing SEI messages
+  Bool      m_pocProportionalToTimingFlag;                    ///< Indicates that the POC value is proportional to the output time w.r.t. first picture in CVS
+  Int       m_numTicksPocDiffOneMinus1;                       ///< Number of ticks minus 1 that for a POC difference of one
+  Bool      m_bitstreamRestrictionFlag;                       ///< Signals whether bitstream restriction parameters are present
+  Bool      m_tilesFixedStructureFlag;                        ///< Indicates that each active picture parameter set has the same values of the syntax elements related to tiles
+  Bool      m_motionVectorsOverPicBoundariesFlag;             ///< Indicates that no samples outside the picture boundaries are used for inter prediction
+  Int       m_minSpatialSegmentationIdc;                      ///< Indicates the maximum size of the spatial segments in the pictures in the coded video sequence
+  Int       m_maxBytesPerPicDenom;                            ///< Indicates a number of bytes not exceeded by the sum of the sizes of the VCL NAL units associated with any coded picture
+  Int       m_maxBitsPerMinCuDenom;                           ///< Indicates an upper bound for the number of bits of coding_unit() data
+  Int       m_log2MaxMvLengthHorizontal;                      ///< Indicate the maximum absolute value of a decoded horizontal MV component in quarter-pel luma units
+  Int       m_log2MaxMvLengthVertical;                        ///< Indicate the maximum absolute value of a decoded vertical MV component in quarter-pel luma units
+  std::string m_colourRemapSEIFileRoot;
+  std::string m_regionalNestingSEIFileRoot;
