@@ -498,3 +498,79 @@ protected:
   Int       m_log2MaxMvLengthVertical;                        ///< Indicate the maximum absolute value of a decoded vertical MV component in quarter-pel luma units
   std::string m_colourRemapSEIFileRoot;
   std::string m_regionalNestingSEIFileRoot;
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  Bool      m_siiSEIEnabled;
+  UInt      m_siiSEINumUnitsInShutterInterval;
+  UInt      m_siiSEITimeScale;
+  std::vector<UInt>     m_siiSEISubLayerNumUnitsInSI;
+#endif
+#if SEI_ENCODER_CONTROL
+  // film grain characterstics sei
+  Bool      m_fgcSEIEnabled;
+  Bool      m_fgcSEICancelFlag;
+  Bool      m_fgcSEIPersistenceFlag;
+  UInt      m_fgcSEIModelID;
+  Bool      m_fgcSEISepColourDescPresentFlag;
+  UInt      m_fgcSEIBlendingModeID;
+  UInt      m_fgcSEILog2ScaleFactor;
+  Bool      m_fgcSEICompModelPresent[MAX_NUM_COMPONENT];
+#if JVET_X0048_X0103_FILM_GRAIN
+  Bool      m_fgcSEIAnalysisEnabled;
+  std::string m_fgcSEIExternalMask;
+  std::string m_fgcSEIExternalDenoised;
+  Bool      m_fgcSEIPerPictureSEI;
+  UInt      m_fgcSEINumIntensityIntervalMinus1[MAX_NUM_COMPONENT];
+  UInt      m_fgcSEINumModelValuesMinus1[MAX_NUM_COMPONENT];
+  UInt      m_fgcSEIIntensityIntervalLowerBound[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES];
+  UInt      m_fgcSEIIntensityIntervalUpperBound[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES];
+  UInt      m_fgcSEICompModelValue[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES][FG_MAX_NUM_MODEL_VALUES];
+#endif
+  // content light level SEI
+  Bool      m_cllSEIEnabled;
+  UInt      m_cllSEIMaxContentLevel;
+  UInt      m_cllSEIMaxPicAvgLevel;
+  // ambient viewing environment sei
+  Bool      m_aveSEIEnabled;
+  UInt      m_aveSEIAmbientIlluminance;
+  UInt      m_aveSEIAmbientLightX;
+  UInt      m_aveSEIAmbientLightY;
+#endif
+  std::string m_summaryOutFilename;                           ///< filename to use for producing summary output file.
+  std::string m_summaryPicFilenameBase;                       ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  UInt        m_summaryVerboseness;                           ///< Specifies the level of the verboseness of the text output.
+
+#if EXTENSION_360_VIDEO
+  TExt360AppEncCfg m_ext360;
+  friend class TExt360AppEncCfg;
+  friend class TExt360AppEncTop;
+#endif
+
+#if JCTVC_AD0021_SEI_MANIFEST
+  Bool       m_SEIManifestSEIEnabled;
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  Bool       m_SEIPrefixIndicationSEIEnabled;
+#endif
+
+  // internal member functions
+  Void  xCheckParameter ();                                   ///< check validity of configuration values
+  Void  xPrintParameter ();                                   ///< print configuration values
+  Void  xPrintUsage     ();                                   ///< print usage
+#if DPB_ENCODER_USAGE_CHECK
+  Int   xDPBUsage(std::ostream *pOs);                         ///> Calculates maximum number of frames stored in DPB. Can optionally output usage to a stream
+#endif
+public:
+  TAppEncCfg();
+  virtual ~TAppEncCfg();
+
+public:
+  Void  create    ();                                         ///< create option handling class
+  Void  destroy   ();                                         ///< destroy option handling class
+  Bool  parseCfg  ( Int argc, TChar* argv[] );                ///< parse configuration file to fill member variables
+
+};// END CLASS DEFINITION TAppEncCfg
+
+//! \}
+
+#endif // __TAPPENCCFG__
+
