@@ -98,3 +98,103 @@ static const ProfileFeatures validProfiles[] =
     { Profile::MAINREXT,           "Main 4:2:2 10 Intra",            10, CHROMA_422, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   1667,   1833,     2500,    5    , mainLevelTierInfo },
     { Profile::MAINREXT,           "Main 4:2:2 12 Intra",            12, CHROMA_422, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
     { Profile::MAINREXT,           "Main 4:4:4 Intra",                8, CHROMA_444, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 10 Intra",            10, CHROMA_444, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   2500,   2750,     3750,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 12 Intra",            12, CHROMA_444, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   3000,   3300,     4500,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 16 Intra",            16, CHROMA_444, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, false,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 Still Picture",        8, CHROMA_444, true , true , ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, true ,   2000,   2200,     3000,    5    , mainLevelTierInfo },
+    { Profile::MAINREXT,           "Main 4:4:4 16 Still Picture",    16, CHROMA_444, true , true , ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::DISABLED, HBR_1_OR_2   , false, 256, 64, true ,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::HIGHTHROUGHPUTREXT, "High Throughput 4:4:4 16 Intra", 16, CHROMA_444, true , false, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::OPTIONAL, ProfileFeatures::ENABLED , HBR_12_OR_24 , true , 256, 64, false,   4000,   4400,     6000,    5    , mainLevelTierInfo },
+    { Profile::NONE, 0 }
+};
+
+
+
+
+Void
+ProfileLevelTierFeatures::activate(const TComSPS &sps)
+{
+  const ProfileTierLevel ptl=*(sps.getPTL()->getGeneralPTL());
+  activate(ptl.getProfileIdc(),
+           ptl.getBitDepthConstraint(),
+           ptl.getChromaFormatConstraint(),
+           ptl.getIntraConstraintFlag(),
+           ptl.getOnePictureOnlyConstraintFlag(),
+           ptl.getLevelIdc(),
+           ptl.getTierFlag(),
+           sps.getMaxCUWidth(),
+           sps.getBitDepth(CHANNEL_TYPE_LUMA),
+           sps.getBitDepth(CHANNEL_TYPE_CHROMA),
+           sps.getChromaFormatIdc());
+}
+
+Void
+ProfileLevelTierFeatures::activate(const Profile::Name profileIdc,
+                                   const UInt          bitDepthConstraint,
+                                   const ChromaFormat  chromaFormatConstraint,
+                                   const Bool          intraConstraintFlag,
+                                   const Bool          onePictureOnlyConstraintFlag,
+                                   const Level::Name   level,
+                                   const Level::Tier   tier,
+                                   const UInt          ctbSizeY,
+                                   const UInt          bitDepthY,
+                                   const UInt          bitDepthC,
+                                   const ChromaFormat  chFormat)
+{
+  m_tier = tier;
+
+  for(Int i=0; validProfiles[i].profile != Profile::NONE; i++)
+  {
+    if (profileIdc == validProfiles[i].profile &&
+        bitDepthConstraint == validProfiles[i].maxBitDepth &&
+        chromaFormatConstraint == validProfiles[i].maxChromaFormat &&
+        intraConstraintFlag == validProfiles[i].generalIntraConstraintFlag &&
+        onePictureOnlyConstraintFlag == validProfiles[i].generalOnePictureOnlyConstraintFlag )
+    {
+      m_pProfile = &(validProfiles[i]);
+      break;
+    }
+  }
+
+  if (m_pProfile != 0)
+  {
+    // Now identify the level:
+    const LevelTierFeatures *pLTF = m_pProfile->pLevelTiersListInfo;
+    const Level::Name spsLevelName = level;
+    if (spsLevelName!=Level::LEVEL8_5 || m_pProfile->bCanUseLevel8p5)
+    {
+      for(Int i=0; pLTF[i].level!=Level::NONE; i++)
+      {
+        if (pLTF[i].level == spsLevelName)
+        {
+          m_pLevelTier = &(pLTF[i]);
+        }
+      }
+    }
+  }
+
+  {
+    const UInt ctbWidthC  = ctbSizeY >> getChannelTypeScaleX(CHANNEL_TYPE_CHROMA, chFormat);
+    const UInt ctbHeightC = ctbSizeY >> getChannelTypeScaleY(CHANNEL_TYPE_CHROMA, chFormat);
+
+    const UInt rawCtuBits = ctbSizeY*ctbSizeY*bitDepthY+2*(ctbWidthC*ctbHeightC)*bitDepthC;
+    m_maxRawCtuBits=(rawCtuBits*5)/3;
+  }
+
+}
+
+Int ProfileLevelTierFeatures::getMaxDPBNumFrames(const UInt PicSizeInSamplesY) // returns -1 if no limit, otherwise a limit of DPB pictures is indicated.
+{
+  Int MaxDpbSize=-1;
+
+  if (m_pLevelTier!=0)
+  {
+    UInt MaxLumaPs=m_pLevelTier->maxLumaPs;
+    Int maxDpbPicBuf=6; // SCC profiles may set this to 7.
+
+    if( PicSizeInSamplesY <= ( MaxLumaPs >> 2 ) )
+    {
+       MaxDpbSize = min( 4 * maxDpbPicBuf, 16 );
+    }
+    else if( PicSizeInSamplesY <= ( MaxLumaPs >> 1 ) )
+    {
+       MaxDpbSize = min( 2 * maxDpbPicBuf, 16 );
