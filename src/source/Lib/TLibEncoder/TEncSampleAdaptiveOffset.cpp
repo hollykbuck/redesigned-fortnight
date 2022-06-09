@@ -1198,3 +1198,99 @@ Void TEncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const Int 
           srcLineBelow = srcLine + srcStride;
 
           for(x=startX; x<endX; x++)
+          {
+            signDown = (SChar)sgn(srcLine[x] - srcLineBelow[x-1]);
+            edgeType = signDown + signUpLine[x];
+
+            diff [edgeType] += (orgLine[x] - srcLine[x]);
+            count[edgeType] ++;
+
+            signUpLine[x-1] = -signDown;
+          }
+          signUpLine[endX-1] = (SChar)sgn(srcLineBelow[endX-1] - srcLine[endX]);
+          srcLine  += srcStride;
+          orgLine  += orgStride;
+        }
+        if(isCalculatePreDeblockSamples)
+        {
+          if(isBelowAvail)
+          {
+            startX = isLeftAvail  ? 0     : 1 ;
+            endX   = isRightAvail ? width : (width -1);
+
+            for(y=0; y<skipLinesB[typeIdx]; y++)
+            {
+              srcLineBelow = srcLine + srcStride;
+              srcLineAbove = srcLine - srcStride;
+
+              for (x=startX; x<endX; x++)
+              {
+                edgeType = sgn(srcLine[x] - srcLineBelow[x-1]) + sgn(srcLine[x] - srcLineAbove[x+1]);
+                diff [edgeType] += (orgLine[x] - srcLine[x]);
+                count[edgeType] ++;
+              }
+              srcLine  += srcStride;
+              orgLine  += orgStride;
+            }
+          }
+        }
+      }
+      break;
+    case SAO_TYPE_BO:
+      {
+        startX = (!isCalculatePreDeblockSamples)?0
+                                                :( isRightAvail?(width- skipLinesR[typeIdx]):width)
+                                                ;
+        endX   = (!isCalculatePreDeblockSamples)?(isRightAvail ? (width - skipLinesR[typeIdx]) : width )
+                                                :width
+                                                ;
+        endY = isBelowAvail ? (height- skipLinesB[typeIdx]) : height;
+        Int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+        for (y=0; y< endY; y++)
+        {
+          for (x=startX; x< endX; x++)
+          {
+
+            Int bandIdx= srcLine[x] >> shiftBits;
+            diff [bandIdx] += (orgLine[x] - srcLine[x]);
+            count[bandIdx] ++;
+          }
+          srcLine += srcStride;
+          orgLine += orgStride;
+        }
+        if(isCalculatePreDeblockSamples)
+        {
+          if(isBelowAvail)
+          {
+            startX = 0;
+            endX   = width;
+
+            for(y= 0; y< skipLinesB[typeIdx]; y++)
+            {
+              for (x=startX; x< endX; x++)
+              {
+                Int bandIdx= srcLine[x] >> shiftBits;
+                diff [bandIdx] += (orgLine[x] - srcLine[x]);
+                count[bandIdx] ++;
+              }
+              srcLine  += srcStride;
+              orgLine  += orgStride;
+
+            }
+
+          }
+        }
+      }
+      break;
+    default:
+      {
+        printf("Not a supported SAO types\n");
+        assert(0);
+        exit(-1);
+      }
+    }
+  }
+}
+
+
+//! \}
