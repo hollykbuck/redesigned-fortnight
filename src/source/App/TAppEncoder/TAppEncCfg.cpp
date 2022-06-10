@@ -98,3 +98,103 @@ enum UIProfileName // this is used for determining profile strings, where multip
   UI_MAIN_444_12_INTRA = 2312,
   UI_MAIN_444_16_INTRA = 2316,
   UI_MAIN_444_STILL_PICTURE = 11308,
+  UI_MAIN_444_16_STILL_PICTURE = 12316,
+  // The following are high throughput profiles, which would map to the HIGHTHROUGHPUTREXT profile idc.
+  // The enumeration indicates the bit-depth constraint in the bottom 2 digits
+  //                           the chroma format in the next digit
+  //                           the intra constraint in the next digit
+  //                           There is a '2' for the top digit to indicate it is high throughput profile
+  
+  UI_HIGHTHROUGHPUT_444     = 21308,
+  UI_HIGHTHROUGHPUT_444_10  = 21310,
+  UI_HIGHTHROUGHPUT_444_14  = 21314,
+  UI_HIGHTHROUGHPUT_444_16_INTRA  = 22316
+};
+
+constexpr int TF_DEFAULT_REFS = 4;
+
+//! \ingroup TAppEncoder
+//! \{
+
+// ====================================================================================================================
+// Constructor / destructor / initialization / destroy
+// ====================================================================================================================
+
+TAppEncCfg::TAppEncCfg()
+: m_inputColourSpaceConvert(IPCOLOURSPACE_UNCHANGED)
+, m_snrInternalColourSpace(false)
+, m_outputInternalColourSpace(false)
+#if EXTENSION_360_VIDEO
+, m_ext360(*this)
+#endif
+{
+  m_aidQP = NULL;
+  m_startOfCodedInterval = NULL;
+  m_codedPivotValue = NULL;
+  m_targetPivotValue = NULL;
+}
+
+TAppEncCfg::~TAppEncCfg()
+{
+  if ( m_aidQP )
+  {
+    delete[] m_aidQP;
+  }
+  if ( m_startOfCodedInterval )
+  {
+    delete[] m_startOfCodedInterval;
+    m_startOfCodedInterval = NULL;
+  }
+   if ( m_codedPivotValue )
+  {
+    delete[] m_codedPivotValue;
+    m_codedPivotValue = NULL;
+  }
+  if ( m_targetPivotValue )
+  {
+    delete[] m_targetPivotValue;
+    m_targetPivotValue = NULL;
+  }
+}
+
+Void TAppEncCfg::create()
+{
+}
+
+Void TAppEncCfg::destroy()
+{
+}
+
+std::istringstream &operator>>(std::istringstream &in, GOPEntry &entry)     //input
+{
+  in>>entry.m_sliceType;
+  in>>entry.m_POC;
+  in>>entry.m_QPOffset;
+  in>>entry.m_QPOffsetModelOffset;
+  in>>entry.m_QPOffsetModelScale;
+  in>>entry.m_CbQPoffset;
+  in>>entry.m_CrQPoffset;
+  in>>entry.m_QPFactor;
+  in>>entry.m_tcOffsetDiv2;
+  in>>entry.m_betaOffsetDiv2;
+  in>>entry.m_temporalId;
+  in>>entry.m_numRefPicsActive;
+  in>>entry.m_numRefPics;
+  for ( Int i = 0; i < entry.m_numRefPics; i++ )
+  {
+    in>>entry.m_referencePics[i];
+  }
+  in>>entry.m_interRPSPrediction;
+  if (entry.m_interRPSPrediction==1)
+  {
+    in>>entry.m_deltaRPS;
+    in>>entry.m_numRefIdc;
+    for ( Int i = 0; i < entry.m_numRefIdc; i++ )
+    {
+      in>>entry.m_refIdc[i];
+    }
+  }
+  else if (entry.m_interRPSPrediction==2)
+  {
+    in>>entry.m_deltaRPS;
+  }
