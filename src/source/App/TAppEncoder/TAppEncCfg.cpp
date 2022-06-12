@@ -198,3 +198,103 @@ std::istringstream &operator>>(std::istringstream &in, GOPEntry &entry)     //in
   {
     in>>entry.m_deltaRPS;
   }
+  return in;
+}
+
+Bool confirmPara(Bool bflag, const TChar* message);
+
+static inline ChromaFormat numberToChromaFormat(const Int val)
+{
+  switch (val)
+  {
+    case 400: return CHROMA_400; break;
+    case 420: return CHROMA_420; break;
+    case 422: return CHROMA_422; break;
+    case 444: return CHROMA_444; break;
+    default:  return NUM_CHROMA_FORMAT;
+  }
+}
+
+static const struct MapStrToProfile
+{
+  const TChar* str;
+  Profile::Name value;
+}
+strToProfile[] =
+{
+  {"none",                 Profile::NONE               },
+  {"main",                 Profile::MAIN               },
+  {"main10",               Profile::MAIN10             },
+  {"main-still-picture",   Profile::MAINSTILLPICTURE   },
+  {"main10-still-picture", Profile::MAIN10             },
+  {"main-RExt",            Profile::MAINREXT           },
+  {"high-throughput-RExt", Profile::HIGHTHROUGHPUTREXT }
+};
+
+static const struct MapStrToUIProfileName
+{
+  const TChar* str;
+  UIProfileName value;
+}
+strToUIProfileName[] =
+{
+    {"none",                      UI_NONE             },
+    {"main",                      UI_MAIN             },
+    {"main10",                    UI_MAIN10           },
+    {"main10_still_picture",      UI_MAIN10_STILL_PICTURE },
+    {"main10-still-picture",      UI_MAIN10_STILL_PICTURE },
+    {"main_still_picture",        UI_MAINSTILLPICTURE },
+    {"main-still-picture",        UI_MAINSTILLPICTURE },
+    {"main_RExt",                 UI_MAINREXT         },
+    {"main-RExt",                 UI_MAINREXT         },
+    {"main_rext",                 UI_MAINREXT         },
+    {"main-rext",                 UI_MAINREXT         },
+    {"high_throughput_RExt",      UI_HIGHTHROUGHPUTREXT },
+    {"high-throughput-RExt",      UI_HIGHTHROUGHPUTREXT },
+    {"high_throughput_rext",      UI_HIGHTHROUGHPUTREXT },
+    {"high-throughput-rext",      UI_HIGHTHROUGHPUTREXT },
+    {"monochrome",                UI_MONOCHROME_8     },
+    {"monochrome12",              UI_MONOCHROME_12    },
+    {"monochrome16",              UI_MONOCHROME_16    },
+    {"main12",                    UI_MAIN_12          },
+    {"main_422_10",               UI_MAIN_422_10      },
+    {"main_422_12",               UI_MAIN_422_12      },
+    {"main_444",                  UI_MAIN_444         },
+    {"main_444_10",               UI_MAIN_444_10      },
+    {"main_444_12",               UI_MAIN_444_12      },
+    {"main_444_16",               UI_MAIN_444_16      },
+    {"main_intra",                UI_MAIN_INTRA       },
+    {"main_10_intra",             UI_MAIN_10_INTRA    },
+    {"main_12_intra",             UI_MAIN_12_INTRA    },
+    {"main_422_10_intra",         UI_MAIN_422_10_INTRA},
+    {"main_422_12_intra",         UI_MAIN_422_12_INTRA},
+    {"main_444_intra",            UI_MAIN_444_INTRA   },
+    {"main_444_still_picture",    UI_MAIN_444_STILL_PICTURE },
+    {"main_444_10_intra",         UI_MAIN_444_10_INTRA},
+    {"main_444_12_intra",         UI_MAIN_444_12_INTRA},
+    {"main_444_16_intra",         UI_MAIN_444_16_INTRA},
+    {"main_444_16_still_picture", UI_MAIN_444_16_STILL_PICTURE },
+    {"high_throughput_444",       UI_HIGHTHROUGHPUT_444    },
+    {"high_throughput_444_10",    UI_HIGHTHROUGHPUT_444_10 },
+    {"high_throughput_444_14",    UI_HIGHTHROUGHPUT_444_14 },
+    {"high_throughput_444_16_intra", UI_HIGHTHROUGHPUT_444_16_INTRA }
+};
+
+static const UIProfileName validRExtHighThroughPutProfileNames[2/* intraConstraintFlag*/][4/* bit depth constraint 8=0, 10=1, 12=2, 16=3*/]=
+{
+    { UI_HIGHTHROUGHPUT_444,          UI_HIGHTHROUGHPUT_444_10,          UI_HIGHTHROUGHPUT_444_14,         UI_NONE                         }, // intraConstraintFlag 0 - 8-bit,10-bit,14-bit and 16-bit
+    { UI_NONE,                        UI_NONE,                           UI_NONE,                          UI_HIGHTHROUGHPUT_444_16_INTRA  }  // intraConstraintFlag 1 - 8-bit,10-bit,14-bit and 16-bit
+};
+
+static const UIProfileName validRExtProfileNames[2/* intraConstraintFlag*/][4/* bit depth constraint 8=0, 10=1, 12=2, 16=3*/][4/*chroma format*/]=
+{
+    {
+        { UI_MONOCHROME_8,  UI_NONE,          UI_NONE,              UI_MAIN_444          }, // 8-bit  inter for 400, 420, 422 and 444
+        { UI_NONE,          UI_NONE,          UI_MAIN_422_10,       UI_MAIN_444_10       }, // 10-bit inter for 400, 420, 422 and 444
+        { UI_MONOCHROME_12, UI_MAIN_12,       UI_MAIN_422_12,       UI_MAIN_444_12       }, // 12-bit inter for 400, 420, 422 and 444
+        { UI_MONOCHROME_16, UI_NONE,          UI_NONE,              UI_MAIN_444_16       }  // 16-bit inter for 400, 420, 422 and 444 (the latter is non standard used for development)
+    },
+    {
+        { UI_NONE,          UI_MAIN_INTRA,    UI_NONE,              UI_MAIN_444_INTRA    }, // 8-bit  intra for 400, 420, 422 and 444
+        { UI_NONE,          UI_MAIN_10_INTRA, UI_MAIN_422_10_INTRA, UI_MAIN_444_10_INTRA }, // 10-bit intra for 400, 420, 422 and 444
+        { UI_NONE,          UI_MAIN_12_INTRA, UI_MAIN_422_12_INTRA, UI_MAIN_444_12_INTRA }, // 12-bit intra for 400, 420, 422 and 444
