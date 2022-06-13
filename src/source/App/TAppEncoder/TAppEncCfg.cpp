@@ -298,3 +298,103 @@ static const UIProfileName validRExtProfileNames[2/* intraConstraintFlag*/][4/* 
         { UI_NONE,          UI_MAIN_INTRA,    UI_NONE,              UI_MAIN_444_INTRA    }, // 8-bit  intra for 400, 420, 422 and 444
         { UI_NONE,          UI_MAIN_10_INTRA, UI_MAIN_422_10_INTRA, UI_MAIN_444_10_INTRA }, // 10-bit intra for 400, 420, 422 and 444
         { UI_NONE,          UI_MAIN_12_INTRA, UI_MAIN_422_12_INTRA, UI_MAIN_444_12_INTRA }, // 12-bit intra for 400, 420, 422 and 444
+        { UI_NONE,          UI_NONE,          UI_NONE,              UI_MAIN_444_16_INTRA }  // 16-bit intra for 400, 420, 422 and 444
+    }
+};
+
+static const struct MapStrToTier
+{
+  const TChar* str;
+  Level::Tier value;
+}
+strToTier[] =
+{
+  {"main", Level::MAIN},
+  {"high", Level::HIGH},
+};
+
+static const struct MapStrToLevel
+{
+  const TChar* str;
+  Level::Name value;
+}
+strToLevel[] =
+{
+  {"none",Level::NONE},
+  {"1",   Level::LEVEL1},
+  {"2",   Level::LEVEL2},
+  {"2.1", Level::LEVEL2_1},
+  {"3",   Level::LEVEL3},
+  {"3.1", Level::LEVEL3_1},
+  {"4",   Level::LEVEL4},
+  {"4.1", Level::LEVEL4_1},
+  {"5",   Level::LEVEL5},
+  {"5.1", Level::LEVEL5_1},
+  {"5.2", Level::LEVEL5_2},
+  {"6",   Level::LEVEL6},
+  {"6.1", Level::LEVEL6_1},
+  {"6.2", Level::LEVEL6_2},
+#if JVET_X0079_MODIFIED_BITRATES
+  {"6.3", Level::LEVEL6_3},
+#endif
+  {"8.5", Level::LEVEL8_5},
+};
+
+#if !DPB_ENCODER_USAGE_CHECK
+#if JVET_X0079_MODIFIED_BITRATES
+UInt g_uiMaxCpbSize[2][28] =
+{
+  //            LEVEL1,          LEVEL2,  LEVEL2_1,      LEVEL3,  LEVEL3_1,       LEVEL4,   LEVEL4_1,       LEVEL5,    LEVEL5_1,  LEVEL5_2,     LEVEL6,    LEVEL6_1,  LEVEL6_2,  LEVEL6_3
+  { 0, 0, 0, 0, 350000, 0, 0, 0, 1500000, 3000000, 0, 0, 6000000, 10000000, 0, 0, 12000000, 20000000, 0, 0,  25000000,  40000000,  60000000, 0,  60000000, 120000000, 240000000,  240000000 },
+  { 0, 0, 0, 0,      0, 0, 0, 0,       0,       0, 0, 0,       0,        0, 0, 0, 30000000, 50000000, 0, 0, 100000000, 160000000, 240000000, 0, 240000000, 480000000, 800000000, 1600000000 }
+};
+#else
+UInt g_uiMaxCpbSize[2][21] =
+{
+  //         LEVEL1,        LEVEL2,LEVEL2_1,     LEVEL3, LEVEL3_1,      LEVEL4, LEVEL4_1,       LEVEL5,  LEVEL5_1,  LEVEL5_2,    LEVEL6,  LEVEL6_1,  LEVEL6_2 
+  { 0, 0, 0, 350000, 0, 0, 1500000, 3000000, 0, 6000000, 10000000, 0, 12000000, 20000000, 0,  25000000,  40000000,  60000000,  60000000, 120000000, 240000000 },
+  { 0, 0, 0,      0, 0, 0,       0,       0, 0,       0,        0, 0, 30000000, 50000000, 0, 100000000, 160000000, 240000000, 240000000, 480000000, 800000000 }
+};
+#endif
+#endif
+
+static const struct MapStrToCostMode
+{
+  const TChar* str;
+  CostMode    value;
+}
+strToCostMode[] =
+{
+  {"lossy",                     COST_STANDARD_LOSSY},
+  {"sequence_level_lossless",   COST_SEQUENCE_LEVEL_LOSSLESS},
+  {"lossless",                  COST_LOSSLESS_CODING},
+  {"mixed_lossless_lossy",      COST_MIXED_LOSSLESS_LOSSY_CODING}
+};
+
+static const struct MapStrToScalingListMode
+{
+  const TChar* str;
+  ScalingListMode value;
+}
+strToScalingListMode[] =
+{
+  {"0",       SCALING_LIST_OFF},
+  {"1",       SCALING_LIST_DEFAULT},
+  {"2",       SCALING_LIST_FILE_READ},
+  {"off",     SCALING_LIST_OFF},
+  {"default", SCALING_LIST_DEFAULT},
+  {"file",    SCALING_LIST_FILE_READ}
+};
+
+template<typename T, typename P>
+static std::string enumToString(P map[], UInt mapLen, const T val)
+{
+  for (UInt i = 0; i < mapLen; i++)
+  {
+    if (val == map[i].value)
+    {
+      return map[i].str;
+    }
+  }
+  return std::string();
+}
