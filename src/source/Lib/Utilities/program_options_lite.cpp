@@ -298,3 +298,103 @@ namespace df
       /* check for the short list */
       if (allow_short && !(found && allow_long))
       {
+        opt_it = opts.opt_short_map.find(name);
+        if (opt_it != opts.opt_short_map.end())
+        {
+          found = true;
+        }
+      }
+
+      bool allow_prefix = allow_long;
+      if (allow_prefix && !found)
+      {
+        for (opt_it = opts.opt_prefix_map.begin(); opt_it != opts.opt_prefix_map.end(); opt_it++)
+        {
+          std::string name_prefix = name.substr(0, opt_it->first.size());
+          if (name_prefix == opt_it->first)
+          {
+            // prepend value matching *
+            val = name.substr(name_prefix.size()) + std::string(" ") + val;
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (!found)
+      {
+        error_reporter.error(where())
+          << "Unknown option `" << name << "' (value:`" << value << "')\n";
+        return false;
+      }
+
+      setOptions((*opt_it).second, val, error_reporter);
+      return true;
+    }
+
+    struct ArgvParser : public OptionWriter
+    {
+      ArgvParser(Options& rOpts, ErrorReporter& rError_reporter)
+      : OptionWriter(rOpts, rError_reporter)
+      {}
+
+      const string where() { return "command line"; }
+
+      unsigned parseGNU(unsigned argc, const char* argv[]);
+      unsigned parseSHORT(unsigned argc, const char* argv[]);
+    };
+
+    /**
+     * returns number of extra arguments consumed
+     */
+    unsigned ArgvParser::parseGNU(unsigned argc, const char* argv[])
+    {
+      /* gnu style long options can take the forms:
+       *  --option=arg
+       *  --option arg
+       */
+      string arg(argv[0]);
+      size_t arg_opt_start = arg.find_first_not_of('-');
+      size_t arg_opt_sep = arg.find_first_of('=');
+      string option = arg.substr(arg_opt_start, arg_opt_sep - arg_opt_start);
+
+      unsigned extra_argc_consumed = 0;
+      if (arg_opt_sep == string::npos)
+      {
+        /* no argument found => argument in argv[1] (maybe) */
+        /* xxx, need to handle case where option isn't required */
+#if 0
+        /* commented out, to return to true GNU style processing
+        * where longopts have to include an =, otherwise they are
+        * booleans */
+        if (argc == 1)
+        {
+          return 0; /* run out of argv for argument */
+        }
+        extra_argc_consumed = 1;
+#endif
+        if(!storePair(true, false, option, "1"))
+        {
+          return 0;
+        }
+      }
+      else
+      {
+        /* argument occurs after option_sep */
+        string val = arg.substr(arg_opt_sep + 1);
+        storePair(true, false, option, val);
+      }
+
+      return extra_argc_consumed;
+    }
+
+    unsigned ArgvParser::parseSHORT(unsigned argc, const char* argv[])
+    {
+      /* short options can take the forms:
+       *  --option arg
+       *  -option arg
+       */
+      string arg(argv[0]);
+      size_t arg_opt_start = arg.find_first_not_of('-');
+      string option = arg.substr(arg_opt_start);
+      /* lookup option */
