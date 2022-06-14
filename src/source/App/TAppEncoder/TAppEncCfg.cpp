@@ -398,3 +398,103 @@ static std::string enumToString(P map[], UInt mapLen, const T val)
   }
   return std::string();
 }
+
+template<typename T, typename P>
+static istream& readStrToEnum(P map[], UInt mapLen, istream &in, T &val)
+{
+  string str;
+  in >> str;
+
+  UInt i=0;
+  for (; i < mapLen && str!=map[i].str; i++);
+
+  if (i < mapLen)
+  {
+    val = map[i].value;
+  }
+  else
+  {
+    in.setstate(ios::failbit);
+  }
+  return in;
+}
+
+//inline to prevent compiler warnings for "unused static function"
+
+static inline istream& operator >> (istream &in, UIProfileName &profile)
+{
+  return readStrToEnum(strToUIProfileName, sizeof(strToUIProfileName)/sizeof(*strToUIProfileName), in, profile);
+}
+
+namespace Level
+{
+  static inline istream& operator >> (istream &in, Tier &tier)
+  {
+    return readStrToEnum(strToTier, sizeof(strToTier)/sizeof(*strToTier), in, tier);
+  }
+
+  static inline istream& operator >> (istream &in, Name &level)
+  {
+    return readStrToEnum(strToLevel, sizeof(strToLevel)/sizeof(*strToLevel), in, level);
+  }
+}
+
+static inline istream& operator >> (istream &in, CostMode &mode)
+{
+  return readStrToEnum(strToCostMode, sizeof(strToCostMode)/sizeof(*strToCostMode), in, mode);
+}
+
+static inline istream& operator >> (istream &in, ScalingListMode &mode)
+{
+  return readStrToEnum(strToScalingListMode, sizeof(strToScalingListMode)/sizeof(*strToScalingListMode), in, mode);
+}
+
+#if !JVET_X0048_X0103_FILM_GRAIN
+template <class T>
+struct SMultiValueInput
+{
+  const T              minValIncl;
+  const T              maxValIncl;
+  const std::size_t    minNumValuesIncl;
+  const std::size_t    maxNumValuesIncl; // Use 0 for unlimited
+        std::vector<T> values;
+  SMultiValueInput() : minValIncl(0), maxValIncl(0), minNumValuesIncl(0), maxNumValuesIncl(0), values() { }
+  SMultiValueInput(std::vector<T> &defaults) : minValIncl(0), maxValIncl(0), minNumValuesIncl(0), maxNumValuesIncl(0), values(defaults) { }
+  SMultiValueInput(const T &minValue, const T &maxValue, std::size_t minNumberValues=0, std::size_t maxNumberValues=0)
+    : minValIncl(minValue), maxValIncl(maxValue), minNumValuesIncl(minNumberValues), maxNumValuesIncl(maxNumberValues), values()  { }
+  SMultiValueInput(const T &minValue, const T &maxValue, std::size_t minNumberValues, std::size_t maxNumberValues, const T* defValues, const UInt numDefValues)
+    : minValIncl(minValue), maxValIncl(maxValue), minNumValuesIncl(minNumberValues), maxNumValuesIncl(maxNumberValues), values(defValues, defValues+numDefValues)  { }
+  SMultiValueInput<T> &operator=(const std::vector<T> &userValues) { values=userValues; return *this; }
+  SMultiValueInput<T> &operator=(const SMultiValueInput<T> &userValues) { values=userValues.values; return *this; }
+
+  T readValue(const TChar *&pStr, Bool &bSuccess);
+
+  istream& readValues(std::istream &in);
+};
+#endif
+
+template <class T>
+static inline istream& operator >> (std::istream &in, SMultiValueInput<T> &values)
+{
+  return values.readValues(in);
+}
+
+template <class T>
+T SMultiValueInput<T>::readValue(const char *&pStr, bool &bSuccess)
+{
+  T val=T();
+  std::string s(pStr);
+  std::replace(s.begin(), s.end(), ',', ' '); // make comma separated into space separated
+  std::istringstream iss(s);
+  iss>>val;
+  bSuccess=!iss.fail() // check nothing has gone wrong
+           && !(val<minValIncl || val>maxValIncl) // check value is within range
+           && (int)iss.tellg() !=  0 // check we've actually read something
+           && (iss.eof() || iss.peek()==' '); // check next character is a space, or eof
+  pStr+= (iss.eof() ? s.size() : (std::size_t)iss.tellg());
+  return val;
+}
+
+template <class T>
+istream& SMultiValueInput<T>::readValues(std::istream &in)
+{
