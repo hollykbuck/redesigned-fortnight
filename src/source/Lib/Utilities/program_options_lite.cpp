@@ -398,3 +398,103 @@ namespace df
       size_t arg_opt_start = arg.find_first_not_of('-');
       string option = arg.substr(arg_opt_start);
       /* lookup option */
+
+      /* argument in argv[1] */
+      /* xxx, need to handle case where option isn't required */
+      if (argc == 1)
+      {
+        error_reporter.error(where())
+          << "Not processing option `" << option << "' without argument\n";
+        return 0; /* run out of argv for argument */
+      }
+      storePair(false, true, option, string(argv[1]));
+
+      return 1;
+    }
+
+    list<const char*>
+    scanArgv(Options& opts, unsigned argc, const char* argv[], ErrorReporter& error_reporter)
+    {
+      ArgvParser avp(opts, error_reporter);
+
+      /* a list for anything that didn't get handled as an option */
+      list<const char*> non_option_arguments;
+
+      for(unsigned i = 1; i < argc; i++)
+      {
+        if (argv[i][0] != '-')
+        {
+          non_option_arguments.push_back(argv[i]);
+          continue;
+        }
+
+        if (argv[i][1] == 0)
+        {
+          /* a lone single dash is an argument (usually signifying stdin) */
+          non_option_arguments.push_back(argv[i]);
+          continue;
+        }
+
+        if (argv[i][1] != '-')
+        {
+          /* handle short (single dash) options */
+          i += avp.parseSHORT(argc - i, &argv[i]);
+          continue;
+        }
+
+        if (argv[i][2] == 0)
+        {
+          /* a lone double dash ends option processing */
+          while (++i < argc)
+          {
+            non_option_arguments.push_back(argv[i]);
+          }
+          break;
+        }
+
+        /* handle long (double dash) options */
+        i += avp.parseGNU(argc - i, &argv[i]);
+      }
+
+      return non_option_arguments;
+    }
+
+    struct CfgStreamParser : public OptionWriter
+    {
+      CfgStreamParser(const string& rName, Options& rOpts, ErrorReporter& rError_reporter)
+      : OptionWriter(rOpts, rError_reporter)
+      , name(rName)
+      , linenum(0)
+      {}
+
+      const string name;
+      int linenum;
+      const string where()
+      {
+        ostringstream os;
+        os << name << ":" << linenum;
+        return os.str();
+      }
+
+      void scanLine(string& line);
+      void scanStream(istream& in);
+    };
+
+    void CfgStreamParser::scanLine(string& line)
+    {
+      /* strip any leading whitespace */
+      size_t start = line.find_first_not_of(" \t\n\r");
+      if (start == string::npos)
+      {
+        /* blank line */
+        return;
+      }
+      if (line[start] == '#')
+      {
+        /* comment line */
+        return;
+      }
+      /* look for first whitespace or ':' after the option end */
+      size_t option_end = line.find_first_of(": \t\n\r",start);
+      string option = line.substr(start, option_end - start);
+
