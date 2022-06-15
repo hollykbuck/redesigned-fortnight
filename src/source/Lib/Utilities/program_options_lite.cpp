@@ -498,3 +498,99 @@ namespace df
       size_t option_end = line.find_first_of(": \t\n\r",start);
       string option = line.substr(start, option_end - start);
 
+      /* look for ':', eat up any whitespace first */
+      start = line.find_first_not_of(" \t\n\r", option_end);
+      if (start == string::npos)
+      {
+        /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
+        return;
+      }
+      if (line[start] != ':')
+      {
+        /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
+        return;
+      }
+
+      /* look for start of value string -- eat up any leading whitespace */
+      start = line.find_first_not_of(" \t\n\r", ++start);
+      if (start == string::npos)
+      {
+        /* error: badly formatted line */
+        error_reporter.warn(where()) << "line formatting error\n";
+        return;
+      }
+
+      /* extract the value part, which may contain embedded spaces
+       * by searching for a word at a time, until we hit a comment or end of line */
+      size_t value_end = start;
+      do
+      {
+        if (line[value_end] == '#')
+        {
+          /* rest of line is a comment */
+          value_end--;
+          break;
+        }
+        value_end = line.find_first_of(" \t\n\r", value_end);
+        /* consume any white space, incase there is another word.
+         * any trailing whitespace will be removed shortly */
+        value_end = line.find_first_not_of(" \t\n\r", value_end);
+      } while (value_end != string::npos);
+      /* strip any trailing space from value*/
+      value_end = line.find_last_not_of(" \t\n\r", value_end);
+
+      string value;
+      if (value_end >= start)
+      {
+        value = line.substr(start, value_end +1 - start);
+      }
+      else
+      {
+        /* error: no value */
+        error_reporter.warn(where()) << "no value found\n";
+        return;
+      }
+
+      /* store the value in option */
+      storePair(true, false, option, value);
+    }
+
+    void CfgStreamParser::scanStream(istream& in)
+    {
+      do
+      {
+        linenum++;
+        string line;
+        getline(in, line);
+        scanLine(line);
+      } while(!!in);
+    }
+
+    /* for all options in opts, set their storage to their specified
+     * default value */
+    void setDefaults(Options& opts)
+    {
+      for(Options::NamesPtrList::iterator it = opts.opt_list.begin(); it != opts.opt_list.end(); it++)
+      {
+        (*it)->opt->setDefault();
+      }
+    }
+
+    void parseConfigFile(Options& opts, const string& filename, ErrorReporter& error_reporter)
+    {
+      ifstream cfgstream(filename.c_str(), ifstream::in);
+      if (!cfgstream)
+      {
+        error_reporter.error(filename) << "Failed to open config file\n";
+        return;
+      }
+      CfgStreamParser csp(filename, opts, error_reporter);
+      csp.scanStream(cfgstream);
+    }
+
+  }
+}
+
+//! \}
