@@ -498,3 +498,103 @@ T SMultiValueInput<T>::readValue(const char *&pStr, bool &bSuccess)
 template <class T>
 istream& SMultiValueInput<T>::readValues(std::istream &in)
 {
+  values.clear();
+  string str;
+  while (!in.eof())
+  {
+    string tmp; in >> tmp; str+=" " + tmp;
+  }
+  if (!str.empty())
+  {
+    const TChar *pStr=str.c_str();
+    // soak up any whitespace
+    for(;isspace(*pStr);pStr++);
+
+    while (*pStr != 0)
+    {
+      Bool bSuccess=true;
+      T val=readValue(pStr, bSuccess);
+      if (!bSuccess)
+      {
+        in.setstate(ios::failbit);
+        break;
+      }
+
+      if (maxNumValuesIncl != 0 && values.size() >= maxNumValuesIncl)
+      {
+        in.setstate(ios::failbit);
+        break;
+      }
+      values.push_back(val);
+      // soak up any whitespace and up to 1 comma.
+      for(;isspace(*pStr);pStr++);
+      if (*pStr == ',')
+      {
+        pStr++;
+      }
+      for(;isspace(*pStr);pStr++);
+    }
+  }
+  if (values.size() < minNumValuesIncl)
+  {
+    in.setstate(ios::failbit);
+  }
+  return in;
+}
+
+template <class T>
+static inline istream& operator >> (std::istream &in, TAppEncCfg::OptionalValue<T> &value)
+{
+  in >> std::ws;
+  if (in.eof())
+  {
+    value.bPresent=false;
+  }
+  else
+  {
+    in >> value.value;
+    value.bPresent=true;
+  }
+  return in;
+}
+
+template <class T1, class T2>
+static inline istream& operator >> (std::istream &in, std::map<T1, T2> &map)
+{
+  T1 key;
+  T2 value;
+  try
+  {
+    in >> key;
+    in >> value;
+  }
+  catch (...)
+  {
+    in.setstate(ios::failbit);
+  }
+
+  map[key] = value;
+  return in;
+}
+
+static Void
+automaticallySelectRExtProfile(const Bool bUsingGeneralRExtTools,
+                               const Bool bUsingChromaQPAdjustment,
+                               const Bool bUsingExtendedPrecision,
+                               const Bool bIntraConstraintFlag,
+                               UInt &bitDepthConstraint,
+                               ChromaFormat &chromaFormatConstraint,
+                               const Int  maxBitDepth,
+                               const ChromaFormat chromaFormat)
+{
+  // Try to choose profile, according to table in Q1013.
+  UInt trialBitDepthConstraint=maxBitDepth;
+  if (trialBitDepthConstraint<8)
+  {
+    trialBitDepthConstraint=8;
+  }
+  else if (trialBitDepthConstraint==9 || trialBitDepthConstraint==11)
+  {
+    trialBitDepthConstraint++;
+  }
+  else if (trialBitDepthConstraint>12)
