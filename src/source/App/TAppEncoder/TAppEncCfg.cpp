@@ -598,3 +598,103 @@ automaticallySelectRExtProfile(const Bool bUsingGeneralRExtTools,
     trialBitDepthConstraint++;
   }
   else if (trialBitDepthConstraint>12)
+  {
+    trialBitDepthConstraint=16;
+  }
+
+  // both format and bit depth constraints are unspecified
+  if (bUsingExtendedPrecision || trialBitDepthConstraint==16)
+  {
+    bitDepthConstraint = 16;
+    chromaFormatConstraint = (!bIntraConstraintFlag && chromaFormat==CHROMA_400) ? CHROMA_400 : CHROMA_444;
+  }
+  else if (bUsingGeneralRExtTools)
+  {
+    if (chromaFormat == CHROMA_400 && !bIntraConstraintFlag)
+    {
+      bitDepthConstraint = 16;
+      chromaFormatConstraint = CHROMA_400;
+    }
+    else
+    {
+      bitDepthConstraint = trialBitDepthConstraint;
+      chromaFormatConstraint = CHROMA_444;
+    }
+  }
+  else if (chromaFormat == CHROMA_400)
+  {
+    if (bIntraConstraintFlag)
+    {
+      chromaFormatConstraint = CHROMA_420; // there is no intra 4:0:0 profile.
+      bitDepthConstraint     = trialBitDepthConstraint;
+    }
+    else
+    {
+      chromaFormatConstraint = CHROMA_400;
+      bitDepthConstraint     = trialBitDepthConstraint == 8 ? 8 : 12;
+    }
+  }
+  else
+  {
+    bitDepthConstraint = trialBitDepthConstraint;
+    chromaFormatConstraint = chromaFormat;
+    if (bUsingChromaQPAdjustment && chromaFormat == CHROMA_420)
+    {
+      chromaFormatConstraint = CHROMA_422; // 4:2:0 cannot use the chroma qp tool.
+    }
+    if (chromaFormatConstraint == CHROMA_422 && bitDepthConstraint == 8)
+    {
+      bitDepthConstraint = 10; // there is no 8-bit 4:2:2 profile.
+    }
+    if (chromaFormatConstraint == CHROMA_420 && !bIntraConstraintFlag)
+    {
+      bitDepthConstraint = 12; // there is no 8 or 10-bit 4:2:0 inter RExt profile.
+    }
+  }
+}
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+/** \param  argc        number of arguments
+    \param  argv        array of arguments
+    \retval             true when success
+ */
+Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
+{
+  Bool do_help = false;
+
+  Int tmpChromaFormat;
+  Int tmpInputChromaFormat;
+  Int tmpConstraintChromaFormat;
+  Int tmpWeightedPredictionMethod;
+  Int tmpFastInterSearchMode;
+  Int tmpMotionEstimationSearchMethod;
+  Int tmpSliceMode;
+  Int tmpSliceSegmentMode;
+  Int tmpDecodedPictureHashSEIMappedType;
+  string inputColourSpaceConvert;
+  string inputPathPrefix;
+  UIProfileName UIProfile;
+  Int saoOffsetBitShift[MAX_NUM_CHANNEL_TYPE];
+
+  // Multi-value input fields:                                // minval, maxval (incl), min_entries, max_entries (incl) [, default values, number of default values]
+  SMultiValueInput<UInt> cfg_ColumnWidth                     (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UInt>::max());
+  SMultiValueInput<UInt> cfg_RowHeight                       (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UInt>::max());
+  SMultiValueInput<Int>  cfg_startOfCodedInterval            (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, 1<<16);
+  SMultiValueInput<Int>  cfg_codedPivotValue                 (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, 1<<16);
+  SMultiValueInput<Int>  cfg_targetPivotValue                (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, 1<<16);
+
+  SMultiValueInput<Double> cfg_adIntraLambdaModifier         (0, std::numeric_limits<Double>::max(), 0, MAX_TLAYER); ///< Lambda modifier for Intra pictures, one for each temporal layer. If size>temporalLayer, then use [temporalLayer], else if size>0, use [size()-1], else use m_adLambdaModifier.
+
+  const Int defaultLumaLevelTodQp_QpChangePoints[]   =  {-3,  -2,  -1,   0,   1,   2,   3,   4,   5,   6};
+  const Int defaultLumaLevelTodQp_LumaChangePoints[] =  { 0, 301, 367, 434, 501, 567, 634, 701, 767, 834};
+  SMultiValueInput<Int>  cfg_lumaLeveltoDQPMappingQP         (-MAX_QP, MAX_QP,                    0, LUMA_LEVEL_TO_DQP_LUT_MAXSIZE, defaultLumaLevelTodQp_QpChangePoints,   sizeof(defaultLumaLevelTodQp_QpChangePoints  )/sizeof(Int));
+  SMultiValueInput<Int>  cfg_lumaLeveltoDQPMappingLuma       (0, std::numeric_limits<Int>::max(), 0, LUMA_LEVEL_TO_DQP_LUT_MAXSIZE, defaultLumaLevelTodQp_LumaChangePoints, sizeof(defaultLumaLevelTodQp_LumaChangePoints)/sizeof(Int));
+  UInt lumaLevelToDeltaQPMode;
+
+  const UInt defaultInputKneeCodes[3]  = { 600, 800, 900 };
+  const UInt defaultOutputKneeCodes[3] = { 100, 250, 450 };
+  Int cfg_kneeSEINumKneePointsMinus1=0;
+  SMultiValueInput<UInt> cfg_kneeSEIInputKneePointValue      (1,  999, 0, 999, defaultInputKneeCodes,  sizeof(defaultInputKneeCodes )/sizeof(UInt));
+  SMultiValueInput<UInt> cfg_kneeSEIOutputKneePointValue     (0, 1000, 0, 999, defaultOutputKneeCodes, sizeof(defaultOutputKneeCodes)/sizeof(UInt));
