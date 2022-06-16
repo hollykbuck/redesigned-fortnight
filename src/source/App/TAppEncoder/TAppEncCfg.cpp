@@ -698,3 +698,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
   Int cfg_kneeSEINumKneePointsMinus1=0;
   SMultiValueInput<UInt> cfg_kneeSEIInputKneePointValue      (1,  999, 0, 999, defaultInputKneeCodes,  sizeof(defaultInputKneeCodes )/sizeof(UInt));
   SMultiValueInput<UInt> cfg_kneeSEIOutputKneePointValue     (0, 1000, 0, 999, defaultOutputKneeCodes, sizeof(defaultOutputKneeCodes)/sizeof(UInt));
+  const Int defaultPrimaryCodes[6]     = { 0,50000, 0,0, 50000,0 };
+  const Int defaultWhitePointCode[2]   = { 16667, 16667 };
+  SMultiValueInput<Int>  cfg_DisplayPrimariesCode            (0, 50000, 6, 6, defaultPrimaryCodes,   sizeof(defaultPrimaryCodes  )/sizeof(Int));
+  SMultiValueInput<Int>  cfg_DisplayWhitePointCode           (0, 50000, 2, 2, defaultWhitePointCode, sizeof(defaultWhitePointCode)/sizeof(Int));
+
+  SMultiValueInput<Bool> cfg_timeCodeSeiTimeStampFlag        (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiNumUnitFieldBasedFlag(0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiCountingType         (0,  6, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiFullTimeStampFlag    (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiDiscontinuityFlag    (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiCntDroppedFlag       (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiNumberOfFrames       (0,511, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiSecondsValue         (0, 59, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiMinutesValue         (0, 59, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiHoursValue           (0, 23, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiSecondsFlag          (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiMinutesFlag          (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Bool> cfg_timeCodeSeiHoursFlag            (0,  1, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiTimeOffsetLength     (0, 31, 0, MAX_TIMECODE_SEI_SETS);
+  SMultiValueInput<Int>  cfg_timeCodeSeiTimeOffsetValue      (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, MAX_TIMECODE_SEI_SETS);
+#if JVET_X0048_X0103_FILM_GRAIN
+  // default values used for FGC SEI parameter parsing
+  SMultiValueInput<UInt>  cfg_FgcSEIIntensityIntervalLowerBoundComp[3]={SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256)};
+  SMultiValueInput<UInt>  cfg_FgcSEIIntensityIntervalUpperBoundComp[3]={SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256)};
+  SMultiValueInput<UInt>  cfg_FgcSEICompModelValueComp[3]={SMultiValueInput<UInt> (0, 65535, 0, 256 * 6), SMultiValueInput<UInt> (0, 65535, 0, 256 * 6), SMultiValueInput<UInt> (0, 65535, 0, 256 * 6)};
+#endif
+  SMultiValueInput<Int>  cfg_omniViewportSEIAzimuthCentre    (-11796480, 11796479, 0, 15);
+  SMultiValueInput<Int>  cfg_omniViewportSEIElevationCentre  ( -5898240,  5898240, 0, 15);
+  SMultiValueInput<Int>  cfg_omniViewportSEITiltCentre       (-11796480, 11796479, 0, 15);
+  SMultiValueInput<UInt> cfg_omniViewportSEIHorRange         (        1, 23592960, 0, 15);
+  SMultiValueInput<UInt> cfg_omniViewportSEIVerRange         (        1, 11796480, 0, 15);
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpTransformType                 (0, 7, 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<Bool>   cfg_rwpSEIRwpGuardBandFlag                 (0, 1, 0, std::numeric_limits<UChar>::max()); 
+  SMultiValueInput<UInt>   cfg_rwpSEIProjRegionWidth                  (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIProjRegionHeight                 (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpSEIProjRegionTop              (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIProjRegionLeft                   (0, std::numeric_limits<UInt>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIPackedRegionWidth                (0, std::numeric_limits<UShort>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIPackedRegionHeight               (0, std::numeric_limits<UShort>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIPackedRegionTop                  (0, std::numeric_limits<UShort>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIPackedRegionLeft                 (0, std::numeric_limits<UShort>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpLeftGuardBandWidth            (0, std::numeric_limits<UChar>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpRightGuardBandWidth           (0, std::numeric_limits<UChar>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpTopGuardBandHeight            (0, std::numeric_limits<UChar>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpBottomGuardBandHeight         (0, std::numeric_limits<UChar>::max(), 0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<Bool>   cfg_rwpSEIRwpGuardBandNotUsedForPredFlag   (0, 1,   0, std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_rwpSEIRwpGuardBandType                 (0, 7,   0, 4*std::numeric_limits<UChar>::max());
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCircularRegionCentreX     (0, std::numeric_limits<UInt>::max(), 0, 4); // CONFIRM: all the '3's have been changed to '4's since "The value of fisheye_num_active_areas_minus1 shall be in the range of 0 to 3, inclusive", so up to 4 entries.
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCircularRegionCentreY     (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeRectRegionTop             (0, std::numeric_limits<UInt>::max(), 0, 4); // do not know the height of the picture at this point, so cannot limit region top.
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeRectRegionLeft            (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeRectRegionWidth           (1, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeRectRegionHeight          (1, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCircularRegionRadius      (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeSceneRadius               (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<Int>    cfg_fviSEIFisheyeCameraCentreAzimuth       (-180*65536, 180*65536-1, 0, 4);
+  SMultiValueInput<Int>    cfg_fviSEIFisheyeCameraCentreElevation     ( -90*65536,  90*65536  , 0, 4);
+  SMultiValueInput<Int>    cfg_fviSEIFisheyeCameraCentreTilt          (-180*65536, 180*65536-1, 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCameraCentreOffsetX       (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCameraCentreOffsetY       (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeCameraCentreOffsetZ       (0, std::numeric_limits<UInt>::max(), 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeFieldOfView               (0, 360*65536, 0, 4);
+  SMultiValueInput<UInt>   cfg_fviSEIFisheyeNumPolynomialCoeffs       (0, 8, 0, 4);
+  SMultiValueInput<Int>    cfg_fviSEIFisheyePolynomialCoeff           (std::numeric_limits<Int>::min(), std::numeric_limits<Int>::max(), 0, 4*8);
+  UInt cfg_fviSEIFisheyeNumActiveAreasMinus1=0;
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  SMultiValueInput<UInt>   cfg_siiSEIInputNumUnitsInSI                (0, MAX_UINT, 0, 7);
+#endif
+
+  Int warnUnknowParameter = 0;
+  po::Options opts;
+  opts.addOptions()
+  ("help",                                            do_help,                                          false, "this help text")
+  ("c",    po::parseConfigFile, "configuration file name")
+  ("WarnUnknowParameter,w",                           warnUnknowParameter,                                  0, "warn for unknown configuration parameters instead of failing")
+
+  // File, I/O and source parameters
+  ("InputFile,i",                                     m_inputFileName,                             string(""), "Original YUV input file name")
+  ("InputPathPrefix,-ipp",                            inputPathPrefix,                             string(""), "pathname to prepend to input filename")
+  ("BitstreamFile,b",                                 m_bitstreamFileName,                         string(""), "Bitstream output file name")
+  ("ReconFile,o",                                     m_reconFileName,                             string(""), "Reconstructed YUV output file name")
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  ("SEIShutterIntervalPreFilename,-sii",              m_shutterIntervalPreFileName,                string(""), "File name of Pre-Filtering video. If empty, not output video\n")
+#endif
+  ("SourceWidth,-wdt",                                m_sourceWidth,                                        0, "Source picture width")
+  ("SourceHeight,-hgt",                               m_sourceHeight,                                       0, "Source picture height")
+  ("InputBitDepth",                                   m_inputBitDepth[CHANNEL_TYPE_LUMA],                   8, "Bit-depth of input file")
+  ("OutputBitDepth",                                  m_outputBitDepth[CHANNEL_TYPE_LUMA],                  0, "Bit-depth of output file (default:InternalBitDepth)")
+  ("MSBExtendedBitDepth",                             m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA],             0, "bit depth of luma component after addition of MSBs of value 0 (used for synthesising High Dynamic Range source material). (default:InputBitDepth)")
+  ("InternalBitDepth",                                m_internalBitDepth[CHANNEL_TYPE_LUMA],                0, "Bit-depth the codec operates at. (default:MSBExtendedBitDepth). If different to MSBExtendedBitDepth, source data will be converted")
+  ("InputBitDepthC",                                  m_inputBitDepth[CHANNEL_TYPE_CHROMA],                 0, "As per InputBitDepth but for chroma component. (default:InputBitDepth)")
+  ("OutputBitDepthC",                                 m_outputBitDepth[CHANNEL_TYPE_CHROMA],                0, "As per OutputBitDepth but for chroma component. (default:InternalBitDepthC)")
+  ("MSBExtendedBitDepthC",                            m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA],           0, "As per MSBExtendedBitDepth but for chroma component. (default:MSBExtendedBitDepth)")
+  ("InternalBitDepthC",                               m_internalBitDepth[CHANNEL_TYPE_CHROMA],              0, "As per InternalBitDepth but for chroma component. (default:InternalBitDepth)")
+  ("ExtendedPrecision",                               m_extendedPrecisionProcessingFlag,                false, "Increased internal accuracies to support high bit depths (not valid in V1 profiles)")
+  ("HighPrecisionPredictionWeighting",                m_highPrecisionOffsetsEnabledFlag,                false, "Use high precision option for weighted prediction (not valid in V1 profiles)")
+  ("InputColourSpaceConvert",                         inputColourSpaceConvert,                     string(""), "Colour space conversion to apply to input video. Permitted values are (empty string=UNCHANGED) " + getListOfColourSpaceConverts(true))
+  ("SNRInternalColourSpace",                          m_snrInternalColourSpace,                         false, "If true, then no colour space conversion is applied prior to SNR, otherwise inverse of input is applied.")
+  ("OutputInternalColourSpace",                       m_outputInternalColourSpace,                      false, "If true, then no colour space conversion is applied for reconstructed video, otherwise inverse of input is applied.")
+  ("InputChromaFormat",                               tmpInputChromaFormat,                               420, "InputChromaFormatIDC")
