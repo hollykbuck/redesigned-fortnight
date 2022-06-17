@@ -98,3 +98,103 @@ TComTU::TComTU(TComTU &parent, const Bool bProcessLastOfLevel, const TU_SPLIT_MO
     mpcCU(parent.mpcCU),
     mLog2TrLumaSize(parent.mLog2TrLumaSize - ((splitMode != QUAD_SPLIT) ? 0 : 1)), //no change in width for vertical split
     mpParent(&parent)
+{
+  for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+  {
+    mTrDepthRelCU[i] = parent.mTrDepthRelCU[i] + ((splitAtCurrentDepth || (splitMode == DONT_SPLIT)) ? 0 : 1);
+  }
+
+  if (mSplitMode==DONT_SPLIT)
+  {
+    for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+    {
+      mRect[i] = (parent.mRect[i]);
+      mOffsets[i]=parent.mOffsets[i];
+      mCodeAll[i]=true; // The 1 TU at this level is coded.
+      mOrigWidth[i]=mRect[i].width;
+    }
+    return;
+  }
+  else if (mSplitMode==VERTICAL_SPLIT)
+  {
+    for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+    {
+      mRect[i].x0 = (parent.mRect[i].x0);
+      mRect[i].y0 = (parent.mRect[i].y0);
+      mRect[i].width  = (parent.mRect[i].width);
+      mRect[i].height = (parent.mRect[i].height)>>1;
+      mOffsets[i]=parent.mOffsets[i];
+      mCodeAll[i]=true; // The 2 TUs at this level is coded.
+      mOrigWidth[i]=mRect[i].width;
+    }
+    return;
+  }
+
+  for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+  {
+    mRect[i].width = (parent.mRect[i].width >> 1);
+    mRect[i].height= (parent.mRect[i].height>> 1);
+    mRect[i].x0=parent.mRect[i].x0;
+    mRect[i].y0=parent.mRect[i].y0;
+    mOffsets[i]=parent.mOffsets[i];
+
+    if ((mRect[i].width < MIN_TU_SIZE || mRect[i].height < MIN_TU_SIZE) && mRect[i].width!=0)
+    {
+      const UInt numPels=mRect[i].width * mRect[i].height;
+      if (numPels < (MIN_TU_SIZE*MIN_TU_SIZE))
+      {
+        // this level doesn't have enough pixels to have 4 blocks of any relative dimension
+        mRect[i].width = parent.mRect[i].width;
+        mRect[i].height= parent.mRect[i].height;
+        mCodeAll[i]=false; // go up a level, so only process one entry of a quadrant
+        mTrDepthRelCU[i]--;
+      }
+      else if (mRect[i].width < mRect[i].height)
+      {
+        mRect[i].width=MIN_TU_SIZE;
+        mRect[i].height=numPels/MIN_TU_SIZE;
+        mCodeAll[i]=true;
+      }
+      else
+      {
+        mRect[i].height=MIN_TU_SIZE;
+        mRect[i].width=numPels/MIN_TU_SIZE;
+        mCodeAll[i]=true;
+      }
+    }
+    else
+    {
+      mCodeAll[i]=true;
+    }
+
+    mOrigWidth[i]=mRect[i].width;
+    if (!mCodeAll[i] && mbProcessLastOfLevel)
+    {
+      mRect[i].width=0;
+    }
+  }
+}
+
+Bool TComTURecurse::nextSection(const TComTU &parent)
+{
+  if (mSplitMode==DONT_SPLIT)
+  {
+    mSection++;
+    return false;
+  }
+  else
+  {
+    for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+    {
+      mOffsets[i]+=mRect[i].width*mRect[i].height;
+      if (mbProcessLastOfLevel)
+      {
+        mRect[i].width=mOrigWidth[i];
+      }
+      mRect[i].x0+=mRect[i].width;
+      const TComRectangle &parentRect=parent.getRect(ComponentID(i));
+      if (mRect[i].x0 >= parentRect.x0+parentRect.width)
+      {
+        mRect[i].x0=parentRect.x0;
+        mRect[i].y0+=mRect[i].height;
+      }
