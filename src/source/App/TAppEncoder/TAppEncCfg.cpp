@@ -1098,3 +1098,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
   ("SEIToneMapNumPivots",                             m_numPivots,                                          0, "Specifies the number of pivot points in mode 3")
   ("SEIToneMapCodedPivotValue",                       cfg_codedPivotValue,                cfg_codedPivotValue, "Array of pivot point")
   ("SEIToneMapTargetPivotValue",                      cfg_targetPivotValue,              cfg_targetPivotValue, "Array of pivot point")
+  ("SEIToneMapCameraIsoSpeedIdc",                     m_cameraIsoSpeedIdc,                                  0, "Indicates the camera ISO speed for daylight illumination")
+  ("SEIToneMapCameraIsoSpeedValue",                   m_cameraIsoSpeedValue,                              400, "Specifies the camera ISO speed for daylight illumination of Extended_ISO")
+  ("SEIToneMapExposureIndexIdc",                      m_exposureIndexIdc,                                   0, "Indicates the exposure index setting of the camera")
+  ("SEIToneMapExposureIndexValue",                    m_exposureIndexValue,                               400, "Specifies the exposure index setting of the camera of Extended_ISO")
+  ("SEIToneMapExposureCompensationValueSignFlag",     m_exposureCompensationValueSignFlag,               false, "Specifies the sign of ExposureCompensationValue")
+  ("SEIToneMapExposureCompensationValueNumerator",    m_exposureCompensationValueNumerator,                 0, "Specifies the numerator of ExposureCompensationValue")
+  ("SEIToneMapExposureCompensationValueDenomIdc",     m_exposureCompensationValueDenomIdc,                  2, "Specifies the denominator of ExposureCompensationValue")
+  ("SEIToneMapRefScreenLuminanceWhite",               m_refScreenLuminanceWhite,                          350, "Specifies reference screen brightness setting in units of candela per square metre")
+  ("SEIToneMapExtendedRangeWhiteLevel",               m_extendedRangeWhiteLevel,                          800, "Indicates the luminance dynamic range")
+  ("SEIToneMapNominalBlackLevelLumaCodeValue",        m_nominalBlackLevelLumaCodeValue,                    16, "Specifies luma sample value of the nominal black level assigned decoded pictures")
+  ("SEIToneMapNominalWhiteLevelLumaCodeValue",        m_nominalWhiteLevelLumaCodeValue,                   235, "Specifies luma sample value of the nominal white level assigned decoded pictures")
+  ("SEIToneMapExtendedWhiteLevelLumaCodeValue",       m_extendedWhiteLevelLumaCodeValue,                  300, "Specifies luma sample value of the extended dynamic range assigned decoded pictures")
+  ("SEIChromaResamplingFilterHint",                   m_chromaResamplingFilterSEIenabled,               false, "Control generation of the chroma sampling filter hint SEI message")
+  ("SEIChromaResamplingHorizontalFilterType",         m_chromaResamplingHorFilterIdc,                       2, "Defines the Index of the chroma sampling horizontal filter\n"
+                                                                                                               "\t0: unspecified  - Chroma filter is unknown or is determined by the application"
+                                                                                                               "\t1: User-defined - Filter coefficients are specified in the chroma sampling filter hint SEI message"
+                                                                                                               "\t2: Standards-defined - ITU-T Rec. T.800 | ISO/IEC15444-1, 5/3 filter")
+  ("SEIChromaResamplingVerticalFilterType",           m_chromaResamplingVerFilterIdc,                         2, "Defines the Index of the chroma sampling vertical filter\n"
+                                                                                                               "\t0: unspecified  - Chroma filter is unknown or is determined by the application"
+                                                                                                               "\t1: User-defined - Filter coefficients are specified in the chroma sampling filter hint SEI message"
+                                                                                                               "\t2: Standards-defined - ITU-T Rec. T.800 | ISO/IEC15444-1, 5/3 filter")
+  ("SEIFramePacking",                                 m_framePackingSEIEnabled,                         false, "Control generation of frame packing SEI messages")
+  ("SEIFramePackingType",                             m_framePackingSEIType,                                0, "Define frame packing arrangement\n"
+                                                                                                               "\t3: side by side - frames are displayed horizontally\n"
+                                                                                                               "\t4: top bottom - frames are displayed vertically\n"
+                                                                                                               "\t5: frame alternation - one frame is alternated with the other")
+  ("SEIFramePackingId",                               m_framePackingSEIId,                                  0, "Id of frame packing SEI message for a given session")
+  ("SEIFramePackingQuincunx",                         m_framePackingSEIQuincunx,                            0, "Indicate the presence of a Quincunx type video frame")
+  ("SEIFramePackingInterpretation",                   m_framePackingSEIInterpretation,                      0, "Indicate the interpretation of the frame pair\n"
+                                                                                                               "\t0: unspecified\n"
+                                                                                                               "\t1: stereo pair, frame0 represents left view\n"
+                                                                                                               "\t2: stereo pair, frame0 represents right view")
+  ("SEISegmentedRectFramePacking",                    m_segmentedRectFramePackingSEIEnabled,            false, "Controls generation of segmented rectangular frame packing SEI messages")
+  ("SEISegmentedRectFramePackingCancel",              m_segmentedRectFramePackingSEICancel,             false, "If equal to 1, cancels the persistence of any previous SRFPA SEI message")
+  ("SEISegmentedRectFramePackingType",                m_segmentedRectFramePackingSEIType,                   0, "Specifies the arrangement of the frames in the reconstructed picture")
+  ("SEISegmentedRectFramePackingPersistence",         m_segmentedRectFramePackingSEIPersistence,        false, "If equal to 0, the SEI applies to the current frame only")
+  ("SEIDisplayOrientation",                           m_displayOrientationSEIAngle,                         0, "Control generation of display orientation SEI messages\n"
+                                                                                                               "\tN: 0 < N < (2^16 - 1) enable display orientation SEI message with anticlockwise_rotation = N and display_orientation_repetition_period = 1\n"
+                                                                                                               "\t0: disable")
+  ("SEITemporalLevel0Index",                          m_temporalLevel0IndexSEIEnabled,                  false, "Control generation of temporal level 0 index SEI messages")
+  ("SEIGradualDecodingRefreshInfo",                   m_gradualDecodingRefreshInfoEnabled,              false, "Control generation of gradual decoding refresh information SEI message")
+  ("SEINoDisplay",                                    m_noDisplaySEITLayer,                                 0, "Control generation of no display SEI message\n"
+                                                                                                               "\tN: 0 < N enable no display SEI message for temporal layer N or higher\n"
+                                                                                                               "\t0: disable")
+  ("SEIDecodingUnitInfo",                             m_decodingUnitInfoSEIEnabled,                     false, "Control generation of decoding unit information SEI message.")
+  ("SEISOPDescription",                               m_SOPDescriptionSEIEnabled,                       false, "Control generation of SOP description SEI messages")
+  ("SEIScalableNesting",                              m_scalableNestingSEIEnabled,                      false, "Control generation of scalable nesting SEI messages")
+  ("SEITempMotionConstrainedTileSets",                m_tmctsSEIEnabled,                                false, "Control generation of temporal motion constrained tile sets SEI message")
+#if MCTS_ENC_CHECK
+  ("SEITMCTSTileConstraint",                          m_tmctsSEITileConstraint,                         false, "Constrain motion vectors at tile boundaries")
+#endif
+#if MCTS_EXTRACTION
+  ("SEITMCTSExtractionInfo",                          m_tmctsExtractionSEIEnabled,                      false, "Control generation of MCTS extraction info SEI messages")
+#endif
+  ("SEITimeCodeEnabled",                              m_timeCodeSEIEnabled,                             false, "Control generation of time code information SEI message")
+  ("SEITimeCodeNumClockTs",                           m_timeCodeSEINumTs,                                   0, "Number of clock time sets [0..3]")
+  ("SEITimeCodeTimeStampFlag",                        cfg_timeCodeSeiTimeStampFlag,          cfg_timeCodeSeiTimeStampFlag,         "Time stamp flag associated to each time set")
+  ("SEITimeCodeFieldBasedFlag",                       cfg_timeCodeSeiNumUnitFieldBasedFlag,  cfg_timeCodeSeiNumUnitFieldBasedFlag, "Field based flag associated to each time set")
+  ("SEITimeCodeCountingType",                         cfg_timeCodeSeiCountingType,           cfg_timeCodeSeiCountingType,          "Counting type associated to each time set")
+  ("SEITimeCodeFullTsFlag",                           cfg_timeCodeSeiFullTimeStampFlag,      cfg_timeCodeSeiFullTimeStampFlag,     "Full time stamp flag associated to each time set")
+  ("SEITimeCodeDiscontinuityFlag",                    cfg_timeCodeSeiDiscontinuityFlag,      cfg_timeCodeSeiDiscontinuityFlag,     "Discontinuity flag associated to each time set")
+  ("SEITimeCodeCntDroppedFlag",                       cfg_timeCodeSeiCntDroppedFlag,         cfg_timeCodeSeiCntDroppedFlag,        "Counter dropped flag associated to each time set")
+  ("SEITimeCodeNumFrames",                            cfg_timeCodeSeiNumberOfFrames,         cfg_timeCodeSeiNumberOfFrames,        "Number of frames associated to each time set")
+  ("SEITimeCodeSecondsValue",                         cfg_timeCodeSeiSecondsValue,           cfg_timeCodeSeiSecondsValue,          "Seconds value for each time set")
+  ("SEITimeCodeMinutesValue",                         cfg_timeCodeSeiMinutesValue,           cfg_timeCodeSeiMinutesValue,          "Minutes value for each time set")
+  ("SEITimeCodeHoursValue",                           cfg_timeCodeSeiHoursValue,             cfg_timeCodeSeiHoursValue,            "Hours value for each time set")
+  ("SEITimeCodeSecondsFlag",                          cfg_timeCodeSeiSecondsFlag,            cfg_timeCodeSeiSecondsFlag,           "Flag to signal seconds value presence in each time set")
+  ("SEITimeCodeMinutesFlag",                          cfg_timeCodeSeiMinutesFlag,            cfg_timeCodeSeiMinutesFlag,           "Flag to signal minutes value presence in each time set")
+  ("SEITimeCodeHoursFlag",                            cfg_timeCodeSeiHoursFlag,              cfg_timeCodeSeiHoursFlag,             "Flag to signal hours value presence in each time set")
+  ("SEITimeCodeOffsetLength",                         cfg_timeCodeSeiTimeOffsetLength,       cfg_timeCodeSeiTimeOffsetLength,      "Time offset length associated to each time set")
+  ("SEITimeCodeTimeOffset",                           cfg_timeCodeSeiTimeOffsetValue,        cfg_timeCodeSeiTimeOffsetValue,       "Time offset associated to each time set")
+  ("SEIKneeFunctionInfo",                             m_kneeSEIEnabled,                                            false,          "Control generation of Knee function SEI messages")
+  ("SEIKneeFunctionId",                               m_kneeFunctionInformationSEI.m_kneeFunctionId,               0,              "Specifies Id of Knee function SEI message for a given session")
+  ("SEIKneeFunctionCancelFlag",                       m_kneeFunctionInformationSEI.m_kneeFunctionCancelFlag,       false,          "Indicates that Knee function SEI message cancels the persistence or follows")
+  ("SEIKneeFunctionPersistenceFlag",                  m_kneeFunctionInformationSEI.m_kneeFunctionPersistenceFlag,  true,           "Specifies the persistence of the Knee function SEI message")
+  ("SEIKneeFunctionInputDrange",                      m_kneeFunctionInformationSEI.m_inputDRange,                  1000,           "Specifies the peak luminance level for the input picture of Knee function SEI messages")
+  ("SEIKneeFunctionInputDispLuminance",               m_kneeFunctionInformationSEI.m_inputDispLuminance,           100,            "Specifies the expected display brightness for the input picture of Knee function SEI messages")
+  ("SEIKneeFunctionOutputDrange",                     m_kneeFunctionInformationSEI.m_outputDRange,                 4000,           "Specifies the peak luminance level for the output picture of Knee function SEI messages")
+  ("SEIKneeFunctionOutputDispLuminance",              m_kneeFunctionInformationSEI.m_outputDispLuminance,          800,            "Specifies the expected display brightness for the output picture of Knee function SEI messages")
+  ("SEIKneeFunctionNumKneePointsMinus1",              cfg_kneeSEINumKneePointsMinus1,           2,                                 "Specifies the number of knee points - 1")
+  ("SEIKneeFunctionInputKneePointValue",              cfg_kneeSEIInputKneePointValue,           cfg_kneeSEIInputKneePointValue,    "Array of input knee point")
+  ("SEIKneeFunctionOutputKneePointValue",             cfg_kneeSEIOutputKneePointValue,          cfg_kneeSEIOutputKneePointValue,   "Array of output knee point")
+  ("SEIMasteringDisplayColourVolume",                 m_masteringDisplay.colourVolumeSEIEnabled,         false, "Control generation of mastering display colour volume SEI messages")
+  ("SEIMasteringDisplayMaxLuminance",                 m_masteringDisplay.maxLuminance,                  10000u, "Specifies the mastering display maximum luminance value in units of 1/10000 candela per square metre (32-bit code value)")
+  ("SEIMasteringDisplayMinLuminance",                 m_masteringDisplay.minLuminance,                      0u, "Specifies the mastering display minimum luminance value in units of 1/10000 candela per square metre (32-bit code value)")
+  ("SEIMasteringDisplayPrimaries",                    cfg_DisplayPrimariesCode,       cfg_DisplayPrimariesCode, "Mastering display primaries for all three colour planes in CIE xy coordinates in increments of 1/50000 (results in the ranges 0 to 50000 inclusive)")
+  ("SEIMasteringDisplayWhitePoint",                   cfg_DisplayWhitePointCode,     cfg_DisplayWhitePointCode, "Mastering display white point CIE xy coordinates in normalised increments of 1/50000 (e.g. 0.333 = 16667)")
+  ("SEIPreferredTransferCharacteristics",             m_preferredTransferCharacteristics,                   -1, "Value for the preferred_transfer_characteristics field of the Alternative transfer characteristics SEI which will override the corresponding entry in the VUI. If negative, do not produce the respective SEI message")
+  ("SEIGreenMetadataType",                            m_greenMetadataType,                   0u, "Value for the green_metadata_type specifies the type of metadata that is present in the SEI message. If green_metadata_type is 1, then metadata enabling quality recovery after low-power encoding is present")
+  ("SEIXSDMetricType",                                m_xsdMetricType,                      0u, "Value for the xsd_metric_type indicates the type of the objective quality metric. PSNR is the only type currently supported")
+  ("SEICCVEnabled",                                   m_ccvSEIEnabled,                       false,                                    "Enables the Content Colour Volume SEI message")
+  ("SEICCVCancelFlag",                                m_ccvSEICancelFlag,                    true,                                     "Specifies the persistence of any previous content colour volume SEI message in output order.")
+  ("SEICCVPersistenceFlag",                           m_ccvSEIPersistenceFlag,               false,                                    "Specifies the persistence of the content colour volume SEI message for the current layer.")
+  ("SEICCVPrimariesPresent",                          m_ccvSEIPrimariesPresentFlag,          true,                                    "Specifies whether the CCV primaries are present in the content colour volume SEI message.")
+  ("m_ccvSEIPrimariesX0",                             m_ccvSEIPrimariesX[0],                0.300, "Specifies the x coordinate of the first (green) primary for the content colour volume SEI message")
+  ("m_ccvSEIPrimariesY0",                             m_ccvSEIPrimariesY[0],                0.600, "Specifies the y coordinate of the first (green) primary for the content colour volume SEI message")
+  ("m_ccvSEIPrimariesX1",                             m_ccvSEIPrimariesX[1],                0.150, "Specifies the x coordinate of the second (blue) primary for the content colour volume SEI message")
+  ("m_ccvSEIPrimariesY1",                             m_ccvSEIPrimariesY[1],                0.060, "Specifies the y coordinate of the second (blue) primary for the content colour volume SEI message")
+  ("m_ccvSEIPrimariesX2",                             m_ccvSEIPrimariesX[2],                0.640, "Specifies the x coordinate of the third (red) primary for the content colour volume SEI message")
+  ("m_ccvSEIPrimariesY2",                             m_ccvSEIPrimariesY[2],                0.330, "Specifies the y coordinate of the third (red) primary for the content colour volume SEI message")
