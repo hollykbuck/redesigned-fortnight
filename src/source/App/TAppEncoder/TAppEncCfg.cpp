@@ -1298,3 +1298,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
   ("SEIRwpProjRegionTop",                             cfg_rwpSEIRwpSEIProjRegionTop,            cfg_rwpSEIRwpSEIProjRegionTop,            "specifies the top sample row of the i-th projected region.")
   ("SEIRwpProjRegionLeft",                            cfg_rwpSEIProjRegionLeft,                 cfg_rwpSEIProjRegionLeft,                 "specifies the left-most sample column of the i-th projected region.")
   ("SEIRwpPackedRegionWidth",                         cfg_rwpSEIPackedRegionWidth,              cfg_rwpSEIPackedRegionWidth,              "specifies the width of the i-th packed region.")
+  ("SEIRwpPackedRegionHeight",                        cfg_rwpSEIPackedRegionHeight,             cfg_rwpSEIPackedRegionHeight,             "specifies the height of the i-th packed region.")
+  ("SEIRwpPackedRegionTop",                           cfg_rwpSEIPackedRegionTop,                cfg_rwpSEIPackedRegionTop,                "specifies the top luma sample row of the i-th packed region.")
+  ("SEIRwpPackedRegionLeft",                          cfg_rwpSEIPackedRegionLeft,               cfg_rwpSEIPackedRegionLeft,               "specifies the left-most luma sample column of the i-th packed region.")
+  ("SEIRwpLeftGuardBandWidth",                        cfg_rwpSEIRwpLeftGuardBandWidth,          cfg_rwpSEIRwpLeftGuardBandWidth,          "specifies the width of the guard band on the left side of the i-th packed region.")
+  ("SEIRwpRightGuardBandWidth",                       cfg_rwpSEIRwpRightGuardBandWidth,         cfg_rwpSEIRwpRightGuardBandWidth,         "specifies the width of the guard band on the right side of the i-th packed region.")
+  ("SEIRwpTopGuardBandHeight",                        cfg_rwpSEIRwpTopGuardBandHeight,          cfg_rwpSEIRwpTopGuardBandHeight,          "specifies the height of the guard band above the i-th packed region.")
+  ("SEIRwpBottomGuardBandHeight",                     cfg_rwpSEIRwpBottomGuardBandHeight,       cfg_rwpSEIRwpBottomGuardBandHeight,       "specifies the height of the guard band below the i-th packed region.")
+  ("SEIRwpGuardBandNotUsedForPredFlag",               cfg_rwpSEIRwpGuardBandNotUsedForPredFlag, cfg_rwpSEIRwpGuardBandNotUsedForPredFlag, "Specifies if the guard bands is used in the inter prediction process.")
+  ("SEIRwpGuardBandType",                             cfg_rwpSEIRwpGuardBandType,               cfg_rwpSEIRwpGuardBandType,               "Specifies the type of the guard bands for the i-th packed region.")
+  ("SEIFviEnabled",                                   m_fisheyeVIdeoInfoSEIEnabled,             false,                                   "Controls if fisheye video information SEI message enabled")
+  ("SEIFviCancelFlag",                                m_fisheyeVideoInfoSEI.m_fisheyeCancelFlag,                true,                    "Specifies the persistence of any previous fisheye video information SEI message in output order.")
+  ("SEIFviPersistenceFlag",                           m_fisheyeVideoInfoSEI.m_fisheyePersistenceFlag,           false,                   "Specifies the persistence of the fisheye video information SEI message for the current layer.")
+  ("SEIFviViewDimensionIdc",                          m_fisheyeVideoInfoSEI.m_fisheyeViewDimensionIdc,          0u,                      "Specifies the alignment and viewing direction of a fisheye lens")
+  ("SEIFviNumActiveAreasMinus1",                      cfg_fviSEIFisheyeNumActiveAreasMinus1,    0u,                                      "Specifies the number of active areas in the coded picture minus 1")
+  ("SEIFviCircularRegionCentreX",                     cfg_fviSEIFisheyeCircularRegionCentreX,   cfg_fviSEIFisheyeCircularRegionCentreX,  "Specifies the horizontal coordinates of the centre of the circular region that contains the i-th active area in the coded picture")
+  ("SEIFviCircularRegionCentreY",                     cfg_fviSEIFisheyeCircularRegionCentreY,   cfg_fviSEIFisheyeCircularRegionCentreY,  "Specifies the vertical coordinates of the centre of the circular region that contains the i-th active area in the coded picture")
+  ("SEIFviRectRegionTop",                             cfg_fviSEIFisheyeRectRegionTop,           cfg_fviSEIFisheyeRectRegionTop,          "Specifies the vertical coordinates of the top-left corner of the i-th rectangular region that contains the i-th active area")
+  ("SEIFviRectRegionLeft",                            cfg_fviSEIFisheyeRectRegionLeft,          cfg_fviSEIFisheyeRectRegionLeft,         "Specifies the horizontal coordinates of the top-left corner of the i-th rectangular region that contains the i-th active area")
+  ("SEIFviRectRegionWidth",                           cfg_fviSEIFisheyeRectRegionWidth,         cfg_fviSEIFisheyeRectRegionWidth,        "Specifies the width of the i-th rectangular region that contains the i-th active area")
+  ("SEIFviRectRegionHeight",                          cfg_fviSEIFisheyeRectRegionHeight,        cfg_fviSEIFisheyeRectRegionHeight,       "Specifies the height of the i-th rectangular region that contains the i-th active area")
+  ("SEIFviCircularRegionRadius",                      cfg_fviSEIFisheyeCircularRegionRadius,    cfg_fviSEIFisheyeCircularRegionRadius,   "Specifies the radius of the circular region that contains the i-th active area that is defined as a length from the centre of the circular region to the outermost pixel boundary of the circular region, that corresponds to the maximum field of view of the i-th fisheye lens")
+  ("SEIFviSceneRadius",                               cfg_fviSEIFisheyeSceneRadius,             cfg_fviSEIFisheyeSceneRadius,            "Specifies the radius of a circular region within the i-th active area where the obstruction is not included in the region")
+  ("SEIFviCameraCentreAzimuth",                       cfg_fviSEIFisheyeCameraCentreAzimuth,     cfg_fviSEIFisheyeCameraCentreAzimuth,    "Indicates the spherical coordinates that correspond to the centre of the circular region that contains the i-th active area")
+  ("SEIFviCameraCentreElevation",                     cfg_fviSEIFisheyeCameraCentreElevation,   cfg_fviSEIFisheyeCameraCentreElevation,  "Indicates the spherical coordinates that correspond to the centre of the circular region that contains the i-th active area")
+  ("SEIFviCameraCentreTilt",                          cfg_fviSEIFisheyeCameraCentreTilt,        cfg_fviSEIFisheyeCameraCentreTilt,       "Indicates the spherical coordinates that correspond to the centre of the circular region that contains the i-th active area")
+  ("SEIFviCameraCentreOffsetX",                       cfg_fviSEIFisheyeCameraCentreOffsetX,     cfg_fviSEIFisheyeCameraCentreOffsetX,    "Indicates the XYZ offset values of the focal centre of the fisheye camera lens corresponding to the i-th active area from the focal centre origin of the overall fisheye camera configuration.")
+  ("SEIFviCameraCentreOffsetY",                       cfg_fviSEIFisheyeCameraCentreOffsetY,     cfg_fviSEIFisheyeCameraCentreOffsetY,    "Indicates the XYZ offset values of the focal centre of the fisheye camera lens corresponding to the i-th active area from the focal centre origin of the overall fisheye camera configuration.")
+  ("SEIFviCameraCenterOffsetZ",                       cfg_fviSEIFisheyeCameraCentreOffsetZ,     cfg_fviSEIFisheyeCameraCentreOffsetZ,    "Indicates the XYZ offset values of the focal centre of the fisheye camera lens corresponding to the i-th active area from the focal centre origin of the overall fisheye camera configuration.")
+  ("SEIFviFieldOfView",                               cfg_fviSEIFisheyeFieldOfView,             cfg_fviSEIFisheyeFieldOfView,            "Specifies the field of view of the lens that corresponds to the i-th active area")
+  ("SEIFviNumPolynomialCoeffs",                       cfg_fviSEIFisheyeNumPolynomialCoeffs,     cfg_fviSEIFisheyeNumPolynomialCoeffs,    "Specifies the number of polynomial coefficients for the circular region")
+  ("SEIFviPolynomialCoeff",                           cfg_fviSEIFisheyePolynomialCoeff,         cfg_fviSEIFisheyePolynomialCoeff,        "Specifies the j-th polynomial coefficient value of the curve function that maps the normalized distance of a luma sample from the centre of the circular region corresponding to the i-th active area to the angular value of a sphere coordinate from the normal vector of a nominal imaging plane that passes through the centre of the sphere coordinate system for the i-th active region.")
+  ("SEIRegionalNestingFileRoot,-rns",                 m_regionalNestingSEIFileRoot,                    string(""), "Regional nesting SEI parameters root file name (wo num ext); only the file name base is to be added. Underscore and POC would be automatically addded to . E.g. \"-rns rns\" will search for files rns_0.txt, rns_1.txt, ...")
+  ("SEIAnnotatedRegionsFileRoot,-ar",                 m_arSEIFileRoot,                                 string(""), "Annotated region SEI parameters root file name (wo num ext); only the file name base is to be added. Underscore and POC would be automatically addded to . E.g. \"-ar ar\" will search for files ar_0.txt, ar_1.txt, ...")
+#if JCTVC_AD0021_SEI_MANIFEST
+  ("SEISEIManifestEnabled",                           m_SEIManifestSEIEnabled,                  false,                                   "Controls if SEI Manifest SEI messages enabled")
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  ("SEISEIPrefixIndicationEnabled",                   m_SEIPrefixIndicationSEIEnabled,          false,                                   "Controls if SEI Prefix Indications SEI messages enabled")
+#endif
+  ;
+
+  opts.addOptions()
+    ("TemporalFilter", m_gopBasedTemporalFilterEnabled, false, "Enable GOP based temporal filter. Disabled per default")
+    ("TemporalFilterPastRefs", m_gopBasedTemporalFilterPastRefs, TF_DEFAULT_REFS, "Number of past references for temporal prefilter")
+    ("TemporalFilterFutureRefs", m_gopBasedTemporalFilterFutureRefs, TF_DEFAULT_REFS, "Number of future references for temporal prefilter")
+    ("FirstValidFrame", m_firstValidFrame, 0, "First valid frame")
+    ("LastValidFrame", m_lastValidFrame, MAX_INT, "Last valid frame")
+    ("TemporalFilterStrengthFrame*", m_gopBasedTemporalFilterStrengths, std::map<Int, Double>(), "Strength for every * frame in GOP based temporal filter, where * is an integer."
+                                                                                                   " E.g. --TemporalFilterStrengthFrame8 0.95 will enable GOP based temporal filter at every 8th frame with strength 0.95");
+
+#if EXTENSION_360_VIDEO
+  TExt360AppEncCfg::TExt360AppEncCfgContext ext360CfgContext;
+  m_ext360.addOptions(opts, ext360CfgContext);
+#endif
+
+  for(Int i=1; i<MAX_GOP+1; i++)
+  {
+    std::ostringstream cOSS;
+    cOSS<<"Frame"<<i;
+    opts.addOptions()(cOSS.str(), m_GOPList[i-1], GOPEntry());
+  }
+  po::setDefaults(opts);
+  po::ErrorReporter err;
+  const list<const TChar*>& argv_unhandled = po::scanArgv(opts, argc, (const TChar**) argv, err);
+
+  for (list<const TChar*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++)
+  {
+    fprintf(stderr, "Unhandled argument ignored: `%s'\n", *it);
+  }
+
+  if (argc == 1 || do_help)
+  {
+    /* argc == 1: no options have been specified */
+    po::doHelp(cout, opts);
+    return false;
+  }
+
+  if (err.is_errored)
+  {
+    if (!warnUnknowParameter)
+    {
+      /* error report has already been printed on stderr */
+      return false;
+    }
+  }
+
+  /*
+   * Set any derived parameters
+   */
+  m_inputFileWidth  = m_sourceWidth;
+  m_inputFileHeight = m_sourceHeight;
+
+  if (!inputPathPrefix.empty() && inputPathPrefix.back() != '/' && inputPathPrefix.back() != '\\' )
+  {
+    inputPathPrefix += "/";
+  }
+  m_inputFileName   = inputPathPrefix + m_inputFileName;
+
+  if (m_firstValidFrame < 0)
+  {
