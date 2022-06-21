@@ -1398,3 +1398,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
 
   if (m_firstValidFrame < 0)
   {
+    m_firstValidFrame = m_FrameSkip;
+  }
+  if (m_lastValidFrame < 0)
+  {
+    m_lastValidFrame = m_firstValidFrame + m_framesToBeEncoded - 1;
+  }
+
+  m_framesToBeEncoded = ( m_framesToBeEncoded + m_temporalSubsampleRatio - 1 ) / m_temporalSubsampleRatio;
+  m_adIntraLambdaModifier = cfg_adIntraLambdaModifier.values;
+  if(m_isField)
+  {
+    //Frame height
+    m_sourceHeightOrg = m_sourceHeight;
+    //Field height
+    m_sourceHeight = m_sourceHeight >> 1;
+    //number of fields to encode
+    m_framesToBeEncoded *= 2;
+  }
+
+  if( !m_tileUniformSpacingFlag && m_numTileColumnsMinus1 > 0 )
+  {
+    if (cfg_ColumnWidth.values.size() > m_numTileColumnsMinus1)
+    {
+      printf( "The number of columns whose width are defined is larger than the allowed number of columns.\n" );
+      exit( EXIT_FAILURE );
+    }
+    else if (cfg_ColumnWidth.values.size() < m_numTileColumnsMinus1)
+    {
+      printf( "The width of some columns is not defined.\n" );
+      exit( EXIT_FAILURE );
+    }
+    else
+    {
+      m_tileColumnWidth.resize(m_numTileColumnsMinus1);
+      for(UInt i=0; i<cfg_ColumnWidth.values.size(); i++)
+      {
+        m_tileColumnWidth[i]=cfg_ColumnWidth.values[i];
+      }
+    }
+  }
+  else
+  {
+    m_tileColumnWidth.clear();
+  }
+
+  if( !m_tileUniformSpacingFlag && m_numTileRowsMinus1 > 0 )
+  {
+    if (cfg_RowHeight.values.size() > m_numTileRowsMinus1)
+    {
+      printf( "The number of rows whose height are defined is larger than the allowed number of rows.\n" );
+      exit( EXIT_FAILURE );
+    }
+    else if (cfg_RowHeight.values.size() < m_numTileRowsMinus1)
+    {
+      printf( "The height of some rows is not defined.\n" );
+      exit( EXIT_FAILURE );
+    }
+    else
+    {
+      m_tileRowHeight.resize(m_numTileRowsMinus1);
+      for(UInt i=0; i<cfg_RowHeight.values.size(); i++)
+      {
+        m_tileRowHeight[i]=cfg_RowHeight.values[i];
+      }
+    }
+  }
+  else
+  {
+    m_tileRowHeight.clear();
+  }
+
+  /* rules for input, output and internal bitdepths as per help text */
+  if (m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA  ] == 0)
+  {
+    m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA  ] = m_inputBitDepth      [CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] == 0)
+  {
+    m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] = m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_internalBitDepth   [CHANNEL_TYPE_LUMA  ] == 0)
+  {
+    m_internalBitDepth   [CHANNEL_TYPE_LUMA  ] = m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_internalBitDepth   [CHANNEL_TYPE_CHROMA] == 0)
+  {
+    m_internalBitDepth   [CHANNEL_TYPE_CHROMA] = m_internalBitDepth   [CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_inputBitDepth      [CHANNEL_TYPE_CHROMA] == 0)
+  {
+    m_inputBitDepth      [CHANNEL_TYPE_CHROMA] = m_inputBitDepth      [CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_outputBitDepth     [CHANNEL_TYPE_LUMA  ] == 0)
+  {
+    m_outputBitDepth     [CHANNEL_TYPE_LUMA  ] = m_internalBitDepth   [CHANNEL_TYPE_LUMA  ];
+  }
+  if (m_outputBitDepth     [CHANNEL_TYPE_CHROMA] == 0)
+  {
+    m_outputBitDepth     [CHANNEL_TYPE_CHROMA] = m_internalBitDepth   [CHANNEL_TYPE_CHROMA];
+  }
