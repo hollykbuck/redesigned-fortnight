@@ -1498,3 +1498,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
   {
     m_outputBitDepth     [CHANNEL_TYPE_CHROMA] = m_internalBitDepth   [CHANNEL_TYPE_CHROMA];
   }
+
+  m_InputChromaFormatIDC = numberToChromaFormat(tmpInputChromaFormat);
+  m_chromaFormatIDC      = ((tmpChromaFormat == 0) ? (m_InputChromaFormatIDC) : (numberToChromaFormat(tmpChromaFormat)));
+
+#if EXTENSION_360_VIDEO
+  m_ext360.processOptions(ext360CfgContext);
+#endif
+
+  assert(tmpWeightedPredictionMethod>=0 && tmpWeightedPredictionMethod<=WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING_AND_EXTENSION);
+  if (!(tmpWeightedPredictionMethod>=0 && tmpWeightedPredictionMethod<=WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING_AND_EXTENSION))
+  {
+    exit(EXIT_FAILURE);
+  }
+  m_weightedPredictionMethod = WeightedPredictionMethod(tmpWeightedPredictionMethod);
+
+  assert(tmpFastInterSearchMode>=0 && tmpFastInterSearchMode<=FASTINTERSEARCH_MODE3);
+  if (tmpFastInterSearchMode<0 || tmpFastInterSearchMode>FASTINTERSEARCH_MODE3)
+  {
+    exit(EXIT_FAILURE);
+  }
+  m_fastInterSearchMode = FastInterSearchMode(tmpFastInterSearchMode);
+
+  assert(tmpMotionEstimationSearchMethod>=0 && tmpMotionEstimationSearchMethod<MESEARCH_NUMBER_OF_METHODS);
+  if (tmpMotionEstimationSearchMethod<0 || tmpMotionEstimationSearchMethod>=MESEARCH_NUMBER_OF_METHODS)
+  {
+    exit(EXIT_FAILURE);
+  }
+  m_motionEstimationSearchMethod=MESearchMethod(tmpMotionEstimationSearchMethod);
+
+  switch (UIProfile)
+  {
+    case UI_NONE:
+      m_profile = Profile::NONE;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    case UI_MAIN:
+      m_profile = Profile::MAIN;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    case UI_MAIN10:
+      m_profile = Profile::MAIN10;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    case UI_MAINSTILLPICTURE:
+      m_profile = Profile::MAINSTILLPICTURE;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    case UI_MAIN10_STILL_PICTURE:
+      m_profile = Profile::MAIN10;
+      m_onePictureOnlyConstraintFlag = true;
+      break;
+    case UI_MAINREXT:
+      m_profile = Profile::MAINREXT;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    case UI_HIGHTHROUGHPUTREXT:
+      m_profile = Profile::HIGHTHROUGHPUTREXT;
+      m_onePictureOnlyConstraintFlag = false;
+      break;
+    default:
+      if (UIProfile >= 1000 && UIProfile <= 12316)
+      {
+        m_profile = Profile::MAINREXT;
+        if (m_bitDepthConstraint != 0 || tmpConstraintChromaFormat != 0)
+        {
+          fprintf(stderr, "Error: The bit depth and chroma format constraints are not used when an explicit RExt profile is specified\n");
+          exit(EXIT_FAILURE);
+        }
+        m_bitDepthConstraint           = (UIProfile%100);
+        m_intraConstraintFlag          = ((UIProfile%10000)>=2000);
+        m_onePictureOnlyConstraintFlag = (UIProfile >= 10000);
+        switch ((UIProfile/100)%10)
+        {
+          case 0:  tmpConstraintChromaFormat=400; break;
+          case 1:  tmpConstraintChromaFormat=420; break;
+          case 2:  tmpConstraintChromaFormat=422; break;
+          default: tmpConstraintChromaFormat=444; break;
+        }
+      }
+      else if (UIProfile >= 21308 && UIProfile <= 22316)
+      {
+        m_profile = Profile::HIGHTHROUGHPUTREXT;
+        if (m_bitDepthConstraint != 0 || tmpConstraintChromaFormat != 0)
+        {
+          fprintf(stderr, "Error: The bit depth and chroma format constraints are not used when an explicit RExt profile is specified\n");
+          exit(EXIT_FAILURE);
+        }
+        m_bitDepthConstraint           = (UIProfile%100);
+        m_intraConstraintFlag          = ((UIProfile%10000)>=2000);
+        m_onePictureOnlyConstraintFlag = 0;
+        if((UIProfile == UI_HIGHTHROUGHPUT_444) || (UIProfile == UI_HIGHTHROUGHPUT_444_10) )
+        {
+           assert(m_cabacBypassAlignmentEnabledFlag==0);
+        }
+        switch ((UIProfile/100)%10)
+        {
+          case 0:  tmpConstraintChromaFormat=400; break;
+          case 1:  tmpConstraintChromaFormat=420; break;
+          case 2:  tmpConstraintChromaFormat=422; break;
+          default: tmpConstraintChromaFormat=444; break;
