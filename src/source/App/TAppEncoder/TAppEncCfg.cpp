@@ -1598,3 +1598,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
           case 1:  tmpConstraintChromaFormat=420; break;
           case 2:  tmpConstraintChromaFormat=422; break;
           default: tmpConstraintChromaFormat=444; break;
+        }
+      }
+      else
+      {
+        fprintf(stderr, "Error: Unprocessed UI profile\n");
+        assert(0);
+        exit(EXIT_FAILURE);
+      }
+      break;
+  }
+
+  switch (m_profile)
+  {
+    case Profile::HIGHTHROUGHPUTREXT:
+      {
+        if (m_bitDepthConstraint == 0)
+        {
+          m_bitDepthConstraint = 16;
+        }
+        m_chromaFormatConstraint = (tmpConstraintChromaFormat == 0) ? CHROMA_444 : numberToChromaFormat(tmpConstraintChromaFormat);
+      }
+      break;
+    case Profile::MAINREXT:
+      {
+        if (m_bitDepthConstraint == 0 && tmpConstraintChromaFormat == 0)
+        {
+          // produce a valid combination, if possible.
+          const Bool bUsingGeneralRExtTools  = m_transformSkipRotationEnabledFlag        ||
+                                               m_transformSkipContextEnabledFlag         ||
+                                               m_rdpcmEnabledFlag[RDPCM_SIGNAL_IMPLICIT] ||
+                                               m_rdpcmEnabledFlag[RDPCM_SIGNAL_EXPLICIT] ||
+                                               !m_enableIntraReferenceSmoothing          ||
+                                               m_persistentRiceAdaptationEnabledFlag     ||
+                                               m_log2MaxTransformSkipBlockSize!=2;
+          const Bool bUsingChromaQPAdjustment= m_diffCuChromaQpOffsetDepth >= 0;
+          const Bool bUsingExtendedPrecision = m_extendedPrecisionProcessingFlag;
+          if (m_onePictureOnlyConstraintFlag)
+          {
+            m_chromaFormatConstraint = CHROMA_444;
+            if (m_intraConstraintFlag != true)
+            {
+              fprintf(stderr, "Error: Intra constraint flag must be true when one_picture_only_constraint_flag is true\n");
+              exit(EXIT_FAILURE);
+            }
+            const Int maxBitDepth = m_chromaFormatIDC==CHROMA_400 ? m_internalBitDepth[CHANNEL_TYPE_LUMA] : std::max(m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA]);
+            m_bitDepthConstraint = maxBitDepth>8 ? 16:8;
+          }
+          else
+          {
+            m_chromaFormatConstraint = NUM_CHROMA_FORMAT;
+            automaticallySelectRExtProfile(bUsingGeneralRExtTools,
+                                           bUsingChromaQPAdjustment,
+                                           bUsingExtendedPrecision,
+                                           m_intraConstraintFlag,
+                                           m_bitDepthConstraint,
+                                           m_chromaFormatConstraint,
+                                           m_chromaFormatIDC==CHROMA_400 ? m_internalBitDepth[CHANNEL_TYPE_LUMA] : std::max(m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA]),
+                                           m_chromaFormatIDC);
+          }
+        }
+        else if (m_bitDepthConstraint == 0 || tmpConstraintChromaFormat == 0)
+        {
+          fprintf(stderr, "Error: The bit depth and chroma format constraints must either both be specified or both be configured automatically\n");
+          exit(EXIT_FAILURE);
+        }
+        else
+        {
+          m_chromaFormatConstraint = numberToChromaFormat(tmpConstraintChromaFormat);
+        }
+      }
+      break;
+    case Profile::MAIN:
+    case Profile::MAIN10:
+    case Profile::MAINSTILLPICTURE:
+      m_chromaFormatConstraint = (tmpConstraintChromaFormat == 0) ? m_chromaFormatIDC : numberToChromaFormat(tmpConstraintChromaFormat);
+      m_bitDepthConstraint = (m_profile == Profile::MAIN10?10:8);
+      break;
+    case Profile::NONE:
+      m_chromaFormatConstraint = m_chromaFormatIDC;
+      m_bitDepthConstraint = m_chromaFormatIDC==CHROMA_400 ? m_internalBitDepth[CHANNEL_TYPE_LUMA] : std::max(m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA]);
+      break;
+    default:
+      fprintf(stderr, "Unknown profile selected\n");
+      exit(EXIT_FAILURE);
+      break;
+  }
+
+  m_inputColourSpaceConvert = stringToInputColourSpaceConvert(inputColourSpaceConvert, true);
+
+  // Picture width and height must be multiples of 8 and minCuSize
+  const Int minCuSize = m_uiMaxCUHeight >> (m_uiMaxCUDepth - 1);
+  const Int minResolutionMultiple = std::max(8, minCuSize);
+
+  switch (m_conformanceWindowMode)
+  {
+  case 0:
+    {
+      // no conformance or padding
+      m_confWinLeft = m_confWinRight = m_confWinTop = m_confWinBottom = 0;
+      m_sourcePadding[1] = m_sourcePadding[0] = 0;
