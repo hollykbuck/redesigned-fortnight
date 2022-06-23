@@ -398,3 +398,103 @@ Int64 TEncSampleAdaptiveOffset::getDistortion(const Int channelBitDepth, Int typ
       }
       break;
     case SAO_TYPE_BO:
+      {
+        for (Int offsetIdx=typeAuxInfo; offsetIdx<typeAuxInfo+4; offsetIdx++)
+        {
+          Int bandIdx = offsetIdx % NUM_SAO_BO_CLASSES ;
+          dist += estSaoDist( statData.count[bandIdx], invQuantOffset[bandIdx], statData.diff[bandIdx], shift);
+        }
+      }
+      break;
+    default:
+      {
+        printf("Not a supported type");
+        assert(0);
+        exit(-1);
+      }
+  }
+
+  return dist;
+}
+
+inline Int64 TEncSampleAdaptiveOffset::estSaoDist(Int64 count, Int64 offset, Int64 diffSum, Int shift)
+{
+  return (( count*offset*offset-diffSum*offset*2 ) >> shift);
+}
+
+
+inline Int TEncSampleAdaptiveOffset::estIterOffset(Int typeIdx, Double lambda, Int offsetInput, Int64 count, Int64 diffSum, Int shift, Int bitIncrease, Int64& bestDist, Double& bestCost, Int offsetTh )
+{
+  Int iterOffset, tempOffset;
+  Int64 tempDist, tempRate;
+  Double tempCost, tempMinCost;
+  Int offsetOutput = 0;
+  iterOffset = offsetInput;
+  // Assuming sending quantized value 0 results in zero offset and sending the value zero needs 1 bit. entropy coder can be used to measure the exact rate here.
+  tempMinCost = lambda;
+  while (iterOffset != 0)
+  {
+    // Calculate the bits required for signaling the offset
+    tempRate = (typeIdx == SAO_TYPE_BO) ? (abs((Int)iterOffset)+2) : (abs((Int)iterOffset)+1);
+    if (abs((Int)iterOffset)==offsetTh) //inclusive
+    {
+      tempRate --;
+    }
+    // Do the dequantization before distortion calculation
+    tempOffset  = iterOffset << bitIncrease;
+    tempDist    = estSaoDist( count, tempOffset, diffSum, shift);
+    tempCost    = ((Double)tempDist + lambda * (Double) tempRate);
+    if(tempCost < tempMinCost)
+    {
+      tempMinCost = tempCost;
+      offsetOutput = iterOffset;
+      bestDist = tempDist;
+      bestCost = tempCost;
+    }
+    iterOffset = (iterOffset > 0) ? (iterOffset-1):(iterOffset+1);
+  }
+  return offsetOutput;
+}
+
+Void TEncSampleAdaptiveOffset::deriveOffsets(ComponentID compIdx, const Int channelBitDepth, Int typeIdc, SAOStatData& statData, Int* quantOffsets, Int& typeAuxInfo)
+{
+  Int bitDepth = channelBitDepth;
+  Int shift    = 2 * DISTORTION_PRECISION_ADJUSTMENT(bitDepth-8);
+  Int offsetTh = TComSampleAdaptiveOffset::getMaxOffsetQVal(channelBitDepth);  //inclusive
+
+  ::memset(quantOffsets, 0, sizeof(Int)*MAX_NUM_SAO_CLASSES);
+
+  //derive initial offsets
+  Int numClasses = (typeIdc == SAO_TYPE_BO)?((Int)NUM_SAO_BO_CLASSES):((Int)NUM_SAO_EO_CLASSES);
+  for(Int classIdx=0; classIdx< numClasses; classIdx++)
+  {
+    if( (typeIdc != SAO_TYPE_BO) && (classIdx==SAO_CLASS_EO_PLAIN)  )
+    {
+      continue; //offset will be zero
+    }
+
+    if(statData.count[classIdx] == 0)
+    {
+      continue; //offset will be zero
+    }
+
+    quantOffsets[classIdx] = (Int) xRoundIbdi(bitDepth, (Double)( statData.diff[classIdx]<<(bitDepth-8))
+                                                                  /
+                                                          (Double)( statData.count[classIdx]<< m_offsetStepLog2[compIdx])
+                                               );
+    quantOffsets[classIdx] = Clip3(-offsetTh, offsetTh, quantOffsets[classIdx]);
+  }
+
+  // adjust offsets
+  switch(typeIdc)
+  {
+    case SAO_TYPE_EO_0:
+    case SAO_TYPE_EO_90:
+    case SAO_TYPE_EO_135:
+    case SAO_TYPE_EO_45:
+      {
+        Int64 classDist;
+        Double classCost;
+        for(Int classIdx=0; classIdx<NUM_SAO_EO_CLASSES; classIdx++)
+        {
+          if(classIdx==SAO_CLASS_EO_FULL_VALLEY && quantOffsets[classIdx] < 0)
