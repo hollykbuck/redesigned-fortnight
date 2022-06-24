@@ -498,3 +498,103 @@ Void TEncSampleAdaptiveOffset::deriveOffsets(ComponentID compIdx, const Int chan
         for(Int classIdx=0; classIdx<NUM_SAO_EO_CLASSES; classIdx++)
         {
           if(classIdx==SAO_CLASS_EO_FULL_VALLEY && quantOffsets[classIdx] < 0)
+          {
+            quantOffsets[classIdx] =0;
+          }
+          if(classIdx==SAO_CLASS_EO_HALF_VALLEY && quantOffsets[classIdx] < 0)
+          {
+            quantOffsets[classIdx] =0;
+          }
+          if(classIdx==SAO_CLASS_EO_HALF_PEAK   && quantOffsets[classIdx] > 0)
+          {
+            quantOffsets[classIdx] =0;
+          }
+          if(classIdx==SAO_CLASS_EO_FULL_PEAK   && quantOffsets[classIdx] > 0)
+          {
+            quantOffsets[classIdx] =0;
+          }
+
+          if( quantOffsets[classIdx] != 0 ) //iterative adjustment only when derived offset is not zero
+          {
+            quantOffsets[classIdx] = estIterOffset( typeIdc, m_lambda[compIdx], quantOffsets[classIdx], statData.count[classIdx], statData.diff[classIdx], shift, m_offsetStepLog2[compIdx], classDist , classCost , offsetTh );
+          }
+        }
+
+        typeAuxInfo =0;
+      }
+      break;
+    case SAO_TYPE_BO:
+      {
+        Int64  distBOClasses[NUM_SAO_BO_CLASSES];
+        Double costBOClasses[NUM_SAO_BO_CLASSES];
+        ::memset(distBOClasses, 0, sizeof(Int64)*NUM_SAO_BO_CLASSES);
+        for(Int classIdx=0; classIdx< NUM_SAO_BO_CLASSES; classIdx++)
+        {
+          costBOClasses[classIdx]= m_lambda[compIdx];
+          if( quantOffsets[classIdx] != 0 ) //iterative adjustment only when derived offset is not zero
+          {
+            quantOffsets[classIdx] = estIterOffset( typeIdc, m_lambda[compIdx], quantOffsets[classIdx], statData.count[classIdx], statData.diff[classIdx], shift, m_offsetStepLog2[compIdx], distBOClasses[classIdx], costBOClasses[classIdx], offsetTh );
+          }
+        }
+
+        //decide the starting band index
+        Double minCost = MAX_DOUBLE, cost;
+        for(Int band=0; band< NUM_SAO_BO_CLASSES- 4+ 1; band++)
+        {
+          cost  = costBOClasses[band  ];
+          cost += costBOClasses[band+1];
+          cost += costBOClasses[band+2];
+          cost += costBOClasses[band+3];
+
+          if(cost < minCost)
+          {
+            minCost = cost;
+            typeAuxInfo = band;
+          }
+        }
+        //clear those unused classes
+        Int clearQuantOffset[NUM_SAO_BO_CLASSES];
+        ::memset(clearQuantOffset, 0, sizeof(Int)*NUM_SAO_BO_CLASSES);
+        for(Int i=0; i< 4; i++)
+        {
+          Int band = (typeAuxInfo+i)%NUM_SAO_BO_CLASSES;
+          clearQuantOffset[band] = quantOffsets[band];
+        }
+        ::memcpy(quantOffsets, clearQuantOffset, sizeof(Int)*NUM_SAO_BO_CLASSES);
+      }
+      break;
+    default:
+      {
+        printf("Not a supported type");
+        assert(0);
+        exit(-1);
+      }
+
+  }
+
+
+}
+
+Void TEncSampleAdaptiveOffset::deriveModeNewRDO(const BitDepths &bitDepths, Int ctuRsAddr, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES], Bool* sliceEnabled, SAOStatData*** blkStats, SAOBlkParam& modeParam, Double& modeNormCost, TEncSbac** cabacCoderRDO, Int inCabacLabel)
+{
+  Double minCost, cost;
+  UInt previousWrittenBits;
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+
+  Int64 dist[MAX_NUM_COMPONENT], modeDist[MAX_NUM_COMPONENT];
+  SAOOffset testOffset[MAX_NUM_COMPONENT];
+  Int invQuantOffset[MAX_NUM_SAO_CLASSES];
+  for(Int comp=0; comp < MAX_NUM_COMPONENT; comp++)
+  {
+    modeDist[comp] = 0;
+  }
+
+  //pre-encode merge flags
+  modeParam[COMPONENT_Y].modeIdc = SAO_MODE_OFF;
+  m_pcRDGoOnSbacCoder->load(cabacCoderRDO[inCabacLabel]);
+  m_pcRDGoOnSbacCoder->codeSAOBlkParam(modeParam, bitDepths, sliceEnabled, (mergeList[SAO_MERGE_LEFT]!= NULL), (mergeList[SAO_MERGE_ABOVE]!= NULL), true);
+  m_pcRDGoOnSbacCoder->store(cabacCoderRDO[SAO_CABACSTATE_BLK_MID]);
+
+    //------ luma --------//
+  {
+    const ComponentID compIdx = COMPONENT_Y;
