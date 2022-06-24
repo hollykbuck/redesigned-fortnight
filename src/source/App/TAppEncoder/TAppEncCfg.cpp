@@ -1698,3 +1698,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
       // no conformance or padding
       m_confWinLeft = m_confWinRight = m_confWinTop = m_confWinBottom = 0;
       m_sourcePadding[1] = m_sourcePadding[0] = 0;
+      break;
+    }
+  case 1:
+    {
+      // automatic padding to minimum CU size
+      if (m_sourceWidth % minResolutionMultiple)
+      {
+        m_sourcePadding[0] = m_confWinRight  = ((m_sourceWidth / minResolutionMultiple) + 1) * minResolutionMultiple - m_sourceWidth;
+        m_sourceWidth  += m_confWinRight;
+      }
+      if (m_sourceHeight % minResolutionMultiple)
+      {
+        m_sourcePadding[1] = m_confWinBottom = ((m_sourceHeight / minResolutionMultiple) + 1) * minResolutionMultiple - m_sourceHeight;
+        m_sourceHeight += m_confWinBottom;
+        if ( m_isField )
+        {
+          m_sourceHeightOrg += m_confWinBottom << 1;
+          m_sourcePadding[1] = m_confWinBottom << 1;
+        }
+      }
+      if (m_sourcePadding[0] % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0)
+      {
+        fprintf(stderr, "Error: picture width is not an integer multiple of the specified chroma subsampling\n");
+        exit(EXIT_FAILURE);
+      }
+      if (m_sourcePadding[1] % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0)
+      {
+        fprintf(stderr, "Error: picture height is not an integer multiple of the specified chroma subsampling\n");
+        exit(EXIT_FAILURE);
+      }
+      if (m_sourcePadding[0])
+      {
+        fprintf(stderr, "Info: Conformance window automatically enabled. Adding %i lumal pel horizontally\n", m_sourcePadding[0]);
+      }
+      if (m_sourcePadding[1])
+      {
+        fprintf(stderr, "Info: Conformance window automatically enabled. Adding %i lumal pel vertically\n", m_sourcePadding[1]);
+      }
+      break;
+    }
+  case 2:
+    {
+      //padding
+      m_sourceWidth  += m_sourcePadding[0];
+      m_sourceHeight += m_sourcePadding[1];
+      m_confWinRight  = m_sourcePadding[0];
+      m_confWinBottom = m_sourcePadding[1];
+      break;
+    }
+  case 3:
+    {
+      // conformance
+      if ((m_confWinLeft == 0) && (m_confWinRight == 0) && (m_confWinTop == 0) && (m_confWinBottom == 0))
+      {
+        fprintf(stderr, "Warning: Conformance window enabled, but all conformance window parameters set to zero\n");
+      }
+      if ((m_sourcePadding[1] != 0) || (m_sourcePadding[0]!=0))
+      {
+        fprintf(stderr, "Warning: Conformance window enabled, padding parameters will be ignored\n");
+      }
+      m_sourcePadding[1] = m_sourcePadding[0] = 0;
+      break;
+    }
+  }
+  if ((m_sourceWidth% minResolutionMultiple) || (m_sourceHeight % minResolutionMultiple))
+  {
+    fprintf(stderr, "Picture width or height (after padding) is not a multiple of 8 or minCuSize, please use ConformanceWindowMode=1 for automatic adjustment or ConformanceWindowMode=2 to specify padding manually!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  if (tmpSliceMode<0 || tmpSliceMode>=Int(NUMBER_OF_SLICE_CONSTRAINT_MODES))
+  {
+    fprintf(stderr, "Error: bad slice mode\n");
+    exit(EXIT_FAILURE);
+  }
+  m_sliceMode = SliceConstraint(tmpSliceMode);
+  if (tmpSliceSegmentMode<0 || tmpSliceSegmentMode>=Int(NUMBER_OF_SLICE_CONSTRAINT_MODES))
+  {
+    fprintf(stderr, "Error: bad slice segment mode\n");
+    exit(EXIT_FAILURE);
+  }
+  m_sliceSegmentMode = SliceConstraint(tmpSliceSegmentMode);
+
+  if (tmpDecodedPictureHashSEIMappedType<0 || tmpDecodedPictureHashSEIMappedType>=Int(NUMBER_OF_HASHTYPES))
+  {
+    fprintf(stderr, "Error: bad checksum mode\n");
+    exit(EXIT_FAILURE);
+  }
+  // Need to map values to match those of the SEI message:
+  if (tmpDecodedPictureHashSEIMappedType==0)
+  {
+    m_decodedPictureHashSEIType=HASHTYPE_NONE;
+  }
+  else
+  {
+    m_decodedPictureHashSEIType=HashType(tmpDecodedPictureHashSEIMappedType-1);
+  }
+
+  // allocate slice-based dQP values
+  m_aidQP = new Int[ m_framesToBeEncoded + m_iGOPSize + 1 ];
