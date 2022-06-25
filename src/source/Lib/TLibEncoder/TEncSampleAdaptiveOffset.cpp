@@ -598,3 +598,103 @@ Void TEncSampleAdaptiveOffset::deriveModeNewRDO(const BitDepths &bitDepths, Int 
     //------ luma --------//
   {
     const ComponentID compIdx = COMPONENT_Y;
+    //"off" case as initial cost
+    modeParam[compIdx].modeIdc = SAO_MODE_OFF;
+    m_pcRDGoOnSbacCoder->resetBits();
+    m_pcRDGoOnSbacCoder->codeSAOOffsetParam(compIdx, modeParam[compIdx], sliceEnabled[compIdx], bitDepths.recon[CHANNEL_TYPE_LUMA]);
+    modeDist[compIdx] = 0;
+    minCost= m_lambda[compIdx]*((Double)m_pcRDGoOnSbacCoder->getNumberOfWrittenBits());
+    m_pcRDGoOnSbacCoder->store(cabacCoderRDO[SAO_CABACSTATE_BLK_TEMP]);
+    if(sliceEnabled[compIdx])
+    {
+      for(Int typeIdc=0; typeIdc< NUM_SAO_NEW_TYPES; typeIdc++)
+      {
+        testOffset[compIdx].modeIdc = SAO_MODE_NEW;
+        testOffset[compIdx].typeIdc = typeIdc;
+
+        //derive coded offset
+        deriveOffsets(compIdx, bitDepths.recon[CHANNEL_TYPE_LUMA], typeIdc, blkStats[ctuRsAddr][compIdx][typeIdc], testOffset[compIdx].offset, testOffset[compIdx].typeAuxInfo);
+
+        //inversed quantized offsets
+        invertQuantOffsets(compIdx, typeIdc, testOffset[compIdx].typeAuxInfo, invQuantOffset, testOffset[compIdx].offset);
+
+        //get distortion
+        dist[compIdx] = getDistortion(bitDepths.recon[CHANNEL_TYPE_LUMA], testOffset[compIdx].typeIdc, testOffset[compIdx].typeAuxInfo, invQuantOffset, blkStats[ctuRsAddr][compIdx][typeIdc]);
+
+        //get rate
+        m_pcRDGoOnSbacCoder->load(cabacCoderRDO[SAO_CABACSTATE_BLK_MID]);
+        m_pcRDGoOnSbacCoder->resetBits();
+        m_pcRDGoOnSbacCoder->codeSAOOffsetParam(compIdx, testOffset[compIdx], sliceEnabled[compIdx], bitDepths.recon[CHANNEL_TYPE_LUMA]);
+        Int rate = m_pcRDGoOnSbacCoder->getNumberOfWrittenBits();
+        cost = (Double)dist[compIdx] + m_lambda[compIdx]*((Double)rate);
+        if(cost < minCost)
+        {
+          minCost = cost;
+          modeDist[compIdx] = dist[compIdx];
+          modeParam[compIdx]= testOffset[compIdx];
+          m_pcRDGoOnSbacCoder->store(cabacCoderRDO[SAO_CABACSTATE_BLK_TEMP]);
+        }
+      }
+    }
+    m_pcRDGoOnSbacCoder->load(cabacCoderRDO[SAO_CABACSTATE_BLK_TEMP]);
+    m_pcRDGoOnSbacCoder->store(cabacCoderRDO[SAO_CABACSTATE_BLK_MID]);
+  }
+
+  //------ chroma --------//
+//"off" case as initial cost
+  cost = 0;
+  previousWrittenBits = 0;
+  m_pcRDGoOnSbacCoder->resetBits();
+  for(UInt componentIndex = COMPONENT_Cb; componentIndex < numberOfComponents; componentIndex++)
+  {
+    const ComponentID component = ComponentID(componentIndex);
+
+    modeParam[component].modeIdc = SAO_MODE_OFF;
+    modeDist [component]         = 0;
+    m_pcRDGoOnSbacCoder->codeSAOOffsetParam(component, modeParam[component], sliceEnabled[component], bitDepths.recon[CHANNEL_TYPE_CHROMA]);
+    
+    const UInt currentWrittenBits = m_pcRDGoOnSbacCoder->getNumberOfWrittenBits();
+    cost += m_lambda[component] * (currentWrittenBits - previousWrittenBits);
+    previousWrittenBits = currentWrittenBits;
+  }
+
+  minCost = cost;
+
+  //doesn't need to store cabac status here since the whole CTU parameters will be re-encoded at the end of this function
+
+  for(Int typeIdc=0; typeIdc< NUM_SAO_NEW_TYPES; typeIdc++)
+  {
+    m_pcRDGoOnSbacCoder->load(cabacCoderRDO[SAO_CABACSTATE_BLK_MID]);
+    m_pcRDGoOnSbacCoder->resetBits();
+    previousWrittenBits = 0;
+    cost = 0;
+
+    for(UInt componentIndex = COMPONENT_Cb; componentIndex < numberOfComponents; componentIndex++)
+    {
+      const ComponentID component = ComponentID(componentIndex);
+      if(!sliceEnabled[component])
+      {
+        testOffset[component].modeIdc = SAO_MODE_OFF;
+        dist[component]= 0;
+        continue;
+      }
+      testOffset[component].modeIdc = SAO_MODE_NEW;
+      testOffset[component].typeIdc = typeIdc;
+
+      //derive offset & get distortion
+      deriveOffsets(component, bitDepths.recon[CHANNEL_TYPE_CHROMA], typeIdc, blkStats[ctuRsAddr][component][typeIdc], testOffset[component].offset, testOffset[component].typeAuxInfo);
+      invertQuantOffsets(component, typeIdc, testOffset[component].typeAuxInfo, invQuantOffset, testOffset[component].offset);
+      dist[component] = getDistortion(bitDepths.recon[CHANNEL_TYPE_CHROMA], typeIdc, testOffset[component].typeAuxInfo, invQuantOffset, blkStats[ctuRsAddr][component][typeIdc]);
+
+      m_pcRDGoOnSbacCoder->codeSAOOffsetParam(component, testOffset[component], sliceEnabled[component], bitDepths.recon[CHANNEL_TYPE_CHROMA]);
+
+      const UInt currentWrittenBits = m_pcRDGoOnSbacCoder->getNumberOfWrittenBits();
+      cost += dist[component] + (m_lambda[component] * (currentWrittenBits - previousWrittenBits));
+      previousWrittenBits = currentWrittenBits;
+    }
+
+    if(cost < minCost)
+    {
+      minCost = cost;
+      for(UInt componentIndex = COMPONENT_Cb; componentIndex < numberOfComponents; componentIndex++)
+      {
