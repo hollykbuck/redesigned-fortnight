@@ -1798,3 +1798,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
 
   // allocate slice-based dQP values
   m_aidQP = new Int[ m_framesToBeEncoded + m_iGOPSize + 1 ];
+  ::memset( m_aidQP, 0, sizeof(Int)*( m_framesToBeEncoded + m_iGOPSize + 1 ) );
+
+  if (m_qpIncrementAtSourceFrame.bPresent)
+  {
+    UInt switchingPOC=0;
+    if (m_qpIncrementAtSourceFrame.value > m_FrameSkip)
+    {
+      // if switch source frame (ssf) = 10, and frame skip (fs)=2 and temporal subsample ratio (tsr) =1, then
+      //    for this simulation switch at POC 8 (=10-2).
+      // if ssf=10, fs=2, tsr=2, then for this simulation, switch at POC 4 (=(10-2)/2): POC0=Src2, POC1=Src4, POC2=Src6, POC3=Src8, POC4=Src10
+      switchingPOC = (m_qpIncrementAtSourceFrame.value - m_FrameSkip) / m_temporalSubsampleRatio;
+    }
+    for(UInt i=switchingPOC; i<( m_framesToBeEncoded + m_iGOPSize + 1 ); i++)
+    {
+      m_aidQP[i]=1;
+    }
+  }
+
+  for(UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    if (saoOffsetBitShift[ch]<0)
+    {
+      if (m_internalBitDepth[ch]>10)
+      {
+        m_log2SaoOffsetScale[ch]=UInt(Clip3<Int>(0, m_internalBitDepth[ch]-10, Int(m_internalBitDepth[ch]-10 + 0.165*m_iQP - 3.22 + 0.5) ) );
+      }
+      else
+      {
+        m_log2SaoOffsetScale[ch]=0;
+      }
+    }
+    else
+    {
+      m_log2SaoOffsetScale[ch]=UInt(saoOffsetBitShift[ch]);
+    }
+  }
+
+  assert(lumaLevelToDeltaQPMode<LUMALVL_TO_DQP_NUM_MODES);
+  if (lumaLevelToDeltaQPMode>=LUMALVL_TO_DQP_NUM_MODES)
+  {
+    exit(EXIT_FAILURE);
+  }
+  m_lumaLevelToDeltaQPMapping.mode=LumaLevelToDQPMode(lumaLevelToDeltaQPMode);
+
+  if (m_lumaLevelToDeltaQPMapping.mode)
+  {
+    assert(  cfg_lumaLeveltoDQPMappingLuma.values.size() == cfg_lumaLeveltoDQPMappingQP.values.size() );
+    m_lumaLevelToDeltaQPMapping.mapping.resize(cfg_lumaLeveltoDQPMappingLuma.values.size());
+    for(UInt i=0; i<cfg_lumaLeveltoDQPMappingLuma.values.size(); i++)
+    {
+      m_lumaLevelToDeltaQPMapping.mapping[i]=std::pair<Int,Int>(cfg_lumaLeveltoDQPMappingLuma.values[i], cfg_lumaLeveltoDQPMappingQP.values[i]);
+    }
+  }
+
+  // reading external dQP description from file
+  if ( !m_dQPFileName.empty() )
+  {
+    FILE* fpt=fopen( m_dQPFileName.c_str(), "r" );
+    if ( fpt )
+    {
+      Int iValue;
+      Int iPOC = 0;
+      while ( iPOC < m_framesToBeEncoded )
+      {
+        if ( fscanf(fpt, "%d", &iValue ) == EOF )
+        {
+          break;
+        }
+        m_aidQP[ iPOC ] = iValue;
+        iPOC++;
+      }
+      fclose(fpt);
+    }
+  }
+
+  if( m_masteringDisplay.colourVolumeSEIEnabled )
+  {
+    for(UInt idx=0; idx<6; idx++)
+    {
+      m_masteringDisplay.primaries[idx/2][idx%2] = UShort((cfg_DisplayPrimariesCode.values.size() > idx) ? cfg_DisplayPrimariesCode.values[idx] : 0);
+    }
+    for(UInt idx=0; idx<2; idx++)
+    {
+      m_masteringDisplay.whitePoint[idx] = UShort((cfg_DisplayWhitePointCode.values.size() > idx) ? cfg_DisplayWhitePointCode.values[idx] : 0);
+    }
+  }
+    
+  if( m_toneMappingInfoSEIEnabled && !m_toneMapCancelFlag )
+  {
+    if( m_toneMapModelId == 2 && !cfg_startOfCodedInterval.values.empty() )
+    {
+      const UInt num = 1u<< m_toneMapTargetBitDepth;
+      m_startOfCodedInterval = new Int[num];
+      for(UInt i=0; i<num; i++)
+      {
+        m_startOfCodedInterval[i] = cfg_startOfCodedInterval.values.size() > i ? cfg_startOfCodedInterval.values[i] : 0;
+      }
+    }
+    else
+    {
