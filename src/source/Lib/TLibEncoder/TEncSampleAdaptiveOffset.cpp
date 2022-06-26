@@ -698,3 +698,103 @@ Void TEncSampleAdaptiveOffset::deriveModeNewRDO(const BitDepths &bitDepths, Int 
       minCost = cost;
       for(UInt componentIndex = COMPONENT_Cb; componentIndex < numberOfComponents; componentIndex++)
       {
+        modeDist[componentIndex]  = dist[componentIndex];
+        modeParam[componentIndex] = testOffset[componentIndex];
+      }
+    }
+
+  } // SAO_TYPE loop
+
+  //----- re-gen rate & normalized cost----//
+  modeNormCost = 0;
+  for(UInt componentIndex = COMPONENT_Y; componentIndex < numberOfComponents; componentIndex++)
+  {
+    modeNormCost += (Double)modeDist[componentIndex] / m_lambda[componentIndex];
+  }
+
+  m_pcRDGoOnSbacCoder->load(cabacCoderRDO[inCabacLabel]);
+  m_pcRDGoOnSbacCoder->resetBits();
+  m_pcRDGoOnSbacCoder->codeSAOBlkParam(modeParam, bitDepths, sliceEnabled, (mergeList[SAO_MERGE_LEFT]!= NULL), (mergeList[SAO_MERGE_ABOVE]!= NULL), false);
+  modeNormCost += (Double)m_pcRDGoOnSbacCoder->getNumberOfWrittenBits();
+}
+
+Void TEncSampleAdaptiveOffset::deriveModeMergeRDO(const BitDepths &bitDepths, Int ctuRsAddr, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES], Bool* sliceEnabled, SAOStatData*** blkStats, SAOBlkParam& modeParam, Double& modeNormCost, TEncSbac** cabacCoderRDO, Int inCabacLabel)
+{
+  modeNormCost = MAX_DOUBLE;
+
+  Double cost;
+  SAOBlkParam testBlkParam;
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+
+  for(Int mergeType=0; mergeType< NUM_SAO_MERGE_TYPES; mergeType++)
+  {
+    if(mergeList[mergeType] == NULL)
+    {
+      continue;
+    }
+
+    testBlkParam = *(mergeList[mergeType]);
+    //normalized distortion
+    Double normDist=0;
+    for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+    {
+      testBlkParam[compIdx].modeIdc = SAO_MODE_MERGE;
+      testBlkParam[compIdx].typeIdc = mergeType;
+
+      SAOOffset& mergedOffsetParam = (*(mergeList[mergeType]))[compIdx];
+
+      if( mergedOffsetParam.modeIdc != SAO_MODE_OFF)
+      {
+        //offsets have been reconstructed. Don't call inversed quantization function.
+        normDist += (((Double)getDistortion(bitDepths.recon[toChannelType(ComponentID(compIdx))], mergedOffsetParam.typeIdc, mergedOffsetParam.typeAuxInfo, mergedOffsetParam.offset, blkStats[ctuRsAddr][compIdx][mergedOffsetParam.typeIdc]))
+                       /m_lambda[compIdx]
+                    );
+      }
+
+    }
+
+    //rate
+    m_pcRDGoOnSbacCoder->load(cabacCoderRDO[inCabacLabel]);
+    m_pcRDGoOnSbacCoder->resetBits();
+    m_pcRDGoOnSbacCoder->codeSAOBlkParam(testBlkParam, bitDepths, sliceEnabled, (mergeList[SAO_MERGE_LEFT]!= NULL), (mergeList[SAO_MERGE_ABOVE]!= NULL), false);
+    Int rate = m_pcRDGoOnSbacCoder->getNumberOfWrittenBits();
+
+    cost = normDist+(Double)rate;
+
+    if(cost < modeNormCost)
+    {
+      modeNormCost = cost;
+      modeParam    = testBlkParam;
+      m_pcRDGoOnSbacCoder->store(cabacCoderRDO[SAO_CABACSTATE_BLK_TEMP]);
+    }
+  }
+
+  m_pcRDGoOnSbacCoder->load(cabacCoderRDO[SAO_CABACSTATE_BLK_TEMP]);
+}
+
+Void TEncSampleAdaptiveOffset::decideBlkParams(TComPic* pic, Bool* sliceEnabled, SAOStatData*** blkStats, TComPicYuv* srcYuv, TComPicYuv* resYuv,
+                                               SAOBlkParam* reconParams, SAOBlkParam* codedParams, const Bool bTestSAODisableAtPictureLevel,
+                                               const Double saoEncodingRate, const Double saoEncodingRateChroma)
+{
+  Bool allBlksDisabled = true;
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+  for(Int compId = COMPONENT_Y; compId < numberOfComponents; compId++)
+  {
+    if (sliceEnabled[compId])
+    {
+      allBlksDisabled = false;
+    }
+  }
+
+  m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[ SAO_CABACSTATE_PIC_INIT ]);
+
+  SAOBlkParam modeParam;
+  Double minCost, modeCost;
+
+
+  Double totalCost = 0; // Used if bTestSAODisableAtPictureLevel==true
+
+  for(Int ctuRsAddr=0; ctuRsAddr< m_numCTUsPic; ctuRsAddr++)
+  {
+    if(allBlksDisabled)
+    {
