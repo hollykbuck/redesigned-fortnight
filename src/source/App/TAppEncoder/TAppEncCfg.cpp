@@ -1898,3 +1898,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
     }
     else
     {
+      m_startOfCodedInterval = NULL;
+    }
+    if( ( m_toneMapModelId == 3 ) && ( m_numPivots > 0 ) )
+    {
+      if( !cfg_codedPivotValue.values.empty() && !cfg_targetPivotValue.values.empty() )
+      {
+        m_codedPivotValue  = new Int[m_numPivots];
+        m_targetPivotValue = new Int[m_numPivots];
+        for(UInt i=0; i<m_numPivots; i++)
+        {
+          m_codedPivotValue[i]  = cfg_codedPivotValue.values.size()  > i ? cfg_codedPivotValue.values [i] : 0;
+          m_targetPivotValue[i] = cfg_targetPivotValue.values.size() > i ? cfg_targetPivotValue.values[i] : 0;
+        }
+      }
+    }
+    else
+    {
+      m_codedPivotValue = NULL;
+      m_targetPivotValue = NULL;
+    }
+  }
+
+  if( m_kneeSEIEnabled && !m_kneeFunctionInformationSEI.m_kneeFunctionCancelFlag )
+  {
+    assert ( cfg_kneeSEINumKneePointsMinus1 >= 0 && cfg_kneeSEINumKneePointsMinus1 < 999 );
+    m_kneeFunctionInformationSEI.m_kneeSEIKneePointPairs.resize(cfg_kneeSEINumKneePointsMinus1+1);
+    for(Int i=0; i<(cfg_kneeSEINumKneePointsMinus1+1); i++)
+    {
+      TEncCfg::TEncSEIKneeFunctionInformation::KneePointPair &kpp=m_kneeFunctionInformationSEI.m_kneeSEIKneePointPairs[i];
+      kpp.inputKneePoint = cfg_kneeSEIInputKneePointValue.values.size()  > i ? cfg_kneeSEIInputKneePointValue.values[i]  : 1;
+      kpp.outputKneePoint = cfg_kneeSEIOutputKneePointValue.values.size() > i ? cfg_kneeSEIOutputKneePointValue.values[i] : 0;
+    }
+  }
+
+  if ( m_omniViewportSEIEnabled && !m_omniViewportSEICancelFlag )
+  {
+    assert ( m_omniViewportSEICntMinus1 >= 0 && m_omniViewportSEICntMinus1 < 16 );
+    m_omniViewportSEIAzimuthCentre.resize  (m_omniViewportSEICntMinus1+1);
+    m_omniViewportSEIElevationCentre.resize(m_omniViewportSEICntMinus1+1);
+    m_omniViewportSEITiltCentre.resize     (m_omniViewportSEICntMinus1+1);
+    m_omniViewportSEIHorRange.resize       (m_omniViewportSEICntMinus1+1);
+    m_omniViewportSEIVerRange.resize       (m_omniViewportSEICntMinus1+1);
+    for(Int i=0; i<(m_omniViewportSEICntMinus1+1); i++)
+    {
+      m_omniViewportSEIAzimuthCentre[i]   = cfg_omniViewportSEIAzimuthCentre  .values.size() > i ? cfg_omniViewportSEIAzimuthCentre  .values[i] : 0;
+      m_omniViewportSEIElevationCentre[i] = cfg_omniViewportSEIElevationCentre.values.size() > i ? cfg_omniViewportSEIElevationCentre.values[i] : 0;
+      m_omniViewportSEITiltCentre[i]      = cfg_omniViewportSEITiltCentre     .values.size() > i ? cfg_omniViewportSEITiltCentre     .values[i] : 0;
+      m_omniViewportSEIHorRange[i]        = cfg_omniViewportSEIHorRange       .values.size() > i ? cfg_omniViewportSEIHorRange       .values[i] : 0;
+      m_omniViewportSEIVerRange[i]        = cfg_omniViewportSEIVerRange       .values.size() > i ? cfg_omniViewportSEIVerRange       .values[i] : 0;
+    }
+  }
+
+  if(!m_rwpSEIRwpCancelFlag && m_rwpSEIEnabled)
+  {
+    assert ( m_rwpSEINumPackedRegions > 0 && m_rwpSEINumPackedRegions <= std::numeric_limits<UChar>::max() );
+    assert (cfg_rwpSEIRwpTransformType.values.size() == m_rwpSEINumPackedRegions  && cfg_rwpSEIRwpGuardBandFlag.values.size() == m_rwpSEINumPackedRegions    && cfg_rwpSEIProjRegionWidth.values.size() == m_rwpSEINumPackedRegions &&
+            cfg_rwpSEIProjRegionHeight.values.size() == m_rwpSEINumPackedRegions  && cfg_rwpSEIRwpSEIProjRegionTop.values.size() == m_rwpSEINumPackedRegions && cfg_rwpSEIProjRegionLeft.values.size() == m_rwpSEINumPackedRegions  &&
+            cfg_rwpSEIPackedRegionWidth.values.size() == m_rwpSEINumPackedRegions && cfg_rwpSEIPackedRegionHeight.values.size() == m_rwpSEINumPackedRegions  && cfg_rwpSEIPackedRegionTop.values.size() == m_rwpSEINumPackedRegions &&
+            cfg_rwpSEIPackedRegionLeft.values.size() == m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpTransformType.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpGuardBandFlag.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIProjRegionWidth.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIProjRegionHeight.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpSEIProjRegionTop.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIProjRegionLeft.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIPackedRegionWidth.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIPackedRegionHeight.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIPackedRegionTop.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIPackedRegionLeft.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpLeftGuardBandWidth.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpRightGuardBandWidth.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpTopGuardBandHeight.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpBottomGuardBandHeight.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpGuardBandNotUsedForPredFlag.resize(m_rwpSEINumPackedRegions);
+    m_rwpSEIRwpGuardBandType.resize(4*m_rwpSEINumPackedRegions);
+    for( Int i=0; i < m_rwpSEINumPackedRegions; i++ )
+    {
+      m_rwpSEIRwpTransformType[i]                     = cfg_rwpSEIRwpTransformType.values[i];
+      assert ( m_rwpSEIRwpTransformType[i] >= 0 && m_rwpSEIRwpTransformType[i] <= 7 );
+      m_rwpSEIRwpGuardBandFlag[i]                     = cfg_rwpSEIRwpGuardBandFlag.values[i];
+      m_rwpSEIProjRegionWidth[i]                      = cfg_rwpSEIProjRegionWidth.values[i];
+      m_rwpSEIProjRegionHeight[i]                     = cfg_rwpSEIProjRegionHeight.values[i];
+      m_rwpSEIRwpSEIProjRegionTop[i]                  = cfg_rwpSEIRwpSEIProjRegionTop.values[i];
+      m_rwpSEIProjRegionLeft[i]                       = cfg_rwpSEIProjRegionLeft.values[i];
+      m_rwpSEIPackedRegionWidth[i]                    = cfg_rwpSEIPackedRegionWidth.values[i];
+      m_rwpSEIPackedRegionHeight[i]                   = cfg_rwpSEIPackedRegionHeight.values[i];
+      m_rwpSEIPackedRegionTop[i]                      = cfg_rwpSEIPackedRegionTop.values[i];
+      m_rwpSEIPackedRegionLeft[i]                     = cfg_rwpSEIPackedRegionLeft.values[i]; 
+      if( m_rwpSEIRwpGuardBandFlag[i] )
+      {
+        m_rwpSEIRwpLeftGuardBandWidth[i]              =  cfg_rwpSEIRwpLeftGuardBandWidth.values[i];
+        m_rwpSEIRwpRightGuardBandWidth[i]             =  cfg_rwpSEIRwpRightGuardBandWidth.values[i];
+        m_rwpSEIRwpTopGuardBandHeight[i]              =  cfg_rwpSEIRwpTopGuardBandHeight.values[i];
+        m_rwpSEIRwpBottomGuardBandHeight[i]           =  cfg_rwpSEIRwpBottomGuardBandHeight.values[i];
+        assert ( m_rwpSEIRwpLeftGuardBandWidth[i] > 0 || m_rwpSEIRwpRightGuardBandWidth[i] > 0 || m_rwpSEIRwpTopGuardBandHeight[i] >0 || m_rwpSEIRwpBottomGuardBandHeight[i] >0 );
+        m_rwpSEIRwpGuardBandNotUsedForPredFlag[i]     =  cfg_rwpSEIRwpGuardBandNotUsedForPredFlag.values[i];
+        for( Int j=0; j < 4; j++ )
+        {
+          m_rwpSEIRwpGuardBandType[i*4 + j]           =  cfg_rwpSEIRwpGuardBandType.values[i*4 + j];
+        }
