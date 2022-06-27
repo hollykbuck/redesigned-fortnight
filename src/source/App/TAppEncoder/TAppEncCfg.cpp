@@ -1998,3 +1998,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
         {
           m_rwpSEIRwpGuardBandType[i*4 + j]           =  cfg_rwpSEIRwpGuardBandType.values[i*4 + j];
         }
+
+      }
+    }
+  }
+  if (!m_fisheyeVideoInfoSEI.m_fisheyeCancelFlag && m_fisheyeVIdeoInfoSEIEnabled)
+  {
+    if (cfg_fviSEIFisheyeNumActiveAreasMinus1 < 0 || cfg_fviSEIFisheyeNumActiveAreasMinus1 > 3)             { fprintf(stderr, "Bad number of FVI active areas\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCircularRegionCentreX.values.size() != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI circular region centre X entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCircularRegionCentreY.values.size() != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI circular region centre Y entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeRectRegionTop.values.size()         != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI rect region top entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeRectRegionLeft.values.size()        != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI rect region left entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeRectRegionWidth.values.size()       != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI rect region width entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeRectRegionHeight.values.size()      != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI rect region height entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCircularRegionRadius.values.size()  != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI circular region radius entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeSceneRadius.values.size()           != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI scene radius entries\n"); exit(EXIT_FAILURE); }
+
+    if (cfg_fviSEIFisheyeCameraCentreAzimuth.values.size()   != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre azimuth entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCameraCentreElevation.values.size() != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre elevation entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCameraCentreTilt.values.size()      != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre tilt entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCameraCentreOffsetX.values.size()   != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre offsetX entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCameraCentreOffsetY.values.size()   != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre offsetY entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeCameraCentreOffsetZ.values.size()   != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI camera centre offsetZ entries\n"); exit(EXIT_FAILURE); }
+    if (cfg_fviSEIFisheyeFieldOfView.values.size()           != cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1)  { fprintf(stderr, "Bad number of FVI field of view entries\n"); exit(EXIT_FAILURE); }
+
+    m_fisheyeVideoInfoSEI.m_fisheyeActiveAreas.resize(cfg_fviSEIFisheyeNumActiveAreasMinus1 + 1);
+
+    for (std::size_t i = 0, extractPolynomialIdx = 0; i < m_fisheyeVideoInfoSEI.m_fisheyeActiveAreas.size(); i++)
+    {
+      TComSEIFisheyeVideoInfo::ActiveAreaInfo &info=m_fisheyeVideoInfoSEI.m_fisheyeActiveAreas[i];
+      info.m_fisheyeCircularRegionCentreX           = cfg_fviSEIFisheyeCircularRegionCentreX.values[i];
+      info.m_fisheyeCircularRegionCentreY           = cfg_fviSEIFisheyeCircularRegionCentreY.values[i];
+      info.m_fisheyeRectRegionTop                   = cfg_fviSEIFisheyeRectRegionTop.values[i];
+      info.m_fisheyeRectRegionLeft                  = cfg_fviSEIFisheyeRectRegionLeft.values[i];
+      info.m_fisheyeRectRegionWidth                 = cfg_fviSEIFisheyeRectRegionWidth.values[i];
+      info.m_fisheyeRectRegionHeight                = cfg_fviSEIFisheyeRectRegionHeight.values[i];
+      info.m_fisheyeCircularRegionRadius            = cfg_fviSEIFisheyeCircularRegionRadius.values[i];
+      info.m_fisheyeSceneRadius                     = cfg_fviSEIFisheyeSceneRadius.values[i];
+
+      // check rectangular region is within the conformance window.
+      if ( (!( info.m_fisheyeRectRegionHeight >= 1 && m_confWinTop  <= info.m_fisheyeRectRegionTop  && info.m_fisheyeRectRegionTop  + info.m_fisheyeRectRegionHeight < m_sourceHeight -m_confWinBottom ) ) ||
+           (!( info.m_fisheyeRectRegionWidth  >= 1 && m_confWinLeft <= info.m_fisheyeRectRegionLeft && info.m_fisheyeRectRegionLeft + info.m_fisheyeRectRegionWidth  < m_sourceWidth  -m_confWinRight  ) ) )
+      {
+        fprintf(stderr, "Fisheye region is not within visible area\n");
+        exit (EXIT_FAILURE);
+      }
+
+      info.m_fisheyeCameraCentreAzimuth             = cfg_fviSEIFisheyeCameraCentreAzimuth.values[i];
+      info.m_fisheyeCameraCentreElevation           = cfg_fviSEIFisheyeCameraCentreElevation.values[i];
+      info.m_fisheyeCameraCentreTilt                = cfg_fviSEIFisheyeCameraCentreTilt.values[i];
+      info.m_fisheyeCameraCentreOffsetX             = cfg_fviSEIFisheyeCameraCentreOffsetX.values[i];
+      info.m_fisheyeCameraCentreOffsetY             = cfg_fviSEIFisheyeCameraCentreOffsetY.values[i];
+      info.m_fisheyeCameraCentreOffsetZ             = cfg_fviSEIFisheyeCameraCentreOffsetZ.values[i];
+
+      info.m_fisheyeFieldOfView                     = cfg_fviSEIFisheyeFieldOfView.values[i];
+      assert(cfg_fviSEIFisheyeNumPolynomialCoeffs.values[i] >= 0 && cfg_fviSEIFisheyeNumPolynomialCoeffs.values[i] <= 8);
+      info.m_fisheyePolynomialCoeff.resize(cfg_fviSEIFisheyeNumPolynomialCoeffs.values[i]);
+
+      for (Int j = 0; j < info.m_fisheyePolynomialCoeff.size(); j++)
+      {
+        assert(cfg_fviSEIFisheyePolynomialCoeff.values.size() > extractPolynomialIdx);
+        info.m_fisheyePolynomialCoeff[j] = cfg_fviSEIFisheyePolynomialCoeff.values[extractPolynomialIdx++];
+      }
+    }
+  }
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  m_ShutterFilterEnable = false;
+#endif
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  if (m_siiSEIEnabled)
+  {
+    assert(m_siiSEITimeScale >= 0 && m_siiSEITimeScale <= MAX_UINT);
+    UInt arraySize = (UInt)cfg_siiSEIInputNumUnitsInSI.values.size();
+    assert(arraySize > 0);
+    if (arraySize > 1)
+    {
+      m_siiSEISubLayerNumUnitsInSI.resize(arraySize);
+      for (Int i = 0; i < arraySize; i++)
+      {
+        m_siiSEISubLayerNumUnitsInSI[i] = cfg_siiSEIInputNumUnitsInSI.values[i];
+        assert(m_siiSEISubLayerNumUnitsInSI[i] >= 0 && m_siiSEISubLayerNumUnitsInSI[i] <= MAX_UINT);
+      }
+    }
+    else
+    {
+      m_siiSEINumUnitsInShutterInterval = cfg_siiSEIInputNumUnitsInSI.values[0];
+      assert(m_siiSEINumUnitsInShutterInterval >= 0 && m_siiSEINumUnitsInShutterInterval <= MAX_UINT);
+    }
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+    if (arraySize > 1 && m_siiSEISubLayerNumUnitsInSI[0] == 2 * m_siiSEISubLayerNumUnitsInSI[arraySize - 1])
+    {
+      m_ShutterFilterEnable = true;
+      const Double shutterAngle = 360.0;
+      Double fpsHFR = (Double)m_iFrameRate, fpsLFR = (Double)m_iFrameRate / 2.0;
+      UInt numUnitsHFR = (UInt)(((Double)m_siiSEITimeScale / fpsHFR) * (shutterAngle / 360.0));
+      UInt numUnitsLFR = (UInt)(((Double)m_siiSEITimeScale / fpsLFR) * (shutterAngle / 360.0));
+      for (Int i = 0; i < arraySize - 1; i++) m_siiSEISubLayerNumUnitsInSI[i] = numUnitsLFR;
+      m_siiSEISubLayerNumUnitsInSI[arraySize - 1] = numUnitsHFR;
+    }
+    else
+    {
