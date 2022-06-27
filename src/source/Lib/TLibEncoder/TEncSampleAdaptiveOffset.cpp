@@ -798,3 +798,103 @@ Void TEncSampleAdaptiveOffset::decideBlkParams(TComPic* pic, Bool* sliceEnabled,
   {
     if(allBlksDisabled)
     {
+      codedParams[ctuRsAddr].reset();
+      continue;
+    }
+
+    m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[ SAO_CABACSTATE_BLK_CUR ]);
+
+    //get merge list
+    SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES] = { NULL };
+    getMergeList(pic, ctuRsAddr, reconParams, mergeList);
+
+    minCost = MAX_DOUBLE;
+    for(Int mode=0; mode < NUM_SAO_MODES; mode++)
+    {
+      switch(mode)
+      {
+      case SAO_MODE_OFF:
+        {
+          continue; //not necessary, since all-off case will be tested in SAO_MODE_NEW case.
+        }
+        break;
+      case SAO_MODE_NEW:
+        {
+          deriveModeNewRDO(pic->getPicSym()->getSPS().getBitDepths(), ctuRsAddr, mergeList, sliceEnabled, blkStats, modeParam, modeCost, m_pppcRDSbacCoder, SAO_CABACSTATE_BLK_CUR);
+
+        }
+        break;
+      case SAO_MODE_MERGE:
+        {
+          deriveModeMergeRDO(pic->getPicSym()->getSPS().getBitDepths(), ctuRsAddr, mergeList, sliceEnabled, blkStats , modeParam, modeCost, m_pppcRDSbacCoder, SAO_CABACSTATE_BLK_CUR);
+        }
+        break;
+      default:
+        {
+          printf("Not a supported SAO mode\n");
+          assert(0);
+          exit(-1);
+        }
+      }
+
+      if(modeCost < minCost)
+      {
+        minCost = modeCost;
+        codedParams[ctuRsAddr] = modeParam;
+        m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[ SAO_CABACSTATE_BLK_NEXT ]);
+      }
+    } //mode
+
+    totalCost += minCost;
+
+    m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[ SAO_CABACSTATE_BLK_NEXT ]);
+
+    //apply reconstructed offsets
+    reconParams[ctuRsAddr] = codedParams[ctuRsAddr];
+    reconstructBlkSAOParam(reconParams[ctuRsAddr], mergeList);
+    offsetCTU(ctuRsAddr, srcYuv, resYuv, reconParams[ctuRsAddr], pic);
+  } //ctuRsAddr
+
+  if (!allBlksDisabled && (totalCost >= 0) && bTestSAODisableAtPictureLevel) //SAO has not beneficial in this case - disable it
+  {
+    for(Int ctuRsAddr = 0; ctuRsAddr < m_numCTUsPic; ctuRsAddr++)
+    {
+      codedParams[ctuRsAddr].reset();
+    }
+
+    for (UInt componentIndex = 0; componentIndex < MAX_NUM_COMPONENT; componentIndex++)
+    {
+      sliceEnabled[componentIndex] = false;
+    }
+
+    m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[ SAO_CABACSTATE_PIC_INIT ]);
+  }
+
+  if (saoEncodingRate > 0.0)
+  {
+    Int picTempLayer = pic->getSlice(0)->getDepth();
+    Int numCtusForSAOOff[MAX_NUM_COMPONENT];
+
+    for (Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+    {
+      numCtusForSAOOff[compIdx] = 0;
+      for(Int ctuRsAddr=0; ctuRsAddr< m_numCTUsPic; ctuRsAddr++)
+      {
+        if( reconParams[ctuRsAddr][compIdx].modeIdc == SAO_MODE_OFF)
+        {
+          numCtusForSAOOff[compIdx]++;
+        }
+      }
+    }
+    if (saoEncodingRateChroma > 0.0)
+    {
+      for (Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+      {
+        m_saoDisabledRate[compIdx][picTempLayer] = (Double)numCtusForSAOOff[compIdx]/(Double)m_numCTUsPic;
+      }
+    }
+    else if (picTempLayer == 0)
+    {
+      m_saoDisabledRate[COMPONENT_Y][0] = (Double)(numCtusForSAOOff[COMPONENT_Y]+numCtusForSAOOff[COMPONENT_Cb]+numCtusForSAOOff[COMPONENT_Cr])/(Double)(m_numCTUsPic*3);
+    }
+  }
