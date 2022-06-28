@@ -898,3 +898,103 @@ Void TEncSampleAdaptiveOffset::decideBlkParams(TComPic* pic, Bool* sliceEnabled,
       m_saoDisabledRate[COMPONENT_Y][0] = (Double)(numCtusForSAOOff[COMPONENT_Y]+numCtusForSAOOff[COMPONENT_Cb]+numCtusForSAOOff[COMPONENT_Cr])/(Double)(m_numCTUsPic*3);
     }
   }
+}
+
+
+Void TEncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const Int channelBitDepth, SAOStatData* statsDataTypes
+                        , Pel* srcBlk, Pel* orgBlk, Int srcStride, Int orgStride, Int width, Int height
+                        , Bool isLeftAvail,  Bool isRightAvail, Bool isAboveAvail, Bool isBelowAvail, Bool isAboveLeftAvail, Bool isAboveRightAvail
+                        , Bool isCalculatePreDeblockSamples
+                        )
+{
+  if(m_lineBufWidth != m_maxCUWidth)
+  {
+    m_lineBufWidth = m_maxCUWidth;
+
+    if (m_signLineBuf1)
+    {
+      delete[] m_signLineBuf1;
+      m_signLineBuf1 = NULL;
+    }
+    m_signLineBuf1 = new SChar[m_lineBufWidth+1];
+
+    if (m_signLineBuf2)
+    {
+      delete[] m_signLineBuf2;
+      m_signLineBuf2 = NULL;
+    }
+    m_signLineBuf2 = new SChar[m_lineBufWidth+1];
+  }
+
+  Int x,y, startX, startY, endX, endY, edgeType, firstLineStartX, firstLineEndX;
+  SChar signLeft, signRight, signDown;
+  Int64 *diff, *count;
+  Pel *srcLine, *orgLine;
+  Int* skipLinesR = m_skipLinesR[compIdx];
+  Int* skipLinesB = m_skipLinesB[compIdx];
+
+  for(Int typeIdx=0; typeIdx< NUM_SAO_NEW_TYPES; typeIdx++)
+  {
+    SAOStatData& statsData= statsDataTypes[typeIdx];
+    statsData.reset();
+
+    srcLine = srcBlk;
+    orgLine = orgBlk;
+    diff    = statsData.diff;
+    count   = statsData.count;
+    switch(typeIdx)
+    {
+    case SAO_TYPE_EO_0:
+      {
+        diff +=2;
+        count+=2;
+        endY   = (isBelowAvail) ? (height - skipLinesB[typeIdx]) : height;
+        startX = (!isCalculatePreDeblockSamples) ? (isLeftAvail  ? 0 : 1)
+                                                 : (isRightAvail ? (width - skipLinesR[typeIdx]) : (width - 1))
+                                                 ;
+        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR[typeIdx]) : (width - 1))
+                                                 : (isRightAvail ? width : (width - 1))
+                                                 ;
+        for (y=0; y<endY; y++)
+        {
+          signLeft = (SChar)sgn(srcLine[startX] - srcLine[startX-1]);
+          for (x=startX; x<endX; x++)
+          {
+            signRight =  (SChar)sgn(srcLine[x] - srcLine[x+1]);
+            edgeType  =  signRight + signLeft;
+            signLeft  = -signRight;
+
+            diff [edgeType] += (orgLine[x] - srcLine[x]);
+            count[edgeType] ++;
+          }
+          srcLine  += srcStride;
+          orgLine  += orgStride;
+        }
+        if(isCalculatePreDeblockSamples)
+        {
+          if(isBelowAvail)
+          {
+            startX = isLeftAvail  ? 0 : 1;
+            endX   = isRightAvail ? width : (width -1);
+
+            for(y=0; y<skipLinesB[typeIdx]; y++)
+            {
+              signLeft = (SChar)sgn(srcLine[startX] - srcLine[startX-1]);
+              for (x=startX; x<endX; x++)
+              {
+                signRight =  (SChar)sgn(srcLine[x] - srcLine[x+1]);
+                edgeType  =  signRight + signLeft;
+                signLeft  = -signRight;
+
+                diff [edgeType] += (orgLine[x] - srcLine[x]);
+                count[edgeType] ++;
+              }
+              srcLine  += srcStride;
+              orgLine  += orgStride;
+            }
+          }
+        }
+      }
+      break;
+    case SAO_TYPE_EO_90:
+      {
