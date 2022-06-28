@@ -2098,3 +2098,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
     }
     else
     {
+      printf("Warning: SII-processing is applied for multiple shutter intervals and number of LFR units should be 2 times of number of HFR units\n");
+    }
+#endif
+  }
+#endif
+  if(m_timeCodeSEIEnabled)
+  {
+    for(Int i = 0; i < m_timeCodeSEINumTs && i < MAX_TIMECODE_SEI_SETS; i++)
+    {
+      m_timeSetArray[i].clockTimeStampFlag    = cfg_timeCodeSeiTimeStampFlag        .values.size()>i ? cfg_timeCodeSeiTimeStampFlag        .values [i] : false;
+      m_timeSetArray[i].numUnitFieldBasedFlag = cfg_timeCodeSeiNumUnitFieldBasedFlag.values.size()>i ? cfg_timeCodeSeiNumUnitFieldBasedFlag.values [i] : 0;
+      m_timeSetArray[i].countingType          = cfg_timeCodeSeiCountingType         .values.size()>i ? cfg_timeCodeSeiCountingType         .values [i] : 0;
+      m_timeSetArray[i].fullTimeStampFlag     = cfg_timeCodeSeiFullTimeStampFlag    .values.size()>i ? cfg_timeCodeSeiFullTimeStampFlag    .values [i] : 0;
+      m_timeSetArray[i].discontinuityFlag     = cfg_timeCodeSeiDiscontinuityFlag    .values.size()>i ? cfg_timeCodeSeiDiscontinuityFlag    .values [i] : 0;
+      m_timeSetArray[i].cntDroppedFlag        = cfg_timeCodeSeiCntDroppedFlag       .values.size()>i ? cfg_timeCodeSeiCntDroppedFlag       .values [i] : 0;
+      m_timeSetArray[i].numberOfFrames        = cfg_timeCodeSeiNumberOfFrames       .values.size()>i ? cfg_timeCodeSeiNumberOfFrames       .values [i] : 0;
+      m_timeSetArray[i].secondsValue          = cfg_timeCodeSeiSecondsValue         .values.size()>i ? cfg_timeCodeSeiSecondsValue         .values [i] : 0;
+      m_timeSetArray[i].minutesValue          = cfg_timeCodeSeiMinutesValue         .values.size()>i ? cfg_timeCodeSeiMinutesValue         .values [i] : 0;
+      m_timeSetArray[i].hoursValue            = cfg_timeCodeSeiHoursValue           .values.size()>i ? cfg_timeCodeSeiHoursValue           .values [i] : 0;
+      m_timeSetArray[i].secondsFlag           = cfg_timeCodeSeiSecondsFlag          .values.size()>i ? cfg_timeCodeSeiSecondsFlag          .values [i] : 0;
+      m_timeSetArray[i].minutesFlag           = cfg_timeCodeSeiMinutesFlag          .values.size()>i ? cfg_timeCodeSeiMinutesFlag          .values [i] : 0;
+      m_timeSetArray[i].hoursFlag             = cfg_timeCodeSeiHoursFlag            .values.size()>i ? cfg_timeCodeSeiHoursFlag            .values [i] : 0;
+      m_timeSetArray[i].timeOffsetLength      = cfg_timeCodeSeiTimeOffsetLength     .values.size()>i ? cfg_timeCodeSeiTimeOffsetLength     .values [i] : 0;
+      m_timeSetArray[i].timeOffsetValue       = cfg_timeCodeSeiTimeOffsetValue      .values.size()>i ? cfg_timeCodeSeiTimeOffsetValue      .values [i] : 0;
+    }
+  }
+#if JVET_X0048_X0103_FILM_GRAIN
+  // Assigning the FGC SEI params from App to Lib
+  if (!m_fgcSEIEnabled && m_fgcSEIAnalysisEnabled)
+  {
+    fprintf(stderr, "FGC SEI must be enabled in order to perform film grain analysis!\n"); exit(EXIT_FAILURE);
+  }
+  if (m_fgcSEIEnabled)
+  {
+    if (m_iQP < 17 && m_fgcSEIAnalysisEnabled == true)
+    {
+      fprintf(stderr, "***************************************************************************************************************\n");
+      fprintf(stderr, "** WARNING: Film Grain Estimation is disabled for Qp<17! FGC SEI will use default parameters for film grain! **\n");
+      fprintf(stderr, "***************************************************************************************************************\n");
+      m_fgcSEIAnalysisEnabled = false;
+    }
+    if (m_iIntraPeriod < 1)
+    {
+      fprintf(stderr, "*************************************************************************************\n");
+      fprintf(stderr, "** WARNING: For low delay configuration, FGC SEI is inserted for first frame only! **\n");
+      fprintf(stderr, "*************************************************************************************\n");
+      m_fgcSEIPerPictureSEI = false;
+      m_fgcSEIPersistenceFlag = true;
+    }
+    else if (m_iIntraPeriod == 1)
+    {
+      fprintf(stderr, "*******************************************************************\n");
+      fprintf(stderr, "** WARNING: For Intra Period = 1, FGC SEI is inserted per frame! **\n");
+      fprintf(stderr, "*******************************************************************\n");
+      m_fgcSEIPerPictureSEI = true;
+      m_fgcSEIPersistenceFlag = false;
+    }
+    if (!m_fgcSEIPerPictureSEI && !m_fgcSEIPersistenceFlag)
+    {
+      fprintf(stderr, "*************************************************************************************\n");
+      fprintf(stderr, "** WARNING: SEIPerPictureSEI is set to 0, SEIPersistenceFlag needs to be set to 1! **\n");
+      fprintf(stderr, "*************************************************************************************\n");
+      m_fgcSEIPersistenceFlag = true;
+    }
+    else if (m_fgcSEIPerPictureSEI && m_fgcSEIPersistenceFlag)
+    {
+      fprintf(stderr, "*************************************************************************************\n");
+      fprintf(stderr, "** WARNING: SEIPerPictureSEI is set to 1, SEIPersistenceFlag needs to be set to 0! **\n");
+      fprintf(stderr, "*************************************************************************************\n");
+      m_fgcSEIPersistenceFlag = false;
+    }
+    UInt numModelCtr;
+    for (UInt c = 0; c <= 2; c++ )
+    {
+      if (m_fgcSEICompModelPresent[c])
+      {
+        numModelCtr = 0;
+        for (UInt i = 0; i <= m_fgcSEINumIntensityIntervalMinus1[c]; i++)
+        {
+          m_fgcSEIIntensityIntervalLowerBound[c][i] = UChar((cfg_FgcSEIIntensityIntervalLowerBoundComp[c].values.size() > i) ? cfg_FgcSEIIntensityIntervalLowerBoundComp[c].values[i] : 0);
+          m_fgcSEIIntensityIntervalUpperBound[c][i] = UChar((cfg_FgcSEIIntensityIntervalUpperBoundComp[c].values.size() > i) ? cfg_FgcSEIIntensityIntervalUpperBoundComp[c].values[i] : 0);
+          for (UInt j = 0; j <= m_fgcSEINumModelValuesMinus1[c]; j++)
+          {
+            m_fgcSEICompModelValue[c][i][j] = UInt((cfg_FgcSEICompModelValueComp[c].values.size() > numModelCtr) ? cfg_FgcSEICompModelValueComp[c].values[numModelCtr] : 0);
+            numModelCtr++;
+          }
+        }
+      }
+    }
+  }
+#endif
+  // check validity of input parameters
+  xCheckParameter();
+
+  // compute actual CU depth with respect to config depth and max transform size
+  UInt uiAddCUDepth  = 0;
+  while( (m_uiMaxCUWidth>>m_uiMaxCUDepth) > ( 1 << ( m_uiQuadtreeTULog2MinSize + uiAddCUDepth )  ) )
+  {
+    uiAddCUDepth++;
+  }
