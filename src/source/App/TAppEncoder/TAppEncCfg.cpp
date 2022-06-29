@@ -2198,3 +2198,103 @@ Bool TAppEncCfg::parseCfg( Int argc, TChar* argv[] )
   {
     uiAddCUDepth++;
   }
+
+  m_uiMaxTotalCUDepth = m_uiMaxCUDepth + uiAddCUDepth + getMaxCUDepthOffset(m_chromaFormatIDC, m_uiQuadtreeTULog2MinSize); // if minimum TU larger than 4x4, allow for additional part indices for 4:2:2 SubTUs.
+  m_uiLog2DiffMaxMinCodingBlockSize = m_uiMaxCUDepth - 1;
+
+  // print-out parameters
+  xPrintParameter();
+
+  return true;
+}
+
+
+// ====================================================================================================================
+// Private member functions
+// ====================================================================================================================
+
+Void TAppEncCfg::xCheckParameter()
+{
+  if (m_decodedPictureHashSEIType==HASHTYPE_NONE)
+  {
+    fprintf(stderr, "******************************************************************\n");
+    fprintf(stderr, "** WARNING: --SEIDecodedPictureHash is now disabled by default. **\n");
+    fprintf(stderr, "**          Automatic verification of decoded pictures by a     **\n");
+    fprintf(stderr, "**          decoder requires this option to be enabled.         **\n");
+    fprintf(stderr, "******************************************************************\n");
+  }
+  if( m_profile==Profile::NONE )
+  {
+    fprintf(stderr, "***************************************************************************\n");
+    fprintf(stderr, "** WARNING: For conforming bitstreams a valid Profile value must be set! **\n");
+    fprintf(stderr, "***************************************************************************\n");
+  }
+  if( m_level==Level::NONE )
+  {
+    fprintf(stderr, "***************************************************************************\n");
+    fprintf(stderr, "** WARNING: For conforming bitstreams a valid Level value must be set!   **\n");
+    fprintf(stderr, "***************************************************************************\n");
+  }
+
+  Bool check_failed = false; /* abort if there is a fatal configuration problem */
+#define xConfirmPara(a,b) check_failed |= confirmPara(a,b)
+
+  xConfirmPara(m_bitstreamFileName.empty(), "A bitstream file name must be specified (BitstreamFile)");
+  const UInt maxBitDepth=(m_chromaFormatIDC==CHROMA_400) ? m_internalBitDepth[CHANNEL_TYPE_LUMA] : std::max(m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA]);
+  xConfirmPara(m_bitDepthConstraint<maxBitDepth, "The internalBitDepth must not be greater than the bitDepthConstraint value");
+  xConfirmPara(m_chromaFormatConstraint<m_chromaFormatIDC, "The chroma format used must not be greater than the chromaFormatConstraint value");
+
+  switch (m_profile)
+  {
+    case Profile::MAINREXT:
+    case Profile::HIGHTHROUGHPUTREXT:
+      {
+        xConfirmPara(m_lowerBitRateConstraintFlag==false && m_intraConstraintFlag==false, "The lowerBitRateConstraint flag cannot be false when intraConstraintFlag is false");
+        xConfirmPara(m_cabacBypassAlignmentEnabledFlag && m_profile!=Profile::HIGHTHROUGHPUTREXT, "AlignCABACBeforeBypass must not be enabled unless the high throughput profile is being used.");
+        if (m_profile == Profile::MAINREXT)
+        {
+          const UInt intraIdx = m_intraConstraintFlag ? 1:0;
+          const UInt bitDepthIdx = (m_bitDepthConstraint == 8 ? 0 : (m_bitDepthConstraint ==10 ? 1 : (m_bitDepthConstraint == 12 ? 2 : (m_bitDepthConstraint == 16 ? 3 : 4 ))));
+          const UInt chromaFormatIdx = UInt(m_chromaFormatConstraint);
+          const Bool bValidProfile = (bitDepthIdx > 3 || chromaFormatIdx>3) ? false : (validRExtProfileNames[intraIdx][bitDepthIdx][chromaFormatIdx] != UI_NONE);
+          xConfirmPara(!bValidProfile, "Invalid intra constraint flag, bit depth constraint flag and chroma format constraint flag combination for a RExt profile");
+          const Bool bUsingGeneralRExtTools  = m_transformSkipRotationEnabledFlag        ||
+                                               m_transformSkipContextEnabledFlag         ||
+                                               m_rdpcmEnabledFlag[RDPCM_SIGNAL_IMPLICIT] ||
+                                               m_rdpcmEnabledFlag[RDPCM_SIGNAL_EXPLICIT] ||
+                                               !m_enableIntraReferenceSmoothing          ||
+                                               m_persistentRiceAdaptationEnabledFlag     ||
+                                               m_log2MaxTransformSkipBlockSize!=2;
+          const Bool bUsingChromaQPTool      = m_diffCuChromaQpOffsetDepth >= 0;
+          const Bool bUsingExtendedPrecision = m_extendedPrecisionProcessingFlag;
+
+          xConfirmPara((m_chromaFormatConstraint==CHROMA_420 || m_chromaFormatConstraint==CHROMA_400) && bUsingChromaQPTool, "CU Chroma QP adjustment cannot be used for 4:0:0 or 4:2:0 RExt profiles");
+          xConfirmPara(m_bitDepthConstraint != 16 && bUsingExtendedPrecision, "Extended precision can only be used in 16-bit RExt profiles");
+          if (!(m_chromaFormatConstraint == CHROMA_400 && m_bitDepthConstraint == 16) && m_chromaFormatConstraint!=CHROMA_444)
+          {
+            xConfirmPara(bUsingGeneralRExtTools, "Combination of tools and profiles are not possible in the specified RExt profile.");
+          }
+          xConfirmPara( m_onePictureOnlyConstraintFlag && m_chromaFormatConstraint!=CHROMA_444, "chroma format constraint must be 4:4:4 when one-picture-only constraint flag is 1");
+          xConfirmPara( m_onePictureOnlyConstraintFlag && m_bitDepthConstraint != 8 && m_bitDepthConstraint != 16, "bit depth constraint must be 8 or 16 when one-picture-only constraint flag is 1");
+          xConfirmPara( m_onePictureOnlyConstraintFlag && m_framesToBeEncoded > 1, "Number of frames to be encoded must be 1 when one-picture-only constraint flag is 1.");
+
+          if (!m_intraConstraintFlag && m_bitDepthConstraint==16 && m_chromaFormatConstraint==CHROMA_444)
+          {
+            fprintf(stderr, "********************************************************************************************************\n");
+            fprintf(stderr, "** WARNING: The RExt constraint flags describe a non standard combination (used for development only) **\n");
+            fprintf(stderr, "********************************************************************************************************\n");
+          }
+        }
+        else
+        {
+          xConfirmPara( m_chromaFormatConstraint != CHROMA_444, "chroma format constraint must be 4:4:4 in the High Throughput 4:4:4 16-bit Intra profile.");
+          const UInt intraIdx = m_intraConstraintFlag ? 1:0;
+          const UInt bitDepthIdx = (m_bitDepthConstraint == 8 ? 0 : (m_bitDepthConstraint ==10 ? 1 : (m_bitDepthConstraint == 14 ? 2 : (m_bitDepthConstraint == 16 ? 3 : 4 ))));
+          const Bool bValidProfile = (bitDepthIdx > 3) ? false : (validRExtHighThroughPutProfileNames[intraIdx][bitDepthIdx] != UI_NONE);
+          xConfirmPara(!bValidProfile, "Invalid intra constraint flag and bit depth constraint flag combination for a RExt high profile throughput profile");
+          if(bitDepthIdx < 2)
+          {
+            xConfirmPara((m_extendedPrecisionProcessingFlag || m_cabacBypassAlignmentEnabledFlag), "Invalid configuration for a RExt high throughput 8 and 10 bit profile");
+          }
+          if(bitDepthIdx == 3)
+          {
