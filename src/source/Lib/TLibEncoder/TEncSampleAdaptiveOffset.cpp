@@ -1098,3 +1098,103 @@ Void TEncSampleAdaptiveOffset::getBlkStats(const ComponentID compIdx, const Int 
         {
           edgeType = sgn(srcLine[x] - srcLineAbove[x-1]) - signUpLine[x+1];
           diff [edgeType] += (orgLine[x] - srcLine[x]);
+          count[edgeType] ++;
+        }
+        srcLine  += srcStride;
+        orgLine  += orgStride;
+
+
+        //middle lines
+        for (y=1; y<endY; y++)
+        {
+          srcLineBelow = srcLine + srcStride;
+
+          for (x=startX; x<endX; x++)
+          {
+            signDown = (SChar)sgn(srcLine[x] - srcLineBelow[x+1]);
+            edgeType = signDown + signUpLine[x];
+            diff [edgeType] += (orgLine[x] - srcLine[x]);
+            count[edgeType] ++;
+
+            signDownLine[x+1] = -signDown;
+          }
+          signDownLine[startX] = (SChar)sgn(srcLineBelow[startX] - srcLine[startX-1]);
+
+          signTmpLine  = signUpLine;
+          signUpLine   = signDownLine;
+          signDownLine = signTmpLine;
+
+          srcLine += srcStride;
+          orgLine += orgStride;
+        }
+        if(isCalculatePreDeblockSamples)
+        {
+          if(isBelowAvail)
+          {
+            startX = isLeftAvail  ? 0     : 1 ;
+            endX   = isRightAvail ? width : (width -1);
+
+            for(y=0; y<skipLinesB[typeIdx]; y++)
+            {
+              srcLineBelow = srcLine + srcStride;
+              srcLineAbove = srcLine - srcStride;
+
+              for (x=startX; x< endX; x++)
+              {
+                edgeType = sgn(srcLine[x] - srcLineBelow[x+1]) + sgn(srcLine[x] - srcLineAbove[x-1]);
+                diff [edgeType] += (orgLine[x] - srcLine[x]);
+                count[edgeType] ++;
+              }
+              srcLine  += srcStride;
+              orgLine  += orgStride;
+            }
+          }
+        }
+      }
+      break;
+    case SAO_TYPE_EO_45:
+      {
+        diff +=2;
+        count+=2;
+        SChar *signUpLine = m_signLineBuf1+1;
+
+        startX = (!isCalculatePreDeblockSamples) ? (isLeftAvail  ? 0 : 1)
+                                                 : (isRightAvail ? (width - skipLinesR[typeIdx]) : (width - 1))
+                                                 ;
+        endX   = (!isCalculatePreDeblockSamples) ? (isRightAvail ? (width - skipLinesR[typeIdx]) : (width - 1))
+                                                 : (isRightAvail ? width : (width - 1))
+                                                 ;
+        endY   = isBelowAvail ? (height - skipLinesB[typeIdx]) : (height - 1);
+
+        //prepare 2nd line upper sign
+        Pel* srcLineBelow = srcLine + srcStride;
+        for (x=startX-1; x<endX; x++)
+        {
+          signUpLine[x] = (SChar)sgn(srcLineBelow[x] - srcLine[x+1]);
+        }
+
+
+        //first line
+        Pel* srcLineAbove = srcLine - srcStride;
+        firstLineStartX = (!isCalculatePreDeblockSamples) ? (isAboveAvail ? startX : endX)
+                                                          : startX
+                                                          ;
+        firstLineEndX   = (!isCalculatePreDeblockSamples) ? ((!isRightAvail && isAboveRightAvail) ? width : endX)
+                                                          : endX
+                                                          ;
+        for(x=firstLineStartX; x<firstLineEndX; x++)
+        {
+          edgeType = sgn(srcLine[x] - srcLineAbove[x+1]) - signUpLine[x-1];
+          diff [edgeType] += (orgLine[x] - srcLine[x]);
+          count[edgeType] ++;
+        }
+
+        srcLine += srcStride;
+        orgLine += orgStride;
+
+        //middle lines
+        for (y=1; y<endY; y++)
+        {
+          srcLineBelow = srcLine + srcStride;
+
+          for(x=startX; x<endX; x++)
