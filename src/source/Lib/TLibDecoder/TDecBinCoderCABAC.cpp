@@ -98,3 +98,103 @@ TDecBinCABAC::copyState( const TDecBinIf* pcTDecBinIf )
 {
   const TDecBinCABAC* pcTDecBinCABAC = pcTDecBinIf->getTDecBinCABAC();
   m_uiRange   = pcTDecBinCABAC->m_uiRange;
+  m_uiValue   = pcTDecBinCABAC->m_uiValue;
+  m_bitsNeeded= pcTDecBinCABAC->m_bitsNeeded;
+}
+
+
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecBinCABAC::decodeBin( UInt& ruiBin, ContextModel &rcCtxModel, const TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecBinCABAC::decodeBin( UInt& ruiBin, ContextModel &rcCtxModel )
+#endif
+{
+#if DEBUG_CABAC_BINS
+  const UInt startingRange = m_uiRange;
+#endif
+
+  UInt uiLPS = TComCABACTables::sm_aucLPSTable[ rcCtxModel.getState() ][ ( m_uiRange >> 6 ) - 4 ];
+  m_uiRange -= uiLPS;
+  UInt scaledRange = m_uiRange << 7;
+
+  if( m_uiValue < scaledRange )
+  {
+    // MPS path
+    ruiBin = rcCtxModel.getMps();
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    TComCodingStatistics::UpdateCABACStat(whichStat, m_uiRange+uiLPS, m_uiRange, Int(ruiBin));
+#endif
+    rcCtxModel.updateMPS();
+
+    if ( scaledRange < ( 256 << 7 ) )
+    {
+      m_uiRange = scaledRange >> 6;
+      m_uiValue += m_uiValue;
+
+      if ( ++m_bitsNeeded == 0 )
+      {
+        m_bitsNeeded = -8;
+        m_uiValue += m_pcTComBitstream->readByte();
+      }
+    }
+  }
+  else
+  {
+    // LPS path
+    ruiBin      = 1 - rcCtxModel.getMps();
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    TComCodingStatistics::UpdateCABACStat(whichStat, m_uiRange+uiLPS, uiLPS, Int(ruiBin));
+#endif
+    Int numBits = TComCABACTables::sm_aucRenormTable[ uiLPS >> 3 ];
+    m_uiValue   = ( m_uiValue - scaledRange ) << numBits;
+    m_uiRange   = uiLPS << numBits;
+    rcCtxModel.updateLPS();
+
+    m_bitsNeeded += numBits;
+
+    if ( m_bitsNeeded >= 0 )
+    {
+      m_uiValue += m_pcTComBitstream->readByte() << m_bitsNeeded;
+      m_bitsNeeded -= 8;
+    }
+  }
+
+#if DEBUG_CABAC_BINS
+  if ((g_debugCounter + debugCabacBinWindow) >= debugCabacBinTargetLine)
+  {
+    std::cout << g_debugCounter << ": coding bin value " << ruiBin << ", range = [" << startingRange << "->" << m_uiRange << "]\n";
+  }
+
+  if (g_debugCounter >= debugCabacBinTargetLine)
+  {
+    UChar breakPointThis;
+    breakPointThis = 7;
+  }
+  if (g_debugCounter >= (debugCabacBinTargetLine + debugCabacBinWindow))
+  {
+    exit(0);
+  }
+  g_debugCounter++;
+#endif
+}
+
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecBinCABAC::decodeBinEP( UInt& ruiBin, const TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecBinCABAC::decodeBinEP( UInt& ruiBin )
+#endif
+{
+  if (m_uiRange == 256)
+  {
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    decodeAlignedBinsEP(ruiBin, 1, whichStat);
+#else
+    decodeAlignedBinsEP(ruiBin, 1);
+#endif
+    return;
+  }
+
+  m_uiValue += m_uiValue;
+
