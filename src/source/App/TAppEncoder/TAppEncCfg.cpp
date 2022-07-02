@@ -2498,3 +2498,103 @@ Void TAppEncCfg::xCheckParameter()
   }
 
   Bool tileFlag = (m_numTileColumnsMinus1 > 0 || m_numTileRowsMinus1 > 0 );
+  if (m_profile!=Profile::HIGHTHROUGHPUTREXT)
+  {
+    xConfirmPara( tileFlag && m_entropyCodingSyncEnabledFlag, "Tiles and entropy-coding-sync (Wavefronts) can not be applied together, except in the High Throughput Intra 4:4:4 16 profile");
+  }
+
+  xConfirmPara( m_sourceWidth  % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Picture width must be an integer multiple of the specified chroma subsampling");
+  xConfirmPara( m_sourceHeight % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Picture height must be an integer multiple of the specified chroma subsampling");
+
+  xConfirmPara( m_sourcePadding[0] % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Horizontal padding must be an integer multiple of the specified chroma subsampling");
+  xConfirmPara( m_sourcePadding[1] % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Vertical padding must be an integer multiple of the specified chroma subsampling");
+
+  xConfirmPara( m_confWinLeft   % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Left conformance window offset must be an integer multiple of the specified chroma subsampling");
+  xConfirmPara( m_confWinRight  % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Right conformance window offset must be an integer multiple of the specified chroma subsampling");
+  xConfirmPara( m_confWinTop    % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Top conformance window offset must be an integer multiple of the specified chroma subsampling");
+  xConfirmPara( m_confWinBottom % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Bottom conformance window offset must be an integer multiple of the specified chroma subsampling");
+
+  xConfirmPara( m_defaultDisplayWindowFlag && !m_vuiParametersPresentFlag, "VUI needs to be enabled for default display window");
+
+  if (m_defaultDisplayWindowFlag)
+  {
+    xConfirmPara( m_defDispWinLeftOffset   % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Left default display window offset must be an integer multiple of the specified chroma subsampling");
+    xConfirmPara( m_defDispWinRightOffset  % TComSPS::getWinUnitX(m_chromaFormatIDC) != 0, "Right default display window offset must be an integer multiple of the specified chroma subsampling");
+    xConfirmPara( m_defDispWinTopOffset    % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Top default display window offset must be an integer multiple of the specified chroma subsampling");
+    xConfirmPara( m_defDispWinBottomOffset % TComSPS::getWinUnitY(m_chromaFormatIDC) != 0, "Bottom default display window offset must be an integer multiple of the specified chroma subsampling");
+  }
+
+  // max CU width and height should be power of 2
+  UInt ui = m_uiMaxCUWidth;
+  while(ui)
+  {
+    ui >>= 1;
+    if( (ui & 1) == 1)
+    {
+      xConfirmPara( ui != 1 , "Width should be 2^n");
+    }
+  }
+  ui = m_uiMaxCUHeight;
+  while(ui)
+  {
+    ui >>= 1;
+    if( (ui & 1) == 1)
+    {
+      xConfirmPara( ui != 1 , "Height should be 2^n");
+    }
+  }
+
+  /* if this is an intra-only sequence, ie IntraPeriod=1, don't verify the GOP structure
+   * This permits the ability to omit a GOP structure specification */
+  if (m_iIntraPeriod == 1 && m_GOPList[0].m_POC == -1)
+  {
+    m_GOPList[0] = GOPEntry();
+    m_GOPList[0].m_QPFactor = 1;
+    m_GOPList[0].m_betaOffsetDiv2 = 0;
+    m_GOPList[0].m_tcOffsetDiv2 = 0;
+    m_GOPList[0].m_POC = 1;
+    m_GOPList[0].m_numRefPicsActive = 4;
+  }
+  else
+  {
+    xConfirmPara( m_intraConstraintFlag, "IntraConstraintFlag cannot be 1 for inter sequences");
+  }
+
+  Bool verifiedGOP=false;
+  Bool errorGOP=false;
+  Int checkGOP=1;
+  Int numRefs = m_isField ? 2 : 1;
+  Int refList[MAX_NUM_REF_PICS+1];
+  refList[0]=0;
+  if(m_isField)
+  {
+    refList[1] = 1;
+  }
+  Bool isOK[MAX_GOP];
+  for(Int i=0; i<MAX_GOP; i++)
+  {
+    isOK[i]=false;
+  }
+  Int numOK=0;
+  xConfirmPara( m_iIntraPeriod >=0&&(m_iIntraPeriod%m_iGOPSize!=0), "Intra period must be a multiple of GOPSize, or -1" );
+
+  for(Int i=0; i<m_iGOPSize; i++)
+  {
+    if(m_GOPList[i].m_POC==m_iGOPSize)
+    {
+      xConfirmPara( m_GOPList[i].m_temporalId!=0 , "The last frame in each GOP must have temporal ID = 0 " );
+    }
+  }
+
+  if ( (m_iIntraPeriod != 1) && !m_loopFilterOffsetInPPS && (!m_bLoopFilterDisable) )
+  {
+    for(Int i=0; i<m_iGOPSize; i++)
+    {
+      xConfirmPara( (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2) < -6 || (m_GOPList[i].m_betaOffsetDiv2 + m_loopFilterBetaOffsetDiv2) > 6, "Loop Filter Beta Offset div. 2 for one of the GOP entries exceeds supported range (-6 to 6)" );
+      xConfirmPara( (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2) < -6 || (m_GOPList[i].m_tcOffsetDiv2 + m_loopFilterTcOffsetDiv2) > 6, "Loop Filter Tc Offset div. 2 for one of the GOP entries exceeds supported range (-6 to 6)" );
+    }
+  }
+
+  for(Int i=0; i<m_iGOPSize; i++)
+  {
+    xConfirmPara( abs(m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
