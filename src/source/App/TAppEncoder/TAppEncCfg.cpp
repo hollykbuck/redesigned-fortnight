@@ -2598,3 +2598,103 @@ Void TAppEncCfg::xCheckParameter()
   for(Int i=0; i<m_iGOPSize; i++)
   {
     xConfirmPara( abs(m_GOPList[i].m_CbQPoffset               ) > 12, "Cb QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    xConfirmPara( abs(m_GOPList[i].m_CbQPoffset + m_cbQpOffset) > 12, "Cb QP Offset for one of the GOP entries, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+    xConfirmPara( abs(m_GOPList[i].m_CrQPoffset               ) > 12, "Cr QP Offset for one of the GOP entries exceeds supported range (-12 to 12)" );
+    xConfirmPara( abs(m_GOPList[i].m_CrQPoffset + m_crQpOffset) > 12, "Cr QP Offset for one of the GOP entries, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+  }
+  xConfirmPara( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]                 ) > 12, "Intra/periodic Cb QP Offset exceeds supported range (-12 to 12)" );
+  xConfirmPara( abs(m_sliceChromaQpOffsetIntraOrPeriodic[0]  + m_cbQpOffset ) > 12, "Intra/periodic Cb QP Offset, when combined with the PPS Cb offset, exceeds supported range (-12 to 12)" );
+  xConfirmPara( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]                 ) > 12, "Intra/periodic Cr QP Offset exceeds supported range (-12 to 12)" );
+  xConfirmPara( abs(m_sliceChromaQpOffsetIntraOrPeriodic[1]  + m_crQpOffset ) > 12, "Intra/periodic Cr QP Offset, when combined with the PPS Cr offset, exceeds supported range (-12 to 12)" );
+
+  m_extraRPSs=0;
+  //start looping through frames in coding order until we can verify that the GOP structure is correct.
+  while(!verifiedGOP&&!errorGOP)
+  {
+    Int curGOP = (checkGOP-1)%m_iGOPSize;
+    Int curPOC = ((checkGOP-1)/m_iGOPSize)*m_iGOPSize + m_GOPList[curGOP].m_POC;
+    if(m_GOPList[curGOP].m_POC<0)
+    {
+      printf("\nError: found fewer Reference Picture Sets than GOPSize\n");
+      errorGOP=true;
+    }
+    else
+    {
+      //check that all reference pictures are available, or have a POC < 0 meaning they might be available in the next GOP.
+      Bool beforeI = false;
+      for(Int i = 0; i< m_GOPList[curGOP].m_numRefPics; i++)
+      {
+        Int absPOC = curPOC+m_GOPList[curGOP].m_referencePics[i];
+        if(absPOC < 0)
+        {
+          beforeI=true;
+        }
+        else
+        {
+          Bool found=false;
+          for(Int j=0; j<numRefs; j++)
+          {
+            if(refList[j]==absPOC)
+            {
+              found=true;
+              for(Int k=0; k<m_iGOPSize; k++)
+              {
+                if(absPOC%m_iGOPSize == m_GOPList[k].m_POC%m_iGOPSize)
+                {
+                  if(m_GOPList[k].m_temporalId==m_GOPList[curGOP].m_temporalId)
+                  {
+                    m_GOPList[k].m_refPic = true;
+                  }
+                  m_GOPList[curGOP].m_usedByCurrPic[i]=m_GOPList[k].m_temporalId<=m_GOPList[curGOP].m_temporalId;
+                }
+              }
+            }
+          }
+          if(!found)
+          {
+            printf("\nError: ref pic %d is not available for GOP frame %d\n",m_GOPList[curGOP].m_referencePics[i],curGOP+1);
+            errorGOP=true;
+          }
+        }
+      }
+      if(!beforeI&&!errorGOP)
+      {
+        //all ref frames were present
+        if(!isOK[curGOP])
+        {
+          numOK++;
+          isOK[curGOP]=true;
+          if(numOK==m_iGOPSize)
+          {
+            verifiedGOP=true;
+          }
+        }
+      }
+      else
+      {
+        //create a new GOPEntry for this frame containing all the reference pictures that were available (POC > 0)
+#if DPB_ENCODER_USAGE_CHECK
+        assert(m_iGOPSize+m_extraRPSs < MAX_GOP);
+#endif
+        m_GOPList[m_iGOPSize+m_extraRPSs]=m_GOPList[curGOP];
+        Int newRefs=0;
+        for(Int i = 0; i< m_GOPList[curGOP].m_numRefPics; i++)
+        {
+          Int absPOC = curPOC+m_GOPList[curGOP].m_referencePics[i];
+          if(absPOC>=0)
+          {
+            m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[newRefs]=m_GOPList[curGOP].m_referencePics[i];
+            m_GOPList[m_iGOPSize+m_extraRPSs].m_usedByCurrPic[newRefs]=m_GOPList[curGOP].m_usedByCurrPic[i];
+            newRefs++;
+          }
+        }
+        Int numPrefRefs = m_GOPList[curGOP].m_numRefPicsActive;
+
+        for(Int offset = -1; offset>-checkGOP; offset--)
+        {
+          //step backwards in coding order and include any extra available pictures we might find useful to replace the ones with POC < 0.
+          Int offGOP = (checkGOP-1+offset)%m_iGOPSize;
+          Int offPOC = ((checkGOP-1+offset)/m_iGOPSize)*m_iGOPSize + m_GOPList[offGOP].m_POC;
+          if(offPOC>=0&&m_GOPList[offGOP].m_temporalId<=m_GOPList[curGOP].m_temporalId)
+          {
+            Bool newRef=false;
