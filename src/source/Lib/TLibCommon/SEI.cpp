@@ -98,3 +98,103 @@ const std::vector<SEI::PayloadType> SEI::suffix_sei_messages({
   SEI::POST_FILTER_HINT,
   SEI::DECODED_PICTURE_HASH,
   SEI::CODED_REGION_COMPLETION,
+});
+
+const std::vector<SEI::PayloadType> SEI::regional_nesting_sei_messages({
+  SEI::USER_DATA_REGISTERED_ITU_T_T35,
+  SEI::USER_DATA_UNREGISTERED,
+  SEI::FILM_GRAIN_CHARACTERISTICS,
+  SEI::POST_FILTER_HINT,
+  SEI::TONE_MAPPING_INFO,
+  SEI::CHROMA_RESAMPLING_FILTER_HINT,
+  SEI::KNEE_FUNCTION_INFO,
+  SEI::COLOUR_REMAPPING_INFO,
+  SEI::CONTENT_COLOUR_VOLUME,
+});
+
+SEIMessages getSeisByType(SEIMessages &seiList, SEI::PayloadType seiType)
+{
+  SEIMessages result;
+
+  for (SEIMessages::iterator it=seiList.begin(); it!=seiList.end(); it++)
+  {
+    if ((*it)->payloadType() == seiType)
+    {
+      result.push_back(*it);
+    }
+  }
+  return result;
+}
+
+SEIMessages extractSeisByType(SEIMessages &seiList, SEI::PayloadType seiType)
+{
+  SEIMessages result;
+
+  SEIMessages::iterator it=seiList.begin();
+  while ( it!=seiList.end() )
+  {
+    if ((*it)->payloadType() == seiType)
+    {
+      result.push_back(*it);
+      it = seiList.erase(it);
+    }
+    else
+    {
+      it++;
+    }
+  }
+  return result;
+}
+
+
+Void deleteSEIs (SEIMessages &seiList)
+{
+  for (SEIMessages::iterator it=seiList.begin(); it!=seiList.end(); it++)
+  {
+    delete (*it);
+  }
+  seiList.clear();
+}
+
+void SEIBufferingPeriod::copyTo (SEIBufferingPeriod& target)
+{
+  target.m_bpSeqParameterSetId = m_bpSeqParameterSetId;
+  target.m_rapCpbParamsPresentFlag = m_rapCpbParamsPresentFlag;
+  target.m_cpbDelayOffset = m_cpbDelayOffset;
+  target.m_dpbDelayOffset = m_dpbDelayOffset;
+  target.m_concatenationFlag = m_concatenationFlag;
+  target.m_auCpbRemovalDelayDelta = m_auCpbRemovalDelayDelta;
+  ::memcpy(target.m_initialCpbRemovalDelay, m_initialCpbRemovalDelay, sizeof(m_initialCpbRemovalDelay));
+  ::memcpy(target.m_initialCpbRemovalDelayOffset, m_initialCpbRemovalDelayOffset, sizeof(m_initialCpbRemovalDelayOffset));
+  ::memcpy(target.m_initialAltCpbRemovalDelay, m_initialAltCpbRemovalDelay, sizeof(m_initialAltCpbRemovalDelay));
+  ::memcpy(target.m_initialAltCpbRemovalDelayOffset, m_initialAltCpbRemovalDelayOffset, sizeof(m_initialAltCpbRemovalDelayOffset));
+}
+
+void SEIPictureTiming::copyTo (SEIPictureTiming& target)
+{
+  target.m_picStruct = m_picStruct;
+  target.m_sourceScanType = m_sourceScanType;
+  target.m_duplicateFlag = m_duplicateFlag;
+
+  target.m_auCpbRemovalDelay = m_auCpbRemovalDelay;
+  target.m_picDpbOutputDelay = m_picDpbOutputDelay;
+  target.m_picDpbOutputDuDelay = m_picDpbOutputDuDelay;
+  target.m_numDecodingUnitsMinus1 = m_numDecodingUnitsMinus1;
+  target.m_duCommonCpbRemovalDelayFlag = m_duCommonCpbRemovalDelayFlag;
+  target.m_duCommonCpbRemovalDelayMinus1 = m_duCommonCpbRemovalDelayMinus1;
+
+  target.m_numNalusInDuMinus1 = m_numNalusInDuMinus1;
+  target.m_duCpbRemovalDelayMinus1 = m_duCpbRemovalDelayMinus1;
+}
+
+std::ostream& operator<<(std::ostream  &os, RNSEIWindow const &region)
+{
+  os << region.getRegionId() << " " << region.getWindowLeftOffset() <<
+      region.getWindowRightOffset() << " " << region.getWindowTopOffset() << " "  <<
+      region.getWindowBottomOffset() << "\n";
+  return os;
+}
+
+SEIRegionalNesting::~SEIRegionalNesting()
+{
+  // Delete SEI messages
