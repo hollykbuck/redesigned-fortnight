@@ -2698,3 +2698,103 @@ Void TAppEncCfg::xCheckParameter()
           if(offPOC>=0&&m_GOPList[offGOP].m_temporalId<=m_GOPList[curGOP].m_temporalId)
           {
             Bool newRef=false;
+            for(Int i=0; i<numRefs; i++)
+            {
+              if(refList[i]==offPOC)
+              {
+                newRef=true;
+              }
+            }
+            for(Int i=0; i<newRefs; i++)
+            {
+              if(m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[i]==offPOC-curPOC)
+              {
+                newRef=false;
+              }
+            }
+            if(newRef)
+            {
+              Int insertPoint=newRefs;
+              //this picture can be added, find appropriate place in list and insert it.
+              if(m_GOPList[offGOP].m_temporalId==m_GOPList[curGOP].m_temporalId)
+              {
+                m_GOPList[offGOP].m_refPic = true;
+              }
+              for(Int j=0; j<newRefs; j++)
+              {
+                if(m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[j]<offPOC-curPOC||m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[j]>0)
+                {
+                  insertPoint = j;
+                  break;
+                }
+              }
+              Int prev = offPOC-curPOC;
+              Int prevUsed = m_GOPList[offGOP].m_temporalId<=m_GOPList[curGOP].m_temporalId;
+              for(Int j=insertPoint; j<newRefs+1; j++)
+              {
+                Int newPrev = m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[j];
+                Int newUsed = m_GOPList[m_iGOPSize+m_extraRPSs].m_usedByCurrPic[j];
+                m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[j]=prev;
+                m_GOPList[m_iGOPSize+m_extraRPSs].m_usedByCurrPic[j]=prevUsed;
+                prevUsed=newUsed;
+                prev=newPrev;
+              }
+              newRefs++;
+            }
+          }
+          if(newRefs>=numPrefRefs)
+          {
+            break;
+          }
+        }
+        m_GOPList[m_iGOPSize+m_extraRPSs].m_numRefPics=newRefs;
+        m_GOPList[m_iGOPSize+m_extraRPSs].m_POC = curPOC;
+        if (m_extraRPSs == 0)
+        {
+          m_GOPList[m_iGOPSize+m_extraRPSs].m_interRPSPrediction = 0;
+          m_GOPList[m_iGOPSize+m_extraRPSs].m_numRefIdc = 0;
+        }
+        else
+        {
+          Int rIdx =  m_iGOPSize + m_extraRPSs - 1;
+          Int refPOC = m_GOPList[rIdx].m_POC;
+          Int refPics = m_GOPList[rIdx].m_numRefPics;
+          Int newIdc=0;
+          for(Int i = 0; i<= refPics; i++)
+          {
+            Int deltaPOC = ((i != refPics)? m_GOPList[rIdx].m_referencePics[i] : 0);  // check if the reference abs POC is >= 0
+            Int absPOCref = refPOC+deltaPOC;
+            Int refIdc = 0;
+            for (Int j = 0; j < m_GOPList[m_iGOPSize+m_extraRPSs].m_numRefPics; j++)
+            {
+              if ( (absPOCref - curPOC) == m_GOPList[m_iGOPSize+m_extraRPSs].m_referencePics[j])
+              {
+                if (m_GOPList[m_iGOPSize+m_extraRPSs].m_usedByCurrPic[j])
+                {
+                  refIdc = 1;
+                }
+                else
+                {
+                  refIdc = 2;
+                }
+              }
+            }
+            m_GOPList[m_iGOPSize+m_extraRPSs].m_refIdc[newIdc]=refIdc;
+            newIdc++;
+          }
+          m_GOPList[m_iGOPSize+m_extraRPSs].m_interRPSPrediction = 1;
+          m_GOPList[m_iGOPSize+m_extraRPSs].m_numRefIdc = newIdc;
+          m_GOPList[m_iGOPSize+m_extraRPSs].m_deltaRPS = refPOC - m_GOPList[m_iGOPSize+m_extraRPSs].m_POC;
+        }
+        curGOP=m_iGOPSize+m_extraRPSs;
+        m_extraRPSs++;
+      }
+      numRefs=0;
+      for(Int i = 0; i< m_GOPList[curGOP].m_numRefPics; i++)
+      {
+        Int absPOC = curPOC+m_GOPList[curGOP].m_referencePics[i];
+        if(absPOC >= 0)
+        {
+          refList[numRefs]=absPOC;
+          numRefs++;
+        }
