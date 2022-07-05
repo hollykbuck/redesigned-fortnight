@@ -2798,3 +2798,103 @@ Void TAppEncCfg::xCheckParameter()
           refList[numRefs]=absPOC;
           numRefs++;
         }
+      }
+      refList[numRefs]=curPOC;
+      numRefs++;
+    }
+    checkGOP++;
+  }
+  xConfirmPara(errorGOP,"Invalid GOP structure given");
+  m_maxTempLayer = 1;
+  for(Int i=0; i<m_iGOPSize; i++)
+  {
+    if(m_GOPList[i].m_temporalId >= m_maxTempLayer)
+    {
+      m_maxTempLayer = m_GOPList[i].m_temporalId+1;
+    }
+    xConfirmPara(m_GOPList[i].m_sliceType!='B' && m_GOPList[i].m_sliceType!='P' && m_GOPList[i].m_sliceType!='I', "Slice type must be equal to B or P or I");
+  }
+  for(Int i=0; i<MAX_TLAYER; i++)
+  {
+    m_numReorderPics[i] = 0;
+    m_maxDecPicBuffering[i] = 1;
+  }
+  for(Int i=0; i<m_iGOPSize; i++)
+  {
+    if(m_GOPList[i].m_numRefPics+1 > m_maxDecPicBuffering[m_GOPList[i].m_temporalId])
+    {
+      m_maxDecPicBuffering[m_GOPList[i].m_temporalId] = m_GOPList[i].m_numRefPics + 1;
+    }
+    Int highestDecodingNumberWithLowerPOC = 0;
+    for(Int j=0; j<m_iGOPSize; j++)
+    {
+      if(m_GOPList[j].m_POC <= m_GOPList[i].m_POC)
+      {
+        highestDecodingNumberWithLowerPOC = j;
+      }
+    }
+    Int numReorder = 0;
+    for(Int j=0; j<highestDecodingNumberWithLowerPOC; j++)
+    {
+      if(m_GOPList[j].m_temporalId <= m_GOPList[i].m_temporalId &&
+        m_GOPList[j].m_POC > m_GOPList[i].m_POC)
+      {
+        numReorder++;
+      }
+    }
+    if(numReorder > m_numReorderPics[m_GOPList[i].m_temporalId])
+    {
+      m_numReorderPics[m_GOPList[i].m_temporalId] = numReorder;
+    }
+  }
+  for(Int i=0; i<MAX_TLAYER-1; i++)
+  {
+    // a lower layer can not have higher value of m_numReorderPics than a higher layer
+    if(m_numReorderPics[i+1] < m_numReorderPics[i])
+    {
+      m_numReorderPics[i+1] = m_numReorderPics[i];
+    }
+    // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] - 1, inclusive
+    if(m_numReorderPics[i] > m_maxDecPicBuffering[i] - 1)
+    {
+      m_maxDecPicBuffering[i] = m_numReorderPics[i] + 1;
+    }
+    // a lower layer can not have higher value of m_uiMaxDecPicBuffering than a higher layer
+    if(m_maxDecPicBuffering[i+1] < m_maxDecPicBuffering[i])
+    {
+      m_maxDecPicBuffering[i+1] = m_maxDecPicBuffering[i];
+    }
+  }
+
+  // the value of num_reorder_pics[ i ] shall be in the range of 0 to max_dec_pic_buffering[ i ] -  1, inclusive
+  if(m_numReorderPics[MAX_TLAYER-1] > m_maxDecPicBuffering[MAX_TLAYER-1] - 1)
+  {
+    m_maxDecPicBuffering[MAX_TLAYER-1] = m_numReorderPics[MAX_TLAYER-1] + 1;
+  }
+
+#if DPB_ENCODER_USAGE_CHECK
+  // Check DPB Usage:
+  Int dpbSize=profileLevelTierFeatures.getMaxDPBNumFrames(m_sourceWidth*m_sourceHeight);
+  if (dpbSize!=-1)
+  {
+    Int dpbUsage=xDPBUsage(0);
+
+    if (dpbUsage > dpbSize)
+    {
+      std::cout << "WARNING - DPB SIZE (" << dpbSize << " pictures) IS LIKELY TO HAVE BEEN EXCEEDED:\n";
+      xDPBUsage(&(std::cout));
+    }
+  }
+#endif
+
+  if(m_vuiParametersPresentFlag && m_bitstreamRestrictionFlag)
+  {
+    Int PicSizeInSamplesY =  m_sourceWidth * m_sourceHeight;
+    if(tileFlag)
+    {
+      Int maxTileWidth = 0;
+      Int maxTileHeight = 0;
+      Int widthInCU = (m_sourceWidth % m_uiMaxCUWidth) ? m_sourceWidth/m_uiMaxCUWidth + 1: m_sourceWidth/m_uiMaxCUWidth;
+      Int heightInCU = (m_sourceHeight % m_uiMaxCUHeight) ? m_sourceHeight/m_uiMaxCUHeight + 1: m_sourceHeight/m_uiMaxCUHeight;
+      if(m_tileUniformSpacingFlag)
+      {
