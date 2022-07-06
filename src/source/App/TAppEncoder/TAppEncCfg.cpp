@@ -2898,3 +2898,103 @@ Void TAppEncCfg::xCheckParameter()
       Int heightInCU = (m_sourceHeight % m_uiMaxCUHeight) ? m_sourceHeight/m_uiMaxCUHeight + 1: m_sourceHeight/m_uiMaxCUHeight;
       if(m_tileUniformSpacingFlag)
       {
+        maxTileWidth = m_uiMaxCUWidth*((widthInCU+m_numTileColumnsMinus1)/(m_numTileColumnsMinus1+1));
+        maxTileHeight = m_uiMaxCUHeight*((heightInCU+m_numTileRowsMinus1)/(m_numTileRowsMinus1+1));
+        // if only the last tile-row is one treeblock higher than the others
+        // the maxTileHeight becomes smaller if the last row of treeblocks has lower height than the others
+        if(!((heightInCU-1)%(m_numTileRowsMinus1+1)))
+        {
+          maxTileHeight = maxTileHeight - m_uiMaxCUHeight + (m_sourceHeight % m_uiMaxCUHeight);
+        }
+        // if only the last tile-column is one treeblock wider than the others
+        // the maxTileWidth becomes smaller if the last column of treeblocks has lower width than the others
+        if(!((widthInCU-1)%(m_numTileColumnsMinus1+1)))
+        {
+          maxTileWidth = maxTileWidth - m_uiMaxCUWidth + (m_sourceWidth % m_uiMaxCUWidth);
+        }
+      }
+      else // not uniform spacing
+      {
+        if(m_numTileColumnsMinus1<1)
+        {
+          maxTileWidth = m_sourceWidth;
+        }
+        else
+        {
+          Int accColumnWidth = 0;
+          for(Int col=0; col<(m_numTileColumnsMinus1); col++)
+          {
+            maxTileWidth = m_tileColumnWidth[col]>maxTileWidth ? m_tileColumnWidth[col]:maxTileWidth;
+            accColumnWidth += m_tileColumnWidth[col];
+          }
+          maxTileWidth = (widthInCU-accColumnWidth)>maxTileWidth ? m_uiMaxCUWidth*(widthInCU-accColumnWidth):m_uiMaxCUWidth*maxTileWidth;
+        }
+        if(m_numTileRowsMinus1<1)
+        {
+          maxTileHeight = m_sourceHeight;
+        }
+        else
+        {
+          Int accRowHeight = 0;
+          for(Int row=0; row<(m_numTileRowsMinus1); row++)
+          {
+            maxTileHeight = m_tileRowHeight[row]>maxTileHeight ? m_tileRowHeight[row]:maxTileHeight;
+            accRowHeight += m_tileRowHeight[row];
+          }
+          maxTileHeight = (heightInCU-accRowHeight)>maxTileHeight ? m_uiMaxCUHeight*(heightInCU-accRowHeight):m_uiMaxCUHeight*maxTileHeight;
+        }
+      }
+      Int maxSizeInSamplesY = maxTileWidth*maxTileHeight;
+      m_minSpatialSegmentationIdc = 4*PicSizeInSamplesY/maxSizeInSamplesY-4;
+    }
+    else if(m_entropyCodingSyncEnabledFlag)
+    {
+      m_minSpatialSegmentationIdc = 4*PicSizeInSamplesY/((2*m_sourceHeight+m_sourceWidth)*m_uiMaxCUHeight)-4;
+    }
+    else if(m_sliceMode == FIXED_NUMBER_OF_CTU)
+    {
+      m_minSpatialSegmentationIdc = 4*PicSizeInSamplesY/(m_sliceArgument*m_uiMaxCUWidth*m_uiMaxCUHeight)-4;
+    }
+    else
+    {
+      m_minSpatialSegmentationIdc = 0;
+    }
+  }
+
+  if (m_toneMappingInfoSEIEnabled)
+  {
+    xConfirmPara( m_toneMapCodedDataBitDepth < 8 || m_toneMapCodedDataBitDepth > 14 , "SEIToneMapCodedDataBitDepth must be in rage 8 to 14");
+    xConfirmPara( m_toneMapTargetBitDepth < 1 || (m_toneMapTargetBitDepth > 16 && m_toneMapTargetBitDepth < 255) , "SEIToneMapTargetBitDepth must be in rage 1 to 16 or equal to 255");
+    xConfirmPara( m_toneMapModelId < 0 || m_toneMapModelId > 4 , "SEIToneMapModelId must be in rage 0 to 4");
+    xConfirmPara( m_cameraIsoSpeedValue == 0, "SEIToneMapCameraIsoSpeedValue shall not be equal to 0");
+    xConfirmPara( m_exposureIndexValue  == 0, "SEIToneMapExposureIndexValue shall not be equal to 0");
+    xConfirmPara( m_extendedRangeWhiteLevel < 100, "SEIToneMapExtendedRangeWhiteLevel should be greater than or equal to 100");
+    xConfirmPara( m_nominalBlackLevelLumaCodeValue >= m_nominalWhiteLevelLumaCodeValue, "SEIToneMapNominalWhiteLevelLumaCodeValue shall be greater than SEIToneMapNominalBlackLevelLumaCodeValue");
+    xConfirmPara( m_extendedWhiteLevelLumaCodeValue < m_nominalWhiteLevelLumaCodeValue, "SEIToneMapExtendedWhiteLevelLumaCodeValue shall be greater than or equal to SEIToneMapNominalWhiteLevelLumaCodeValue");
+  }
+
+  if (m_kneeSEIEnabled && !m_kneeFunctionInformationSEI.m_kneeFunctionCancelFlag)
+  {
+    Int kneeSEINumKneePointsMinus1=Int(m_kneeFunctionInformationSEI.m_kneeSEIKneePointPairs.size())-1;
+    xConfirmPara( kneeSEINumKneePointsMinus1 < 0 || kneeSEINumKneePointsMinus1 > 998, "SEIKneeFunctionNumKneePointsMinus1 must be in the range of 0 to 998");
+    for ( UInt i=0; i<=kneeSEINumKneePointsMinus1; i++ )
+    {
+      TEncCfg::TEncSEIKneeFunctionInformation::KneePointPair &kpp=m_kneeFunctionInformationSEI.m_kneeSEIKneePointPairs[i];
+      xConfirmPara( kpp.inputKneePoint  < 1 || kpp.inputKneePoint  >  999, "SEIKneeFunctionInputKneePointValue must be in the range of 1 to 999");
+      xConfirmPara( kpp.outputKneePoint < 0 || kpp.outputKneePoint > 1000, "SEIKneeFunctionOutputKneePointValue must be in the range of 0 to 1000");
+      if ( i > 0 )
+      {
+        TEncCfg::TEncSEIKneeFunctionInformation::KneePointPair &kppPrev=m_kneeFunctionInformationSEI.m_kneeSEIKneePointPairs[i-1];
+        xConfirmPara( kppPrev.inputKneePoint  >= kpp.inputKneePoint,   "The i-th SEIKneeFunctionInputKneePointValue must be greater than the (i-1)-th value");
+        xConfirmPara( kppPrev.outputKneePoint >= kpp.outputKneePoint,  "The i-th SEIKneeFunctionOutputKneePointValue must be greater than or equal to the (i-1)-th value");
+      }
+    }
+  }
+
+  if (m_chromaResamplingFilterSEIenabled)
+  {
+    xConfirmPara( (m_chromaFormatIDC == CHROMA_400 ), "chromaResamplingFilterSEI is not allowed to be present when ChromaFormatIDC is equal to zero (4:0:0)" );
+    xConfirmPara(m_vuiParametersPresentFlag && m_chromaLocInfoPresentFlag && (m_chromaSampleLocTypeTopField != m_chromaSampleLocTypeBottomField ), "When chromaResamplingFilterSEI is enabled, ChromaSampleLocTypeTopField has to be equal to ChromaSampleLocTypeBottomField" );
+  }
+
+  if ( m_RCEnableRateControl )
