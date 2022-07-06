@@ -2998,3 +2998,103 @@ Void TAppEncCfg::xCheckParameter()
   }
 
   if ( m_RCEnableRateControl )
+  {
+    if ( m_RCForceIntraQP )
+    {
+      if ( m_RCInitialQP == 0 )
+      {
+        printf( "\nInitial QP for rate control is not specified. Reset not to use force intra QP!" );
+        m_RCForceIntraQP = false;
+      }
+    }
+    xConfirmPara( m_uiDeltaQpRD > 0, "Rate control cannot be used together with slice level multiple-QP optimization!\n" );
+#if DPB_ENCODER_USAGE_CHECK
+    if ((m_RCCpbSaturationEnabled) && profileLevelTierFeatures.getCpbSizeInBits()!=0)
+    {
+      xConfirmPara(m_RCCpbSize > profileLevelTierFeatures.getCpbSizeInBits(), "RCCpbSize should be smaller than or equal to Max CPB size according to tier and level");
+#else
+    if ((m_RCCpbSaturationEnabled) && (m_level!=Level::NONE) && (m_profile!=Profile::NONE))
+    {
+#if JVET_X0079_MODIFIED_BITRATES
+      UInt uiLevelIdx = (m_level / 30) * 4 + (UInt)((m_level % 30) / 3);
+#else
+      UInt uiLevelIdx = (m_level / 10) + (UInt)((m_level % 10) / 3);    // (m_level / 30)*3 + ((m_level % 10) / 3);
+#endif
+      xConfirmPara(m_RCCpbSize > g_uiMaxCpbSize[m_levelTier][uiLevelIdx], "RCCpbSize should be smaller than or equal to Max CPB size according to tier and level");
+#endif
+      xConfirmPara(m_RCInitialCpbFullness > 1, "RCInitialCpbFullness should be smaller than or equal to 1");
+    }
+  }
+  else
+  {
+    xConfirmPara( m_RCCpbSaturationEnabled != 0, "Target bits saturation cannot be processed without Rate control" );
+  }
+  if (m_vuiParametersPresentFlag)
+  {
+    xConfirmPara(m_RCTargetBitrate == 0, "A target bit rate is required to be set for VUI/HRD parameters.");
+    if (m_RCCpbSize == 0)
+    {
+      printf ("Warning: CPB size is set equal to zero. Adjusting value to be equal to TargetBitrate!\n");
+      m_RCCpbSize = m_RCTargetBitrate;
+    }
+  }
+
+  xConfirmPara(!m_TransquantBypassEnabledFlag && m_CUTransquantBypassFlagForce, "CUTransquantBypassFlagForce cannot be 1 when TransquantBypassEnableFlag is 0");
+
+  xConfirmPara(m_log2ParallelMergeLevel < 2, "Log2ParallelMergeLevel should be larger than or equal to 2");
+
+  if (m_framePackingSEIEnabled)
+  {
+    xConfirmPara(m_framePackingSEIType < 3 || m_framePackingSEIType > 5 , "SEIFramePackingType must be in rage 3 to 5");
+  }
+
+  if (m_segmentedRectFramePackingSEIEnabled)
+  {
+    xConfirmPara(m_framePackingSEIEnabled , "SEISegmentedRectFramePacking must be 0 when SEIFramePacking is 1");
+  }
+
+  if((m_numTileColumnsMinus1 <= 0) && (m_numTileRowsMinus1 <= 0) && m_tmctsSEIEnabled)
+  {
+    printf("Warning: SEITempMotionConstrainedTileSets is set to false to disable temporal motion-constrained tile sets SEI message because there are no tiles enabled.\n");
+    m_tmctsSEIEnabled = false;
+  }
+
+#if MCTS_ENC_CHECK
+  if ((m_tmctsSEIEnabled) && (m_tmctsSEITileConstraint) && (m_bLFCrossTileBoundaryFlag) )
+  {
+    printf("Warning: Constrained Encoding for Temporal Motion Constrained Tile Sets is enabled. Disabling filtering across tile boundaries!\n");
+    m_bLFCrossTileBoundaryFlag = false;
+  }
+#endif
+
+#if MCTS_EXTRACTION
+  if ((m_tmctsSEIEnabled) && (m_tmctsSEITileConstraint) && (m_tmctsExtractionSEIEnabled) && (m_sliceSegmentMode != 3) && (m_sliceSegmentArgument != 1) )
+  {
+    printf("Warning: SEITMCTSExtractionInfo is enabled. Enabling segmentation with one slice per tile.");
+    m_sliceMode = FIXED_NUMBER_OF_TILES;
+    m_sliceArgument = 1;
+  }
+#endif
+
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  if (m_siiSEIEnabled && m_ShutterFilterEnable && m_maxTempLayer == 1 && m_maxDecPicBuffering[0] == 1)
+  {
+    printf("Warning: Shutter Interval SEI message processing is disabled for single TempLayer and single frame in DPB\n");
+    m_ShutterFilterEnable = false;
+  }
+#endif
+
+  if(m_timeCodeSEIEnabled)
+  {
+    xConfirmPara(m_timeCodeSEINumTs > MAX_TIMECODE_SEI_SETS, "Number of time sets cannot exceed 3");
+  }
+
+  xConfirmPara(m_preferredTransferCharacteristics > 255, "transfer_characteristics_idc should not be greater than 255.");
+
+  if( m_erpSEIEnabled && !m_erpSEICancelFlag )
+  {
+    xConfirmPara( m_erpSEIGuardBandType < 0 || m_erpSEIGuardBandType > 8, "SEIEquirectangularprojectionGuardBandType must be in the range of 0 to 7");
+    xConfirmPara( (m_chromaFormatIDC == CHROMA_420 || m_chromaFormatIDC == CHROMA_422) && (m_erpSEILeftGuardBandWidth%2 == 1), "SEIEquirectangularprojectionLeftGuardBandWidth must be an even number for 4:2:0 or 4:2:2 chroma format");
+    xConfirmPara( (m_chromaFormatIDC == CHROMA_420 || m_chromaFormatIDC == CHROMA_422) && (m_erpSEIRightGuardBandWidth%2 == 1), "SEIEquirectangularprojectionRightGuardBandWidth must be an even number for 4:2:0 or 4:2:2 chroma format");
+  }
+
