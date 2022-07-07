@@ -3098,3 +3098,103 @@ Void TAppEncCfg::xCheckParameter()
     xConfirmPara( (m_chromaFormatIDC == CHROMA_420 || m_chromaFormatIDC == CHROMA_422) && (m_erpSEIRightGuardBandWidth%2 == 1), "SEIEquirectangularprojectionRightGuardBandWidth must be an even number for 4:2:0 or 4:2:2 chroma format");
   }
 
+  if( m_sphereRotationSEIEnabled && !m_sphereRotationSEICancelFlag )
+  {
+    xConfirmPara( m_sphereRotationSEIYaw  < -(180<<16) || m_sphereRotationSEIYaw > (180<<16)-1, "SEISphereRotationYaw must be in the range of -11 796 480 to 11 796 479");
+    xConfirmPara( m_sphereRotationSEIPitch < -(90<<16) || m_sphereRotationSEIYaw > (90<<16),    "SEISphereRotationPitch must be in the range of -5 898 240 to 5 898 240");
+    xConfirmPara( m_sphereRotationSEIRoll < -(180<<16) || m_sphereRotationSEIYaw > (180<<16)-1, "SEISphereRotationRoll must be in the range of -11 796 480 to 11 796 479");
+    xConfirmPara( m_erpSEICancelFlag == 1 && m_cmpSEICmpCancelFlag == 1, "erp_cancel_flag equal to 0 or cmp_cancel_flag equal to 0 must be present");
+  }
+
+  if ( m_omniViewportSEIEnabled && !m_omniViewportSEICancelFlag )
+  {
+    xConfirmPara( m_omniViewportSEIId < 0 || m_omniViewportSEIId > 1023, "SEIomniViewportId must be in the range of 0 to 1023");
+    xConfirmPara( m_omniViewportSEICntMinus1 < 0 || m_omniViewportSEICntMinus1 > 15, "SEIomniViewportCntMinus1 must be in the range of 0 to 15");
+    for ( UInt i=0; i<=m_omniViewportSEICntMinus1; i++ )
+    {
+      xConfirmPara( m_omniViewportSEIAzimuthCentre[i] < -(180<<16)  || m_omniViewportSEIAzimuthCentre[i] > (180<<16)-1, "SEIOmniViewportAzimuthCentre must be in the range of -11 796 480 to 11 796 479");
+      xConfirmPara( m_omniViewportSEIElevationCentre[i] < -(90<<16) || m_omniViewportSEIElevationCentre[i] > (90<<16),  "SEIOmniViewportSEIElevationCentre must be in the range of -5 898 240 to 5 898 240");
+      xConfirmPara( m_omniViewportSEITiltCentre[i] < -(180<<16)     || m_omniViewportSEITiltCentre[i] > (180<<16)-1,    "SEIOmniViewportTiltCentre must be in the range of -11 796 480 to 11 796 479");
+      xConfirmPara( m_omniViewportSEIHorRange[i] < 1 || m_omniViewportSEIHorRange[i] > (360<<16), "SEIOmniViewportHorRange must be in the range of 1 to 360*2^16");
+      xConfirmPara( m_omniViewportSEIVerRange[i] < 1 || m_omniViewportSEIVerRange[i] > (180<<16), "SEIOmniViewportVerRange must be in the range of 1 to 180*2^16");
+    }
+  }
+
+  if (m_gopBasedTemporalFilterEnabled)
+  {
+    xConfirmPara(m_temporalSubsampleRatio != 1, "GOP Based Temporal Filter only support Temporal sub-sample ratio 1");
+
+    xConfirmPara(m_gopBasedTemporalFilterPastRefs <= 0 && m_gopBasedTemporalFilterFutureRefs <= 0,
+                 "Either TemporalFilterPastRefs or TemporalFilterFutureRefs must be larger than 0 when TemporalFilter is enabled");
+
+    if ((m_gopBasedTemporalFilterPastRefs != 0 && m_gopBasedTemporalFilterPastRefs != TF_DEFAULT_REFS)
+        || (m_gopBasedTemporalFilterFutureRefs != 0 && m_gopBasedTemporalFilterFutureRefs != TF_DEFAULT_REFS))
+    {
+      printf("Warning: Number of frames used for temporal prefilter is different from default.\n");
+    }
+  }
+#if JVET_Y0077_BIM
+  if (m_bimEnabled)
+  {
+    xConfirmPara(m_temporalSubsampleRatio != 1, "Block Importance Mapping only support Temporal sub-sample ratio 1");
+  }
+#endif
+
+#if EXTENSION_360_VIDEO
+  check_failed |= m_ext360.verifyParameters();
+#endif
+
+#undef xConfirmPara
+  if (check_failed)
+  {
+    exit(EXIT_FAILURE);
+  }
+}
+
+const TChar *profileToString(const Profile::Name profile)
+{
+  static const UInt numberOfProfiles = sizeof(strToProfile)/sizeof(*strToProfile);
+
+  for (UInt profileIndex = 0; profileIndex < numberOfProfiles; profileIndex++)
+  {
+    if (strToProfile[profileIndex].value == profile)
+    {
+      return strToProfile[profileIndex].str;
+    }
+  }
+
+  //if we get here, we didn't find this profile in the list - so there is an error
+  std::cerr << "ERROR: Unknown profile \"" << profile << "\" in profileToString" << std::endl;
+  assert(false);
+  exit(1);
+  return "";
+}
+
+#if DPB_ENCODER_USAGE_CHECK
+
+Int TAppEncCfg::xDPBUsage(std::ostream *pOs)
+{
+  Int minimumOffset=0;
+
+  // Calculate minimum delay caused by the gop structure - i.e. the biggest positive difference between the decoding and display order.
+
+  for(Int gopEntry=0; gopEntry<m_iGOPSize; gopEntry++)
+  {
+    Int poc=m_GOPList[gopEntry].m_POC;
+    minimumOffset=std::max<Int>(minimumOffset, gopEntry-poc);
+  }
+
+  if (pOs)
+  {
+    (*pOs) << "POCs marked with 'r' are reference frames. '!' are awaiting output.\n";
+  }
+
+  Int maxNumInDPB=0;
+  for(Int gopEntry=0; gopEntry<m_iGOPSize; gopEntry++)
+  {
+    if (pOs)
+    {
+      (*pOs) << "DPB Usage for GOP#" << std::setw(3) << gopEntry+1 << ": POC="
+             << std::setw(3) << m_GOPList[gopEntry].m_POC << " Decoder output POC=" << std::setw(4) << gopEntry-minimumOffset << " frames= ";
+      for(Int i=0; i<m_GOPList[gopEntry].m_numRefPics; i++)
+      {
