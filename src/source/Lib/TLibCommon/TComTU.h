@@ -98,3 +98,70 @@ class TComTU
     Bool ProcessingAllQuadrants(const ComponentID compID)      const { return mCodeAll[compID]; }
     Bool ProcessComponentSection(const ComponentID compID)     const { return mRect[compID].width != 0; }
     Bool ProcessChannelSection(const ChannelType chType)       const { return mRect[chType].width != 0; }
+    UInt GetSectionNumber()                                    const { return mSection; }
+
+    UInt getCUDepth()                                          const { return mCuDepth; }
+
+    UInt GetTransformDepthTotal()                              const { return mCuDepth+GetTransformDepthRel(); }
+    UInt GetTransformDepthTotalAdj(const ComponentID compID)   const { return mCuDepth+GetTransformDepthRelAdj(compID); }
+
+    UInt GetTransformDepthRel()                                const { return mTrDepthRelCU[COMPONENT_Y]; }
+    UInt GetTransformDepthRelAdj(const ComponentID compID)     const { return mTrDepthRelCU[compID]; }
+    UInt GetTransformDepthRelAdj(const ChannelType chType)     const
+    {
+      assert(isLuma(chType) || (mTrDepthRelCU[COMPONENT_Cb] == mTrDepthRelCU[COMPONENT_Cr]));
+      return mTrDepthRelCU[isLuma(chType) ? COMPONENT_Y : COMPONENT_Cb];
+    }
+
+    UInt GetAbsPartIdxCU()                                     const { return mAbsPartIdxCU; }
+    UInt GetRelPartIdxTU()                                     const { return mAbsPartIdxTURelCU; }
+    UInt GetRelPartIdxTU(const ComponentID compID)             const { return ProcessingAllQuadrants(compID) ? mAbsPartIdxTURelCU : (mAbsPartIdxTURelCU & (~0x3)); }
+    UInt GetAbsPartIdxTU()                                     const { return GetAbsPartIdxCU() + GetRelPartIdxTU(); }
+    UInt GetAbsPartIdxTU(const ComponentID compID)             const { return GetAbsPartIdxCU() + GetRelPartIdxTU(compID); }
+    UInt GetAbsPartIdxNumParts()                               const { return mAbsPartIdxStep; }
+    UInt GetAbsPartIdxNumParts(const ComponentID compID)       const { return ProcessingAllQuadrants(compID) ? mAbsPartIdxStep : (mAbsPartIdxStep * NUMBER_OF_SECTIONS[mSplitMode]); }
+
+    ChromaFormat GetChromaFormat()                             const { return mChromaFormat; }
+
+    TComDataCU *getCU()                                              { return mpcCU; }
+    const TComDataCU *getCU()                                  const { return mpcCU; }
+    Bool IsLastSection() const { return mSection+1>=((1<<mSplitMode)); }
+
+    UInt GetLog2LumaTrSize()                                   const { return mLog2TrLumaSize; }
+    UInt GetEquivalentLog2TrSize(const ComponentID compID)     const;
+    TU_SPLIT_MODE GetSplitMode()                               const { return mSplitMode; }
+
+    Bool useDST(const ComponentID compID);
+    Bool isNonTransformedResidualRotated(const ComponentID compID);
+
+    UInt getGolombRiceStatisticsIndex(const ComponentID compID);
+};
+
+
+
+class TComTURecurse : public TComTU
+{
+  public:
+
+    TComTURecurse(      TComDataCU *pcCU,
+                  const UInt        absPartIdxCU,
+                  const UInt        forcedDepthOfCU)
+      : TComTU(pcCU, absPartIdxCU, forcedDepthOfCU, 0) { }
+
+    TComTURecurse(      TComDataCU *pcCU,
+                  const UInt        absPartIdxCU); // CU's depth is taken from CU->getDepth(idx)
+
+    TComTURecurse(      TComTU        &parentLevel,                            //Parent TU from which recursion children are derived
+                  const Bool           bProcessLastOfLevel,                    //If true (and the split results in a "step-up" for chroma), the chroma TU is colocated with the last luma TU instead of the first
+                  const TU_SPLIT_MODE  splitMode                 = QUAD_SPLIT, //DONT_SPLIT = create one new TU as a copy of its parent, VERTICAL_SPLIT = split the TU into top and bottom halves, QUAD_SPLIT = split the TU into four equal quadrants
+                  const Bool           splitAtCurrentDepth       = false,      //Set true to keep the current depth when applying a vertical or quad split
+                  const ComponentID    absPartIdxSourceComponent = COMPONENT_Y //Specifies which component of the parent TU should be used to initialise the absPartIdx of the first child and the absPartIdx step (this is needed when splitting a "stepped-up" chroma TU)
+                  )
+                  : TComTU(parentLevel, bProcessLastOfLevel, splitMode, splitAtCurrentDepth, absPartIdxSourceComponent) { }
+
+    Bool nextSection(const TComTU &parent); // returns true if there is another section to process, and prepares internal structures, else returns false
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+
+#endif
