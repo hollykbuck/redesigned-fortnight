@@ -3198,3 +3198,103 @@ Int TAppEncCfg::xDPBUsage(std::ostream *pOs)
              << std::setw(3) << m_GOPList[gopEntry].m_POC << " Decoder output POC=" << std::setw(4) << gopEntry-minimumOffset << " frames= ";
       for(Int i=0; i<m_GOPList[gopEntry].m_numRefPics; i++)
       {
+        Int rplPoc=m_GOPList[gopEntry].m_referencePics[i]+m_GOPList[gopEntry].m_POC;
+        (*pOs) << "  r" << std::setw(3) << rplPoc;
+      }
+    }
+    Int numInDPB=m_GOPList[gopEntry].m_numRefPics + 1; // 1 additional one required for the frame currently being decoded.
+    // When decoding gopEntry N, the decoder will be outputing POC N-minimumOffset, and we must make sure all POCs in the range (POC N-minimumOffset to POC N) are allocated space in the DPB.
+    // When decoding gopEntry N+minimumOffset, the decoder will be outputing POC N
+    for(Int n=gopEntry-minimumOffset; n<=gopEntry; n++)
+    {
+      // check if 'n' exists in the reference picture lists:
+      Bool bNeeded=true;
+      for(Int i=0; i<m_GOPList[gopEntry].m_numRefPics && bNeeded; i++)
+      {
+        Int rplPoc=m_GOPList[gopEntry].m_referencePics[i]+m_GOPList[gopEntry].m_POC;
+        bNeeded=(rplPoc!=n);
+      }
+      if (bNeeded && n>=0)
+      {
+        // 'n' is positive, so check that it has already been decoded within this GOP.
+        bNeeded=false;
+        for(Int i=0; i<gopEntry && !bNeeded; i++)
+        {
+          bNeeded=m_GOPList[i].m_POC == n;
+        }
+
+      }
+      if (bNeeded)
+      {
+        numInDPB++;
+        if (pOs)
+        {
+          (*pOs) << "  !" << std::setw(3)<< n;
+        }
+      }
+    }
+    maxNumInDPB=std::max(maxNumInDPB, numInDPB);
+    if (pOs)
+    {
+      (*pOs) << std::endl;
+    }
+  }
+  if (pOs)
+  {
+    (*pOs) << "Maximum number of pictures required in DPB:" << maxNumInDPB << std::endl;
+  }
+
+  return maxNumInDPB;
+}
+#endif
+
+Void TAppEncCfg::xPrintParameter()
+{
+  printf("\n");
+  printf("Input          File                    : %s\n", m_inputFileName.c_str()          );
+  printf("Bitstream      File                    : %s\n", m_bitstreamFileName.c_str()      );
+  printf("Reconstruction File                    : %s\n", m_reconFileName.c_str()          );
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  if (m_ShutterFilterEnable && !m_shutterIntervalPreFileName.empty())
+  {
+    printf("SII Pre-processed File                 : %s\n", m_shutterIntervalPreFileName.c_str());
+  }
+#endif
+  printf("Real     Format                        : %dx%d %gHz\n", m_sourceWidth - m_confWinLeft - m_confWinRight, m_sourceHeight - m_confWinTop - m_confWinBottom, (Double)m_iFrameRate/m_temporalSubsampleRatio );
+  printf("Internal Format                        : %dx%d %gHz\n", m_sourceWidth, m_sourceHeight, (Double)m_iFrameRate/m_temporalSubsampleRatio );
+  printf("Sequence PSNR output                   : %s\n", (m_printMSEBasedSequencePSNR ? "Linear average, MSE-based" : "Linear average only") );
+  printf("Sequence MSE output                    : %s\n", (m_printSequenceMSE ? "Enabled" : "Disabled") );
+  printf("Frame MSE output                       : %s\n", (m_printFrameMSE    ? "Enabled" : "Disabled") );
+  printf("MS-SSIM output                         : %s\n", (m_printMSSSIM      ? "Enabled" : "Disabled") );
+  printf("xPSNR calculation                      : %s\n", (m_bXPSNREnableFlag ? "Enabled" : "Disabled"));
+  if (m_bXPSNREnableFlag)
+  {
+    printf("xPSNR Weights                          : (%8.3f, %8.3f, %8.3f)\n", m_dXPSNRWeight[COMPONENT_Y], m_dXPSNRWeight[COMPONENT_Cb], m_dXPSNRWeight[COMPONENT_Cr]);
+  }
+  printf("Cabac-zero-word-padding                : %s\n", (m_cabacZeroWordPaddingEnabled? "Enabled" : "Disabled") );
+  if (m_isField)
+  {
+    printf("Frame/Field                            : Field based coding\n");
+    printf("Field index                            : %u - %d (%d fields)\n", m_FrameSkip, m_FrameSkip+m_framesToBeEncoded-1, m_framesToBeEncoded );
+    printf("Field Order                            : %s field first\n", m_isTopFieldFirst?"Top":"Bottom");
+
+  }
+  else
+  {
+    printf("Frame/Field                            : Frame based coding\n");
+    printf("Frame index                            : %u - %d (%d frames)\n", m_FrameSkip, m_FrameSkip+m_framesToBeEncoded-1, m_framesToBeEncoded );
+  }
+  if (m_profile == Profile::MAINREXT)
+  {
+    UIProfileName validProfileName;
+    if (m_onePictureOnlyConstraintFlag)
+    {
+      validProfileName = m_bitDepthConstraint == 8 ? UI_MAIN_444_STILL_PICTURE : (m_bitDepthConstraint == 16 ? UI_MAIN_444_16_STILL_PICTURE : UI_NONE);
+    }
+    else
+    {
+      const UInt intraIdx = m_intraConstraintFlag ? 1:0;
+      const UInt bitDepthIdx = (m_bitDepthConstraint == 8 ? 0 : (m_bitDepthConstraint ==10 ? 1 : (m_bitDepthConstraint == 12 ? 2 : (m_bitDepthConstraint == 16 ? 3 : 4 ))));
+      const UInt chromaFormatIdx = UInt(m_chromaFormatConstraint);
+      validProfileName = (bitDepthIdx > 3 || chromaFormatIdx>3) ? UI_NONE : validRExtProfileNames[intraIdx][bitDepthIdx][chromaFormatIdx];
+    }
