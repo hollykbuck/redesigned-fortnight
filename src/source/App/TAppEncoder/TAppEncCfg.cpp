@@ -3298,3 +3298,103 @@ Void TAppEncCfg::xPrintParameter()
       const UInt chromaFormatIdx = UInt(m_chromaFormatConstraint);
       validProfileName = (bitDepthIdx > 3 || chromaFormatIdx>3) ? UI_NONE : validRExtProfileNames[intraIdx][bitDepthIdx][chromaFormatIdx];
     }
+    std::string rextSubProfile;
+    if (validProfileName!=UI_NONE)
+    {
+      rextSubProfile=enumToString(strToUIProfileName, sizeof(strToUIProfileName)/sizeof(*strToUIProfileName), validProfileName);
+    }
+    if (rextSubProfile == "main_444_16")
+    {
+      rextSubProfile="main_444_16 [NON STANDARD]";
+    }
+    printf("Profile                                : %s (%s)\n", profileToString(m_profile), (rextSubProfile.empty())?"INVALID REXT PROFILE":rextSubProfile.c_str() );
+  }
+  else if (m_profile == Profile::HIGHTHROUGHPUTREXT)
+  {
+    UIProfileName validProfileName;
+    const UInt intraIdx = m_intraConstraintFlag ? 1:0;
+    const UInt bitDepthIdx = (m_bitDepthConstraint == 8 ? 0 : (m_bitDepthConstraint ==10 ? 1 : (m_bitDepthConstraint == 12 ? 2 : (m_bitDepthConstraint == 16 ? 3 : 4 ))));
+    validProfileName = (bitDepthIdx > 3) ? UI_NONE : validRExtHighThroughPutProfileNames[intraIdx][bitDepthIdx];
+    std::string subProfile;
+    if (validProfileName!=UI_NONE)
+    {
+      subProfile=enumToString(strToUIProfileName, sizeof(strToUIProfileName)/sizeof(*strToUIProfileName), validProfileName);
+    }
+    printf("Profile                                : %s (%s)\n", profileToString(m_profile), (subProfile.empty())?"INVALID HIGH THROUGHPUT REXT PROFILE":subProfile.c_str() );
+  }
+  else if (m_profile == Profile::MAIN10 && m_onePictureOnlyConstraintFlag)
+  {
+    printf("Profile                                : %s (main10-still-picture)\n", profileToString(m_profile) );
+  }
+  else
+  {
+    printf("Profile                                : %s\n", profileToString(m_profile) );
+  }
+  printf("CU size / depth / total-depth          : %d / %d / %d\n", m_uiMaxCUWidth, m_uiMaxCUDepth, m_uiMaxTotalCUDepth );
+  printf("RQT trans. size (min / max)            : %d / %d\n", 1 << m_uiQuadtreeTULog2MinSize, 1 << m_uiQuadtreeTULog2MaxSize );
+  printf("Max RQT depth inter                    : %d\n", m_uiQuadtreeTUMaxDepthInter);
+  printf("Max RQT depth intra                    : %d\n", m_uiQuadtreeTUMaxDepthIntra);
+  printf("Min PCM size                           : %d\n", 1 << m_uiPCMLog2MinSize);
+  printf("Motion search range                    : %d\n", m_iSearchRange );
+  printf("Intra period                           : %d\n", m_iIntraPeriod );
+  printf("Decoding refresh type                  : %d\n", m_iDecodingRefreshType );
+  if (m_qpIncrementAtSourceFrame.bPresent)
+  {
+    printf("QP                                     : %d (incrementing internal QP at source frame %d)\n", m_iQP, m_qpIncrementAtSourceFrame.value );
+  }
+  else
+  {
+    printf("QP                                     : %d\n", m_iQP );
+  }
+  printf("Max dQP signaling depth                : %d\n", m_iMaxCuDQPDepth);
+
+  printf("Cb QP Offset                           : %d\n", m_cbQpOffset   );
+  printf("Cr QP Offset                           : %d\n", m_crQpOffset);
+  printf("QP adaptation                          : %d (range=%d)\n", m_bUseAdaptiveQP, (m_bUseAdaptiveQP ? m_iQPAdaptationRange : 0) );
+  printf("GOP size                               : %d\n", m_iGOPSize );
+  printf("Input bit depth                        : (Y:%d, C:%d)\n", m_inputBitDepth[CHANNEL_TYPE_LUMA], m_inputBitDepth[CHANNEL_TYPE_CHROMA] );
+  printf("MSB-extended bit depth                 : (Y:%d, C:%d)\n", m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA], m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] );
+  printf("Internal bit depth                     : (Y:%d, C:%d)\n", m_internalBitDepth[CHANNEL_TYPE_LUMA], m_internalBitDepth[CHANNEL_TYPE_CHROMA] );
+  printf("PCM sample bit depth                   : (Y:%d, C:%d)\n", m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA] : m_internalBitDepth[CHANNEL_TYPE_LUMA],
+                                                                    m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA] : m_internalBitDepth[CHANNEL_TYPE_CHROMA] );
+  printf("Intra reference smoothing              : %s\n", (m_enableIntraReferenceSmoothing           ? "Enabled" : "Disabled") );
+  printf("diff_cu_chroma_qp_offset_depth         : %d\n", m_diffCuChromaQpOffsetDepth);
+  printf("extended_precision_processing_flag     : %s\n", (m_extendedPrecisionProcessingFlag         ? "Enabled" : "Disabled") );
+  printf("implicit_rdpcm_enabled_flag            : %s\n", (m_rdpcmEnabledFlag[RDPCM_SIGNAL_IMPLICIT] ? "Enabled" : "Disabled") );
+  printf("explicit_rdpcm_enabled_flag            : %s\n", (m_rdpcmEnabledFlag[RDPCM_SIGNAL_EXPLICIT] ? "Enabled" : "Disabled") );
+  printf("transform_skip_rotation_enabled_flag   : %s\n", (m_transformSkipRotationEnabledFlag        ? "Enabled" : "Disabled") );
+  printf("transform_skip_context_enabled_flag    : %s\n", (m_transformSkipContextEnabledFlag         ? "Enabled" : "Disabled") );
+  printf("cross_component_prediction_enabled_flag: %s\n", (m_crossComponentPredictionEnabledFlag     ? (m_reconBasedCrossCPredictionEstimate ? "Enabled (reconstructed-residual-based estimate)" : "Enabled (encoder-side-residual-based estimate)") : "Disabled") );
+  printf("high_precision_offsets_enabled_flag    : %s\n", (m_highPrecisionOffsetsEnabledFlag         ? "Enabled" : "Disabled") );
+  printf("persistent_rice_adaptation_enabled_flag: %s\n", (m_persistentRiceAdaptationEnabledFlag     ? "Enabled" : "Disabled") );
+  printf("cabac_bypass_alignment_enabled_flag    : %s\n", (m_cabacBypassAlignmentEnabledFlag         ? "Enabled" : "Disabled") );
+  if (m_bUseSAO)
+  {
+    printf("log2_sao_offset_scale_luma             : %d\n", m_log2SaoOffsetScale[CHANNEL_TYPE_LUMA]);
+    printf("log2_sao_offset_scale_chroma           : %d\n", m_log2SaoOffsetScale[CHANNEL_TYPE_CHROMA]);
+  }
+
+  switch (m_costMode)
+  {
+    case COST_STANDARD_LOSSY:               printf("Cost function:                         : Lossy coding (default)\n"); break;
+    case COST_SEQUENCE_LEVEL_LOSSLESS:      printf("Cost function:                         : Sequence_level_lossless coding\n"); break;
+    case COST_LOSSLESS_CODING:              printf("Cost function:                         : Lossless coding with fixed QP of %d\n", LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP); break;
+    case COST_MIXED_LOSSLESS_LOSSY_CODING:  printf("Cost function:                         : Mixed_lossless_lossy coding with QP'=%d for lossless evaluation\n", LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME); break;
+    default:                                printf("Cost function:                         : Unknown\n"); break;
+  }
+
+  printf("RateControl                            : %d\n", m_RCEnableRateControl );
+  printf("WPMethod                               : %d\n", Int(m_weightedPredictionMethod));
+
+  if(m_RCEnableRateControl)
+  {
+    printf("TargetBitrate                          : %d\n", m_RCTargetBitrate );
+    printf("KeepHierarchicalBit                    : %d\n", m_RCKeepHierarchicalBit );
+    printf("LCULevelRC                             : %d\n", m_RCLCULevelRC );
+    printf("UseLCUSeparateModel                    : %d\n", m_RCUseLCUSeparateModel );
+    printf("InitialQP                              : %d\n", m_RCInitialQP );
+    printf("ForceIntraQP                           : %d\n", m_RCForceIntraQP );
+    printf("CpbSaturation                          : %d\n", m_RCCpbSaturationEnabled );
+    if (m_RCCpbSaturationEnabled)
+    {
+      printf("CpbSize                                : %d\n", m_RCCpbSize);
