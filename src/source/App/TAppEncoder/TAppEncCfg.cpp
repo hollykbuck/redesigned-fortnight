@@ -3398,3 +3398,88 @@ Void TAppEncCfg::xPrintParameter()
     if (m_RCCpbSaturationEnabled)
     {
       printf("CpbSize                                : %d\n", m_RCCpbSize);
+      printf("InitalCpbFullness                      : %.2f\n", m_RCInitialCpbFullness);
+    }
+  }
+
+  printf("Max Num Merge Candidates               : %d\n", m_maxNumMergeCand);
+  printf("\n");
+
+  printf("TOOL CFG: ");
+  printf("IBD:%d ", ((m_internalBitDepth[CHANNEL_TYPE_LUMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_LUMA]) || (m_internalBitDepth[CHANNEL_TYPE_CHROMA] > m_MSBExtendedBitDepth[CHANNEL_TYPE_CHROMA])));
+  printf("HAD:%d ", m_bUseHADME                          );
+  printf("RDQ:%d ", m_useRDOQ                            );
+  printf("RDQTS:%d ", m_useRDOQTS                        );
+  printf("RDpenalty:%d ", m_rdPenalty                    );
+  printf("LQP:%d ", m_lumaLevelToDeltaQPMapping.mode     );
+  printf("SQP:%d ", m_uiDeltaQpRD                        );
+  printf("ASR:%d ", m_bUseASR                            );
+  printf("MinSearchWindow:%d ", m_minSearchWindow        );
+  printf("RestrictMESampling:%d ", m_bRestrictMESampling );
+  printf("FEN:%d ", Int(m_fastInterSearchMode)           );
+  printf("ECU:%d ", m_bUseEarlyCU                        );
+  printf("FDM:%d ", m_useFastDecisionForMerge            );
+  printf("CFM:%d ", m_bUseCbfFastMode                    );
+  printf("ESD:%d ", m_useEarlySkipDetection              );
+  printf("RQT:%d ", 1                                    );
+  printf("TransformSkip:%d ",     m_useTransformSkip     );
+  printf("TransformSkipFast:%d ", m_useTransformSkipFast );
+  printf("TransformSkipLog2MaxSize:%d ", m_log2MaxTransformSkipBlockSize);
+  printf("Slice: M=%d ", Int(m_sliceMode));
+  if (m_sliceMode!=NO_SLICES)
+  {
+    printf("A=%d ", m_sliceArgument);
+  }
+  printf("SliceSegment: M=%d ",m_sliceSegmentMode);
+  if (m_sliceSegmentMode!=NO_SLICES)
+  {
+    printf("A=%d ", m_sliceSegmentArgument);
+  }
+  printf("CIP:%d ", m_bUseConstrainedIntraPred);
+  printf("SAO:%d ", (m_bUseSAO)?(1):(0));
+  printf("PCM:%d ", (m_usePCM && (1<<m_uiPCMLog2MinSize) <= m_uiMaxCUWidth)? 1 : 0);
+
+  if (m_TransquantBypassEnabledFlag && m_CUTransquantBypassFlagForce)
+  {
+    printf("TransQuantBypassEnabled: =1");
+  }
+  else
+  {
+    printf("TransQuantBypassEnabled:%d ", (m_TransquantBypassEnabledFlag)? 1:0 );
+  }
+
+  printf("WPP:%d ", (Int)m_useWeightedPred);
+  printf("WPB:%d ", (Int)m_useWeightedBiPred);
+  printf("PME:%d ", m_log2ParallelMergeLevel);
+  const Int iWaveFrontSubstreams = m_entropyCodingSyncEnabledFlag ? (m_sourceHeight + m_uiMaxCUHeight - 1) / m_uiMaxCUHeight : 1;
+  printf(" WaveFrontSynchro:%d WaveFrontSubstreams:%d", m_entropyCodingSyncEnabledFlag?1:0, iWaveFrontSubstreams);
+  printf(" ScalingList:%d ", m_useScalingListId );
+  printf("TMVPMode:%d ", m_TMVPModeId     );
+#if ADAPTIVE_QP_SELECTION
+  printf("AQpS:%d", m_bUseAdaptQpSelect   );
+#endif
+
+  printf(" SignBitHidingFlag:%d ", m_signDataHidingEnabledFlag);
+  printf("RecalQP:%d", m_recalculateQPAccordingToLambda ? 1 : 0 );
+
+#if EXTENSION_360_VIDEO
+  m_ext360.outputConfigurationSummary();
+#endif
+
+  printf("\n\n");
+
+  fflush(stdout);
+}
+
+Bool confirmPara(Bool bflag, const TChar* message)
+{
+  if (!bflag)
+  {
+    return false;
+  }
+
+  printf("Error: %s\n",message);
+  return true;
+}
+
+//! \}
