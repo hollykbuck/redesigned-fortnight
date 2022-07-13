@@ -498,3 +498,103 @@ Void TDecTop::xParsePrefixSEImessages()
 {
   while (!m_prefixSEINALUs.empty())
   {
+    InputNALUnit &nalu=*m_prefixSEINALUs.front();
+    m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_SEIs, nalu.m_nalUnitType, m_parameterSetManager.getActiveSPS(), m_pDecodedSEIOutputStream );
+    delete m_prefixSEINALUs.front();
+    m_prefixSEINALUs.pop_front();
+  }
+}
+
+#if MCTS_ENC_CHECK
+Void TDecTop::xAnalysePrefixSEImessages()
+{
+  if (m_tmctsCheckEnabled)
+  {
+    SEIMessages mctsSEIs = getSeisByType(m_SEIs, SEI::TEMP_MOTION_CONSTRAINED_TILE_SETS);
+    for (SEIMessages::iterator it = mctsSEIs.begin(); it != mctsSEIs.end(); it++)
+    {
+      SEITempMotionConstrainedTileSets *mcts = (SEITempMotionConstrainedTileSets*)(*it);
+      if (!mcts->m_each_tile_one_tile_set_flag)
+      {
+        printf("cannot (yet) check Temporal constrained MCTS if each_tile_one_tile_set_flag is not enabled\n");
+        exit(1);
+      }
+      else
+      {
+        printf("MCTS check enabled!\n");
+        m_conformanceCheck.enableTMctsCheck(true);
+      }
+    }
+  }
+}
+#endif
+
+#if MCTS_EXTRACTION
+Bool TDecTop::xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisplay, Bool bSkipCabacAndReconstruction)
+#else
+Bool TDecTop::xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisplay)
+#endif
+{
+  m_apcSlicePilot->initSlice(); // the slice pilot is an object to prepare for a new slice
+                                // it is not associated with picture, sps or pps structures.
+
+  if (m_bFirstSliceInPicture)
+  {
+    m_uiSliceIdx = 0;
+  }
+  else
+  {
+    m_apcSlicePilot->copySliceInfo( m_pcPic->getPicSym()->getSlice(m_uiSliceIdx-1) );
+  }
+  m_apcSlicePilot->setSliceIdx(m_uiSliceIdx);
+
+  m_apcSlicePilot->setNalUnitType(nalu.m_nalUnitType);
+  Bool nonReferenceFlag = (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_TRAIL_N ||
+                           m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_TSA_N   ||
+                           m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_STSA_N  ||
+                           m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RADL_N  ||
+                           m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_N);
+  m_apcSlicePilot->setTemporalLayerNonReferenceFlag(nonReferenceFlag);
+  m_apcSlicePilot->setReferenced(true); // Putting this as true ensures that picture is referenced the first time it is in an RPS
+  m_apcSlicePilot->setTLayerInfo(nalu.m_temporalId);
+
+#if ENC_DEC_TRACE
+  const UInt64 originalSymbolCount = g_nSymbolCounter;
+#endif
+
+  m_cEntropyDecoder.decodeSliceHeader (m_apcSlicePilot, &m_parameterSetManager, m_prevTid0POC);
+
+  // set POC for dependent slices in skipped pictures
+  if(m_apcSlicePilot->getDependentSliceSegmentFlag() && m_prevSliceSkipped)
+  {
+    m_apcSlicePilot->setPOC(m_skippedPOC);
+  }
+
+  xUpdatePreviousTid0POC(m_apcSlicePilot);
+
+  m_apcSlicePilot->setAssociatedIRAPPOC(m_pocCRA);
+  m_apcSlicePilot->setAssociatedIRAPType(m_associatedIRAPType);
+
+  //For inference of NoOutputOfPriorPicsFlag
+  if (m_apcSlicePilot->getRapPicFlag())
+  {
+    if ((m_apcSlicePilot->getNalUnitType() >= NAL_UNIT_CODED_SLICE_BLA_W_LP && m_apcSlicePilot->getNalUnitType() <= NAL_UNIT_CODED_SLICE_IDR_N_LP) || 
+        (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA && m_bFirstSliceInSequence) ||
+        (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA && m_apcSlicePilot->getHandleCraAsBlaFlag()))
+    {
+      m_apcSlicePilot->setNoRaslOutputFlag(true);
+    }
+    //the inference for NoOutputPriorPicsFlag
+    if (!m_bFirstSliceInBitstream && m_apcSlicePilot->getRapPicFlag() && m_apcSlicePilot->getNoRaslOutputFlag())
+    {
+      if (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA)
+      {
+        m_apcSlicePilot->setNoOutputPriorPicsFlag(true);
+      }
+    }
+    else
+    {
+      m_apcSlicePilot->setNoOutputPriorPicsFlag(false);
+    }
+
+    if(m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA)
