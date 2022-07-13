@@ -98,3 +98,103 @@ Void TComCUMvField::clearMvField()
 
 Void TComCUMvField::copyFrom( TComCUMvField const * pcCUMvFieldSrc, Int iNumPartSrc, Int iPartAddrDst )
 {
+  Int iSizeInTComMv = sizeof( TComMv ) * iNumPartSrc;
+
+  memcpy( m_pcMv     + iPartAddrDst, pcCUMvFieldSrc->m_pcMv,     iSizeInTComMv );
+  memcpy( m_pcMvd    + iPartAddrDst, pcCUMvFieldSrc->m_pcMvd,    iSizeInTComMv );
+  memcpy( m_piRefIdx + iPartAddrDst, pcCUMvFieldSrc->m_piRefIdx, sizeof( *m_piRefIdx ) * iNumPartSrc );
+}
+
+Void TComCUMvField::copyTo( TComCUMvField* pcCUMvFieldDst, Int iPartAddrDst ) const
+{
+  copyTo( pcCUMvFieldDst, iPartAddrDst, 0, m_uiNumPartition );
+}
+
+Void TComCUMvField::copyTo( TComCUMvField* pcCUMvFieldDst, Int iPartAddrDst, UInt uiOffset, UInt uiNumPart ) const
+{
+  Int iSizeInTComMv = sizeof( TComMv ) * uiNumPart;
+  Int iOffset = uiOffset + iPartAddrDst;
+
+  memcpy( pcCUMvFieldDst->m_pcMv     + iOffset, m_pcMv     + uiOffset, iSizeInTComMv );
+  memcpy( pcCUMvFieldDst->m_pcMvd    + iOffset, m_pcMvd    + uiOffset, iSizeInTComMv );
+  memcpy( pcCUMvFieldDst->m_piRefIdx + iOffset, m_piRefIdx + uiOffset, sizeof( *m_piRefIdx ) * uiNumPart );
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Set
+// --------------------------------------------------------------------------------------------------------------------
+
+template <typename T>
+Void TComCUMvField::setAll( T *p, T const & val, PartSize eCUMode, Int iPartAddr, UInt uiDepth, Int iPartIdx  )
+{
+  Int i;
+  p += iPartAddr;
+  Int numElements = m_uiNumPartition >> ( 2 * uiDepth );
+
+  switch( eCUMode )
+  {
+    case SIZE_2Nx2N:
+      for ( i = 0; i < numElements; i++ )
+      {
+        p[ i ] = val;
+      }
+      break;
+
+    case SIZE_2NxN:
+      numElements >>= 1;
+      for ( i = 0; i < numElements; i++ )
+      {
+        p[ i ] = val;
+      }
+      break;
+
+    case SIZE_Nx2N:
+      numElements >>= 2;
+      for ( i = 0; i < numElements; i++ )
+      {
+        p[ i                   ] = val;
+        p[ i + 2 * numElements ] = val;
+      }
+      break;
+
+    case SIZE_NxN:
+      numElements >>= 2;
+      for ( i = 0; i < numElements; i++)
+      {
+        p[ i ] = val;
+      }
+      break;
+    case SIZE_2NxnU:
+    {
+      Int iCurrPartNumQ = numElements>>2;
+      if( iPartIdx == 0 )
+      {
+        T *pT  = p;
+        T *pT2 = p + iCurrPartNumQ;
+        for (i = 0; i < (iCurrPartNumQ>>1); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+      }
+      else
+      {
+        T *pT  = p;
+        for (i = 0; i < (iCurrPartNumQ>>1); i++)
+        {
+          pT[i] = val;
+        }
+
+        pT = p + iCurrPartNumQ;
+        for (i = 0; i < ( (iCurrPartNumQ>>1) + (iCurrPartNumQ<<1) ); i++)
+        {
+          pT[i] = val;
+        }
+      }
+      break;
+    }
+  case SIZE_2NxnD:
+    {
+      Int iCurrPartNumQ = numElements>>2;
+      if( iPartIdx == 0 )
+      {
