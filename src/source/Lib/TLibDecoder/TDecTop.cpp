@@ -598,3 +598,103 @@ Bool TDecTop::xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisp
     }
 
     if(m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA)
+    {
+      m_craNoRaslOutputFlag = m_apcSlicePilot->getNoRaslOutputFlag();
+    }
+  }
+  if (m_apcSlicePilot->getRapPicFlag() && m_apcSlicePilot->getNoOutputPriorPicsFlag())
+  {
+    m_lastPOCNoOutputPriorPics = m_apcSlicePilot->getPOC();
+    m_isNoOutputPriorPics = true;
+  }
+  else
+  {
+    m_isNoOutputPriorPics = false;
+  }
+
+  //For inference of PicOutputFlag
+  if (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_N || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_R)
+  {
+    if ( m_craNoRaslOutputFlag )
+    {
+      m_apcSlicePilot->setPicOutputFlag(false);
+    }
+  }
+
+  if (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA && m_craNoRaslOutputFlag) //Reset POC MSB when CRA has NoRaslOutputFlag equal to 1
+  {
+    TComPPS *pps = m_parameterSetManager.getPPS(m_apcSlicePilot->getPPSId());
+    assert (pps != 0);
+    TComSPS *sps = m_parameterSetManager.getSPS(pps->getSPSId());
+    assert (sps != 0);
+    Int iMaxPOClsb = 1 << sps->getBitsForPOC();
+    m_apcSlicePilot->setPOC( m_apcSlicePilot->getPOC() & (iMaxPOClsb - 1) );
+    xUpdatePreviousTid0POC(m_apcSlicePilot);
+  }
+
+  // Skip pictures due to random access
+
+  if (isRandomAccessSkipPicture(iSkipFrame, iPOCLastDisplay))
+  {
+    m_prevSliceSkipped = true;
+    m_skippedPOC = m_apcSlicePilot->getPOC();
+    return false;
+  }
+  // Skip TFD pictures associated with BLA/BLANT pictures
+  if (isSkipPictureForBLA(iPOCLastDisplay))
+  {
+    m_prevSliceSkipped = true;
+    m_skippedPOC = m_apcSlicePilot->getPOC();
+    return false;
+  }
+
+  // clear previous slice skipped flag
+  m_prevSliceSkipped = false;
+
+  //we should only get a different poc for a new picture (with CTU address==0)
+  if (!m_apcSlicePilot->getDependentSliceSegmentFlag() && m_apcSlicePilot->getPOC()!=m_prevPOC && !m_bFirstSliceInSequence && (m_apcSlicePilot->getSliceCurStartCtuTsAddr() != 0))
+  {
+    printf ("Warning, the first slice of a picture might have been lost!\n");
+  }
+
+  // exit when a new picture is found
+  if (!m_apcSlicePilot->getDependentSliceSegmentFlag() && (m_apcSlicePilot->getSliceCurStartCtuTsAddr() == 0 && !m_bFirstSliceInPicture) )
+  {
+    if (m_prevPOC >= m_pocRandomAccess)
+    {
+      m_prevPOC = m_apcSlicePilot->getPOC();
+#if ENC_DEC_TRACE
+      //rewind the trace counter since we didn't actually decode the slice
+      g_nSymbolCounter = originalSymbolCount;
+#endif
+      return true;
+    }
+    m_prevPOC = m_apcSlicePilot->getPOC();
+  }
+
+  //detect lost reference picture and insert copy of earlier frame.
+  {
+    Int lostPoc;
+    while((lostPoc=m_apcSlicePilot->checkThatAllRefPicsAreAvailable(m_cListPic, m_apcSlicePilot->getRPS(), true, m_pocRandomAccess)) > 0)
+    {
+      xCreateLostPicture(lostPoc-1);
+    }
+  }
+
+  if (!m_apcSlicePilot->getDependentSliceSegmentFlag())
+  {
+    m_prevPOC = m_apcSlicePilot->getPOC();
+  }
+
+  // actual decoding starts here
+#if MCTS_EXTRACTION
+  xActivateParameterSets(bSkipCabacAndReconstruction);
+#else
+  xActivateParameterSets();
+#endif
+
+
+  TComSlice* pcSlice = m_pcPic->getPicSym()->getSlice(m_uiSliceIdx);
+
+  if (TDecConformanceCheck::doChecking())
+  {
