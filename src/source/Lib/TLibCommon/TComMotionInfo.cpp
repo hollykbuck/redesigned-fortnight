@@ -198,3 +198,103 @@ Void TComCUMvField::setAll( T *p, T const & val, PartSize eCUMode, Int iPartAddr
       Int iCurrPartNumQ = numElements>>2;
       if( iPartIdx == 0 )
       {
+        T *pT  = p;
+        for (i = 0; i < ( (iCurrPartNumQ>>1) + (iCurrPartNumQ<<1) ); i++)
+        {
+          pT[i] = val;
+        }
+        pT = p + ( numElements - iCurrPartNumQ );
+        for (i = 0; i < (iCurrPartNumQ>>1); i++)
+        {
+          pT[i] = val;
+        }
+      }
+      else
+      {
+        T *pT  = p;
+        T *pT2 = p + iCurrPartNumQ;
+        for (i = 0; i < (iCurrPartNumQ>>1); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+      }
+      break;
+    }
+  case SIZE_nLx2N:
+    {
+      Int iCurrPartNumQ = numElements>>2;
+      if( iPartIdx == 0 )
+      {
+        T *pT  = p;
+        T *pT2 = p + (iCurrPartNumQ<<1);
+        T *pT3 = p + (iCurrPartNumQ>>1);
+        T *pT4 = p + (iCurrPartNumQ<<1) + (iCurrPartNumQ>>1);
+
+        for (i = 0; i < (iCurrPartNumQ>>2); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+          pT3[i] = val;
+          pT4[i] = val;
+        }
+      }
+      else
+      {
+        T *pT  = p;
+        T *pT2 = p + (iCurrPartNumQ<<1);
+        for (i = 0; i < (iCurrPartNumQ>>2); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+
+        pT  = p + (iCurrPartNumQ>>1);
+        pT2 = p + (iCurrPartNumQ<<1) + (iCurrPartNumQ>>1);
+        for (i = 0; i < ( (iCurrPartNumQ>>2) + iCurrPartNumQ ); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+      }
+      break;
+    }
+  case SIZE_nRx2N:
+    {
+      Int iCurrPartNumQ = numElements>>2;
+      if( iPartIdx == 0 )
+      {
+        T *pT  = p;
+        T *pT2 = p + (iCurrPartNumQ<<1);
+        for (i = 0; i < ( (iCurrPartNumQ>>2) + iCurrPartNumQ ); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+
+        pT  = p + iCurrPartNumQ + (iCurrPartNumQ>>1);
+        pT2 = p + numElements - iCurrPartNumQ + (iCurrPartNumQ>>1);
+        for (i = 0; i < (iCurrPartNumQ>>2); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+        }
+      }
+      else
+      {
+        T *pT  = p;
+        T *pT2 = p + (iCurrPartNumQ>>1);
+        T *pT3 = p + (iCurrPartNumQ<<1);
+        T *pT4 = p + (iCurrPartNumQ<<1) + (iCurrPartNumQ>>1);
+        for (i = 0; i < (iCurrPartNumQ>>2); i++)
+        {
+          pT [i] = val;
+          pT2[i] = val;
+          pT3[i] = val;
+          pT4[i] = val;
+        }
+      }
+      break;
+    }
+    default:
+      assert(0);
