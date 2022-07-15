@@ -298,3 +298,103 @@ Void TEncSearch::init(TEncCfg*       pcEncCfg,
   }
   m_puhQTTempTrIdx   = new UChar  [uiNumPartitions];
   m_pcQTTempTComYuv  = new TComYuv[uiNumLayersToAllocate];
+  for( UInt ui = 0; ui < uiNumLayersToAllocate; ++ui )
+  {
+    m_pcQTTempTComYuv[ui].create( maxCUWidth, maxCUHeight, pcEncCfg->getChromaFormatIdc() );
+  }
+  m_pcQTTempTransformSkipTComYuv.create( maxCUWidth, maxCUHeight, pcEncCfg->getChromaFormatIdc() );
+  m_tmpYuvPred.create(MAX_CU_SIZE, MAX_CU_SIZE, pcEncCfg->getChromaFormatIdc());
+  m_isInitialized = true;
+}
+
+
+__inline Void TEncSearch::xTZSearchHelp( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const Int iSearchX, const Int iSearchY, const UChar ucPointNr, const UInt uiDistance )
+{
+  Distortion  uiSad = 0;
+
+  const Pel* const  piRefSrch = rcStruct.piRefY + iSearchY * rcStruct.iYStride + iSearchX;
+
+  //-- jclee for using the SAD function pointer
+  m_pcRdCost->setDistParam( pcPatternKey, piRefSrch, rcStruct.iYStride,  m_cDistParam );
+
+  setDistParamComp(COMPONENT_Y);
+
+  // distortion
+  m_cDistParam.bitDepth = pcPatternKey->getBitDepthY();
+  m_cDistParam.m_maximumDistortionForEarlyExit = rcStruct.uiBestSad;
+
+  if((m_pcEncCfg->getRestrictMESampling() == false) && m_pcEncCfg->getMotionEstimationSearchMethod() == MESEARCH_SELECTIVE)
+  {
+    Int isubShift = 0;
+    // motion cost
+    Distortion uiBitCost = m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY );
+
+    // Skip search if bit cost is already larger than best SAD
+    if (uiBitCost < rcStruct.uiBestSad)
+    {
+      if ( m_cDistParam.iRows > 32 )
+      {
+        m_cDistParam.iSubShift = 4;
+      }
+      else if ( m_cDistParam.iRows > 16 )
+      {
+        m_cDistParam.iSubShift = 3;
+      }
+      else if ( m_cDistParam.iRows > 8 )
+      {
+        m_cDistParam.iSubShift = 2;
+      }
+      else
+      {
+        m_cDistParam.iSubShift = 1;
+      }
+
+      Distortion uiTempSad = m_cDistParam.DistFunc( &m_cDistParam );
+      if((uiTempSad + uiBitCost) < rcStruct.uiBestSad)
+      {
+        uiSad += uiTempSad >>  m_cDistParam.iSubShift;
+        while(m_cDistParam.iSubShift > 0)
+        {
+          isubShift         = m_cDistParam.iSubShift -1;
+          m_cDistParam.pOrg = pcPatternKey->getROIY() + (pcPatternKey->getPatternLStride() << isubShift);
+          m_cDistParam.pCur = piRefSrch + (rcStruct.iYStride << isubShift);
+          uiTempSad = m_cDistParam.DistFunc( &m_cDistParam );
+          uiSad += uiTempSad >>  m_cDistParam.iSubShift;
+          if(((uiSad << isubShift) + uiBitCost) > rcStruct.uiBestSad)
+          {
+            break;
+          }
+
+          m_cDistParam.iSubShift--;
+        }
+
+        if(m_cDistParam.iSubShift == 0)
+        {
+          uiSad += uiBitCost;
+          if( uiSad < rcStruct.uiBestSad )
+          {
+            rcStruct.uiBestSad      = uiSad;
+            rcStruct.iBestX         = iSearchX;
+            rcStruct.iBestY         = iSearchY;
+            rcStruct.uiBestDistance = uiDistance;
+            rcStruct.uiBestRound    = 0;
+            rcStruct.ucPointNr      = ucPointNr;
+            m_cDistParam.m_maximumDistortionForEarlyExit = uiSad;
+          }
+        }
+      }
+    }
+  }
+  else
+  {
+    // fast encoder decision: use subsampled SAD when rows > 8 for integer ME
+    if ( m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE1 || m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE3 )
+    {
+      if ( m_cDistParam.iRows > 8 )
+      {
+        m_cDistParam.iSubShift = 1;
+      }
+    }
+
+    uiSad = m_cDistParam.DistFunc( &m_cDistParam );
+
