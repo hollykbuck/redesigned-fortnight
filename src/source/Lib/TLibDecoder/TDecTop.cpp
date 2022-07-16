@@ -798,3 +798,103 @@ Bool TDecTop::xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisp
     {
         pcSlice->getSPS()->getMaxLog2TrDynamicRange(CHANNEL_TYPE_LUMA),
         pcSlice->getSPS()->getMaxLog2TrDynamicRange(CHANNEL_TYPE_CHROMA)
+    };
+    m_cTrQuant.setFlatScalingList(maxLog2TrDynamicRange, pcSlice->getSPS()->getBitDepths());
+    m_cTrQuant.setUseScalingList(false);
+  }
+
+  //  Decode a picture
+  m_cGopDecoder.decompressSlice(&(nalu.getBitstream()), m_pcPic);
+
+  m_bFirstSliceInPicture = false;
+  m_uiSliceIdx++;
+
+  return false;
+}
+
+Void TDecTop::xDecodeVPS(const std::vector<UChar> &naluData)
+{
+  TComVPS* vps = new TComVPS();
+
+  m_cEntropyDecoder.decodeVPS( vps );
+  m_parameterSetManager.storeVPS(vps, naluData);
+}
+
+Void TDecTop::xDecodeSPS(const std::vector<UChar> &naluData)
+{
+  TComSPS* sps = new TComSPS();
+#if O0043_BEST_EFFORT_DECODING
+  sps->setForceDecodeBitDepth(m_forceDecodeBitDepth);
+#endif
+  m_cEntropyDecoder.decodeSPS( sps );
+  m_parameterSetManager.storeSPS(sps, naluData);
+}
+
+Void TDecTop::xDecodePPS(const std::vector<UChar> &naluData)
+{
+  TComPPS* pps = new TComPPS();
+  m_cEntropyDecoder.decodePPS( pps );
+  m_parameterSetManager.storePPS( pps, naluData);
+}
+
+#if MCTS_EXTRACTION
+Bool TDecTop::decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay, Bool bSkipCabacAndReconstruction)
+#else
+Bool TDecTop::decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay)
+#endif
+{
+  // ignore all NAL units of layers > 0
+  if (nalu.m_nuhLayerId > 0)
+  {
+    fprintf (stderr, "Warning: found NAL unit with nuh_layer_id equal to %d. Ignoring.\n", nalu.m_nuhLayerId);
+    return false;
+  }
+  // Initialize entropy decoder
+  m_cEntropyDecoder.setEntropyDecoder (&m_cCavlcDecoder);
+  m_cEntropyDecoder.setBitstream      (&(nalu.getBitstream()));
+
+  switch (nalu.m_nalUnitType)
+  {
+    case NAL_UNIT_VPS:
+      xDecodeVPS(nalu.getBitstream().getFifo());
+      return false;
+
+    case NAL_UNIT_SPS:
+      xDecodeSPS(nalu.getBitstream().getFifo());
+      return false;
+
+    case NAL_UNIT_PPS:
+      xDecodePPS(nalu.getBitstream().getFifo());
+      return false;
+
+    case NAL_UNIT_PREFIX_SEI:
+      // Buffer up prefix SEI messages until SPS of associated VCL is known.
+      m_prefixSEINALUs.push_back(new InputNALUnit(nalu));
+      return false;
+
+    case NAL_UNIT_SUFFIX_SEI:
+      if (m_pcPic)
+      {
+        m_seiReader.parseSEImessage( &(nalu.getBitstream()), m_pcPic->getSEIs(), nalu.m_nalUnitType, m_parameterSetManager.getActiveSPS(), m_pDecodedSEIOutputStream );
+      }
+      else
+      {
+        printf ("Note: received suffix SEI but no picture currently active.\n");
+      }
+      return false;
+
+    case NAL_UNIT_CODED_SLICE_TRAIL_R:
+    case NAL_UNIT_CODED_SLICE_TRAIL_N:
+    case NAL_UNIT_CODED_SLICE_TSA_R:
+    case NAL_UNIT_CODED_SLICE_TSA_N:
+    case NAL_UNIT_CODED_SLICE_STSA_R:
+    case NAL_UNIT_CODED_SLICE_STSA_N:
+    case NAL_UNIT_CODED_SLICE_BLA_W_LP:
+    case NAL_UNIT_CODED_SLICE_BLA_W_RADL:
+    case NAL_UNIT_CODED_SLICE_BLA_N_LP:
+    case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+    case NAL_UNIT_CODED_SLICE_IDR_N_LP:
+    case NAL_UNIT_CODED_SLICE_CRA:
+    case NAL_UNIT_CODED_SLICE_RADL_N:
+    case NAL_UNIT_CODED_SLICE_RADL_R:
+    case NAL_UNIT_CODED_SLICE_RASL_N:
