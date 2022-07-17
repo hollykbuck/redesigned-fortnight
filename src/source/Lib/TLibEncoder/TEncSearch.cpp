@@ -598,3 +598,103 @@ __inline Void TEncSearch::xTZ8PointSquareSearch( const TComPattern* const pcPatt
       xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iBottom, 6, iDist );
     }
     // check bottom middle
+    xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 7, iDist );
+
+    if ( iRight <= iSrchRngHorRight ) // check bottom right
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iRight, iBottom, 8, iDist );
+    }
+  } // check bottom
+}
+
+
+
+
+__inline Void TEncSearch::xTZ8PointDiamondSearch( const TComPattern*const  pcPatternKey,
+                                                  IntTZSearchStruct& rcStruct,
+                                                  const TComMv*const  pcMvSrchRngLT,
+                                                  const TComMv*const  pcMvSrchRngRB,
+                                                  const Int iStartX,
+                                                  const Int iStartY,
+                                                  const Int iDist,
+                                                  const Bool bCheckCornersAtDist1 )
+{
+  const Int   iSrchRngHorLeft   = pcMvSrchRngLT->getHor();
+  const Int   iSrchRngHorRight  = pcMvSrchRngRB->getHor();
+  const Int   iSrchRngVerTop    = pcMvSrchRngLT->getVer();
+  const Int   iSrchRngVerBottom = pcMvSrchRngRB->getVer();
+
+  // 8 point search,                   //   1 2 3
+  // search around the start point     //   4 0 5
+  // with the required  distance       //   6 7 8
+  assert ( iDist != 0 );
+  const Int iTop        = iStartY - iDist;
+  const Int iBottom     = iStartY + iDist;
+  const Int iLeft       = iStartX - iDist;
+  const Int iRight      = iStartX + iDist;
+  rcStruct.uiBestRound += 1;
+
+  if ( iDist == 1 )
+  {
+    if ( iTop >= iSrchRngVerTop ) // check top
+    {
+      if (bCheckCornersAtDist1)
+      {
+        if ( iLeft >= iSrchRngHorLeft) // check top-left
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iTop, 1, iDist );
+        }
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop, 2, iDist );
+        if ( iRight <= iSrchRngHorRight ) // check middle right
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iRight, iTop, 3, iDist );
+        }
+      }
+      else
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop, 2, iDist );
+      }
+    }
+    if ( iLeft >= iSrchRngHorLeft ) // check middle left
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iStartY, 4, iDist );
+    }
+    if ( iRight <= iSrchRngHorRight ) // check middle right
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iRight, iStartY, 5, iDist );
+    }
+    if ( iBottom <= iSrchRngVerBottom ) // check bottom
+    {
+      if (bCheckCornersAtDist1)
+      {
+        if ( iLeft >= iSrchRngHorLeft) // check top-left
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iBottom, 6, iDist );
+        }
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 7, iDist );
+        if ( iRight <= iSrchRngHorRight ) // check middle right
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iRight, iBottom, 8, iDist );
+        }
+      }
+      else
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 7, iDist );
+      }
+    }
+  }
+  else
+  {
+    if ( iDist <= 8 )
+    {
+      const Int iTop_2      = iStartY - (iDist>>1);
+      const Int iBottom_2   = iStartY + (iDist>>1);
+      const Int iLeft_2     = iStartX - (iDist>>1);
+      const Int iRight_2    = iStartX + (iDist>>1);
+
+      if (  iTop >= iSrchRngVerTop && iLeft >= iSrchRngHorLeft &&
+          iRight <= iSrchRngHorRight && iBottom <= iSrchRngVerBottom ) // check border
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX,  iTop,      2, iDist    );
+        xTZSearchHelp( pcPatternKey, rcStruct, iLeft_2,  iTop_2,    1, iDist>>1 );
+        xTZSearchHelp( pcPatternKey, rcStruct, iRight_2, iTop_2,    3, iDist>>1 );
