@@ -898,3 +898,103 @@ Bool TDecTop::decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay)
     case NAL_UNIT_CODED_SLICE_RADL_N:
     case NAL_UNIT_CODED_SLICE_RADL_R:
     case NAL_UNIT_CODED_SLICE_RASL_N:
+    case NAL_UNIT_CODED_SLICE_RASL_R:
+#if MCTS_EXTRACTION
+      return xDecodeSlice(nalu, iSkipFrame, iPOCLastDisplay, bSkipCabacAndReconstruction);
+#else
+      return xDecodeSlice(nalu, iSkipFrame, iPOCLastDisplay);
+#endif
+      break;
+
+    case NAL_UNIT_EOS:
+      m_associatedIRAPType = NAL_UNIT_INVALID;
+      m_pocCRA = 0;
+      m_pocRandomAccess = MAX_INT;
+      m_prevPOC = MAX_INT;
+      m_prevSliceSkipped = false;
+      m_skippedPOC = 0;
+      return false;
+
+    case NAL_UNIT_ACCESS_UNIT_DELIMITER:
+      {
+        AUDReader audReader;
+        UInt picType;
+        audReader.parseAccessUnitDelimiter(&(nalu.getBitstream()),picType);
+        printf ("Note: found NAL_UNIT_ACCESS_UNIT_DELIMITER\n");
+        return false;
+      }
+
+    case NAL_UNIT_EOB:
+      return false;
+
+    case NAL_UNIT_FILLER_DATA:
+      {
+        FDReader fdReader;
+        UInt size;
+        fdReader.parseFillerData(&(nalu.getBitstream()),size);
+        printf ("Note: found NAL_UNIT_FILLER_DATA with %u bytes payload.\n", size);
+        return false;
+      }
+
+    case NAL_UNIT_RESERVED_VCL_N10:
+    case NAL_UNIT_RESERVED_VCL_R11:
+    case NAL_UNIT_RESERVED_VCL_N12:
+    case NAL_UNIT_RESERVED_VCL_R13:
+    case NAL_UNIT_RESERVED_VCL_N14:
+    case NAL_UNIT_RESERVED_VCL_R15:
+
+    case NAL_UNIT_RESERVED_IRAP_VCL22:
+    case NAL_UNIT_RESERVED_IRAP_VCL23:
+
+    case NAL_UNIT_RESERVED_VCL24:
+    case NAL_UNIT_RESERVED_VCL25:
+    case NAL_UNIT_RESERVED_VCL26:
+    case NAL_UNIT_RESERVED_VCL27:
+    case NAL_UNIT_RESERVED_VCL28:
+    case NAL_UNIT_RESERVED_VCL29:
+    case NAL_UNIT_RESERVED_VCL30:
+    case NAL_UNIT_RESERVED_VCL31:
+      printf ("Note: found reserved VCL NAL unit.\n");
+      xParsePrefixSEIsForUnknownVCLNal();
+      return false;
+
+    case NAL_UNIT_RESERVED_NVCL41:
+    case NAL_UNIT_RESERVED_NVCL42:
+    case NAL_UNIT_RESERVED_NVCL43:
+    case NAL_UNIT_RESERVED_NVCL44:
+    case NAL_UNIT_RESERVED_NVCL45:
+    case NAL_UNIT_RESERVED_NVCL46:
+    case NAL_UNIT_RESERVED_NVCL47:
+      printf ("Note: found reserved NAL unit.\n");
+      return false;
+    case NAL_UNIT_UNSPECIFIED_48:
+    case NAL_UNIT_UNSPECIFIED_49:
+    case NAL_UNIT_UNSPECIFIED_50:
+    case NAL_UNIT_UNSPECIFIED_51:
+    case NAL_UNIT_UNSPECIFIED_52:
+    case NAL_UNIT_UNSPECIFIED_53:
+    case NAL_UNIT_UNSPECIFIED_54:
+    case NAL_UNIT_UNSPECIFIED_55:
+    case NAL_UNIT_UNSPECIFIED_56:
+    case NAL_UNIT_UNSPECIFIED_57:
+    case NAL_UNIT_UNSPECIFIED_58:
+    case NAL_UNIT_UNSPECIFIED_59:
+    case NAL_UNIT_UNSPECIFIED_60:
+    case NAL_UNIT_UNSPECIFIED_61:
+    case NAL_UNIT_UNSPECIFIED_62:
+    case NAL_UNIT_UNSPECIFIED_63:
+      printf ("Note: found unspecified NAL unit.\n");
+      return false;
+    default:
+      assert (0);
+      break;
+  }
+
+  return false;
+}
+
+/** Function for checking if picture should be skipped because of association with a previous BLA picture
+ * \param iPOCLastDisplay POC of last picture displayed
+ * \returns true if the picture should be skipped
+ * This function skips all TFD pictures that follow a BLA picture
+ * in decoding order and precede it in output order.
