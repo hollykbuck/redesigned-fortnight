@@ -898,3 +898,103 @@ Distortion TEncSearch::xPatternRefinement( TComPattern* pcPatternKey,
 
   rcMvFrac = pcMvRefine[uiDirecBest];
 
+  return uiDistBest;
+}
+
+
+
+Void
+TEncSearch::xEncSubdivCbfQT(TComTU      &rTu,
+                            Bool         bLuma,
+                            Bool         bChroma )
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx         = rTu.GetAbsPartIdxTU();
+  const UInt uiTrDepth            = rTu.GetTransformDepthRel();
+  const UInt uiTrMode             = pcCU->getTransformIdx( uiAbsPartIdx );
+  const UInt uiSubdiv             = ( uiTrMode > uiTrDepth ? 1 : 0 );
+  const UInt uiLog2LumaTrafoSize  = rTu.GetLog2LumaTrSize();
+
+  if( pcCU->isIntra(0) && pcCU->getPartitionSize(0) == SIZE_NxN && uiTrDepth == 0 )
+  {
+    assert( uiSubdiv );
+  }
+  else if( uiLog2LumaTrafoSize > pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() )
+  {
+    assert( uiSubdiv );
+  }
+  else if( uiLog2LumaTrafoSize == pcCU->getSlice()->getSPS()->getQuadtreeTULog2MinSize() )
+  {
+    assert( !uiSubdiv );
+  }
+  else if( uiLog2LumaTrafoSize == pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) )
+  {
+    assert( !uiSubdiv );
+  }
+  else
+  {
+    assert( uiLog2LumaTrafoSize > pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) );
+    if( bLuma )
+    {
+      m_pcEntropyCoder->encodeTransformSubdivFlag( uiSubdiv, 5 - uiLog2LumaTrafoSize );
+    }
+  }
+
+  if ( bChroma )
+  {
+    const UInt numberValidComponents = getNumberValidComponents(rTu.GetChromaFormat());
+    for (UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+    {
+      const ComponentID compID=ComponentID(ch);
+      if( rTu.ProcessingAllQuadrants(compID) && (uiTrDepth==0 || pcCU->getCbf( uiAbsPartIdx, compID, uiTrDepth-1 ) ))
+      {
+        m_pcEntropyCoder->encodeQtCbf(rTu, compID, (uiSubdiv == 0));
+      }
+    }
+  }
+
+  if( uiSubdiv )
+  {
+    TComTURecurse tuRecurse(rTu, false);
+    do
+    {
+      xEncSubdivCbfQT( tuRecurse, bLuma, bChroma );
+    } while (tuRecurse.nextSection(rTu));
+  }
+  else
+  {
+    //===== Cbfs =====
+    if( bLuma )
+    {
+      m_pcEntropyCoder->encodeQtCbf( rTu, COMPONENT_Y, true );
+    }
+  }
+}
+
+
+
+
+Void
+TEncSearch::xEncCoeffQT(TComTU &rTu,
+                        const ComponentID  component,
+                        Bool         bRealCoeff )
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiTrDepth=rTu.GetTransformDepthRel();
+
+  const UInt  uiTrMode        = pcCU->getTransformIdx( uiAbsPartIdx );
+  const UInt  uiSubdiv        = ( uiTrMode > uiTrDepth ? 1 : 0 );
+
+  if( uiSubdiv )
+  {
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      xEncCoeffQT( tuRecurseChild, component, bRealCoeff );
+    } while (tuRecurseChild.nextSection(rTu) );
+  }
+  else if (rTu.ProcessComponentSection(component))
+  {
+    //===== coefficients =====
+    const UInt  uiLog2TrafoSize = rTu.GetLog2LumaTrSize();
