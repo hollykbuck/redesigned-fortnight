@@ -998,3 +998,103 @@ TEncSearch::xEncCoeffQT(TComTU &rTu,
   {
     //===== coefficients =====
     const UInt  uiLog2TrafoSize = rTu.GetLog2LumaTrSize();
+    UInt    uiCoeffOffset   = rTu.getCoefficientOffset(component);
+    UInt    uiQTLayer       = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrafoSize;
+    TCoeff* pcCoeff         = bRealCoeff ? pcCU->getCoeff(component) : m_ppcQTTempCoeff[component][uiQTLayer];
+
+    if (isChroma(component) && (pcCU->getCbf( rTu.GetAbsPartIdxTU(), COMPONENT_Y, uiTrMode ) != 0) && pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag() )
+    {
+      m_pcEntropyCoder->encodeCrossComponentPrediction( rTu, component );
+    }
+
+    m_pcEntropyCoder->encodeCoeffNxN( rTu, pcCoeff+uiCoeffOffset, component );
+  }
+}
+
+
+
+
+Void
+TEncSearch::xEncIntraHeader( TComDataCU*  pcCU,
+                            UInt         uiTrDepth,
+                            UInt         uiAbsPartIdx,
+                            Bool         bLuma,
+                            Bool         bChroma )
+{
+  if( bLuma )
+  {
+    // CU header
+    if( uiAbsPartIdx == 0 )
+    {
+      if( !pcCU->getSlice()->isIntra() )
+      {
+        if (pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+        {
+          m_pcEntropyCoder->encodeCUTransquantBypassFlag( pcCU, 0, true );
+        }
+        m_pcEntropyCoder->encodeSkipFlag( pcCU, 0, true );
+        m_pcEntropyCoder->encodePredMode( pcCU, 0, true );
+      }
+      m_pcEntropyCoder  ->encodePartSize( pcCU, 0, pcCU->getDepth(0), true );
+
+      if (pcCU->isIntra(0) && pcCU->getPartitionSize(0) == SIZE_2Nx2N )
+      {
+        m_pcEntropyCoder->encodeIPCMInfo( pcCU, 0, true );
+
+        if ( pcCU->getIPCMFlag (0))
+        {
+          return;
+        }
+      }
+    }
+    // luma prediction mode
+    if( pcCU->getPartitionSize(0) == SIZE_2Nx2N )
+    {
+      if (uiAbsPartIdx==0)
+      {
+        m_pcEntropyCoder->encodeIntraDirModeLuma ( pcCU, 0 );
+      }
+    }
+    else
+    {
+      UInt uiQNumParts = pcCU->getTotalNumPart() >> 2;
+      if (uiTrDepth>0 && (uiAbsPartIdx%uiQNumParts)==0)
+      {
+        m_pcEntropyCoder->encodeIntraDirModeLuma ( pcCU, uiAbsPartIdx );
+      }
+    }
+  }
+
+  if( bChroma )
+  {
+    if( pcCU->getPartitionSize(0) == SIZE_2Nx2N || !enable4ChromaPUsInIntraNxNCU(pcCU->getPic()->getChromaFormat()))
+    {
+      if(uiAbsPartIdx==0)
+      {
+         m_pcEntropyCoder->encodeIntraDirModeChroma ( pcCU, uiAbsPartIdx );
+      }
+    }
+    else
+    {
+      UInt uiQNumParts = pcCU->getTotalNumPart() >> 2;
+      assert(uiTrDepth>0);
+      if ((uiAbsPartIdx%uiQNumParts)==0)
+      {
+        m_pcEntropyCoder->encodeIntraDirModeChroma ( pcCU, uiAbsPartIdx );
+      }
+    }
+  }
+}
+
+
+
+
+UInt
+TEncSearch::xGetIntraBitsQT(TComTU &rTu,
+                            Bool         bLuma,
+                            Bool         bChroma,
+                            Bool         bRealCoeff /* just for test */ )
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiTrDepth=rTu.GetTransformDepthRel();
