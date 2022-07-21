@@ -98,3 +98,103 @@ TComSlice::TComSlice()
 , m_sliceBits                     ( 0 )
 , m_sliceSegmentBits              ( 0 )
 , m_bFinalized                    ( false )
+, m_bTestWeightPred               ( false )
+, m_bTestWeightBiPred             ( false )
+, m_substreamSizes                ( )
+, m_cabacInitFlag                 ( false )
+, m_bLMvdL1Zero                   ( false )
+, m_temporalLayerNonReferenceFlag ( false )
+, m_LFCrossSliceBoundaryFlag      ( false )
+, m_enableTMVPFlag                ( true )
+, m_encCABACTableIdx              (I_SLICE)
+{
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_aiNumRefIdx[i] = 0;
+  }
+
+  for (UInt component = 0; component < MAX_NUM_COMPONENT; component++)
+  {
+    m_lambdas            [component] = 0.0;
+    m_iSliceChromaQpDelta[component] = 0;
+  }
+
+  initEqualRef();
+
+  for ( Int idx = 0; idx < MAX_NUM_REF; idx++ )
+  {
+    m_list1IdxToList0Idx[idx] = -1;
+  }
+
+  for(Int iNumCount = 0; iNumCount < MAX_NUM_REF; iNumCount++)
+  {
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      m_apcRefPicList [i][iNumCount] = NULL;
+      m_aiRefPOCList  [i][iNumCount] = 0;
+    }
+  }
+
+  resetWpScaling();
+  initWpAcDcParam();
+
+  for(Int ch=0; ch < MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    m_saoEnabledFlag[ch] = false;
+  }
+}
+
+TComSlice::~TComSlice()
+{
+}
+
+
+Void TComSlice::initSlice()
+{
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_aiNumRefIdx[i]      = 0;
+  }
+  m_colFromL0Flag = true;
+
+  m_colRefIdx = 0;
+  initEqualRef();
+
+  m_bCheckLDC = false;
+
+  for (UInt component = 0; component < MAX_NUM_COMPONENT; component++)
+  {
+    m_iSliceChromaQpDelta[component] = 0;
+  }
+
+  m_maxNumMergeCand = MRG_MAX_NUM_CANDS;
+
+  m_bFinalized=false;
+
+  m_substreamSizes.clear();
+  m_cabacInitFlag        = false;
+  m_enableTMVPFlag = true;
+}
+
+Bool TComSlice::getRapPicFlag() const
+{
+  return getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA;
+}
+
+
+Void  TComSlice::sortPicList        (TComList<TComPic*>& rcListPic)
+{
+  TComPic*    pcPicExtract;
+  TComPic*    pcPicInsert;
+
+  TComList<TComPic*>::iterator    iterPicExtract;
+  TComList<TComPic*>::iterator    iterPicExtract_1;
+  TComList<TComPic*>::iterator    iterPicInsert;
+
+  for (Int i = 1; i < (Int)(rcListPic.size()); i++)
+  {
