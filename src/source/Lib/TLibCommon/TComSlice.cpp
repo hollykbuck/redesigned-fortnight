@@ -198,3 +198,103 @@ Void  TComSlice::sortPicList        (TComList<TComPic*>& rcListPic)
 
   for (Int i = 1; i < (Int)(rcListPic.size()); i++)
   {
+    iterPicExtract = rcListPic.begin();
+    for (Int j = 0; j < i; j++)
+    {
+      iterPicExtract++;
+    }
+    pcPicExtract = *(iterPicExtract);
+    pcPicExtract->setCurrSliceIdx(0);
+
+    iterPicInsert = rcListPic.begin();
+    while (iterPicInsert != iterPicExtract)
+    {
+      pcPicInsert = *(iterPicInsert);
+      pcPicInsert->setCurrSliceIdx(0);
+      if (pcPicInsert->getPOC() >= pcPicExtract->getPOC())
+      {
+        break;
+      }
+
+      iterPicInsert++;
+    }
+
+    iterPicExtract_1 = iterPicExtract;    iterPicExtract_1++;
+
+    //  swap iterPicExtract and iterPicInsert, iterPicExtract = curr. / iterPicInsert = insertion position
+    rcListPic.insert (iterPicInsert, iterPicExtract, iterPicExtract_1);
+    rcListPic.erase  (iterPicExtract);
+  }
+}
+
+TComPic* TComSlice::xGetRefPic (TComList<TComPic*>& rcListPic, Int poc)
+{
+  TComList<TComPic*>::iterator  iterPic = rcListPic.begin();
+  TComPic*                      pcPic = *(iterPic);
+  while ( iterPic != rcListPic.end() )
+  {
+    if(pcPic->getPOC() == poc)
+    {
+      break;
+    }
+    iterPic++;
+    pcPic = *(iterPic);
+  }
+  return  pcPic;
+}
+
+
+TComPic* TComSlice::xGetLongTermRefPic(TComList<TComPic*>& rcListPic, Int poc, Bool pocHasMsb)
+{
+  TComList<TComPic*>::iterator  iterPic = rcListPic.begin();
+  TComPic*                      pcPic = *(iterPic);
+  TComPic*                      pcStPic = pcPic;
+
+  Int pocCycle = 1 << getSPS()->getBitsForPOC();
+  if (!pocHasMsb)
+  {
+    poc = poc & (pocCycle - 1);
+  }
+
+  while ( iterPic != rcListPic.end() )
+  {
+    pcPic = *(iterPic);
+    if (pcPic && pcPic->getPOC()!=this->getPOC() && pcPic->getSlice( 0 )->isReferenced())
+    {
+      Int picPoc = pcPic->getPOC();
+      if (!pocHasMsb)
+      {
+        picPoc = picPoc & (pocCycle - 1);
+      }
+
+      if (poc == picPoc)
+      {
+        if(pcPic->getIsLongTerm())
+        {
+          return pcPic;
+        }
+        else
+        {
+          pcStPic = pcPic;
+        }
+        break;
+      }
+    }
+
+    iterPic++;
+  }
+
+  return  pcStPic;
+}
+
+Void TComSlice::setRefPOCList       ()
+{
+  for (Int iDir = 0; iDir < NUM_REF_PIC_LIST_01; iDir++)
+  {
+    for (Int iNumRefIdx = 0; iNumRefIdx < m_aiNumRefIdx[iDir]; iNumRefIdx++)
+    {
+      m_aiRefPOCList[iDir][iNumRefIdx] = m_apcRefPicList[iDir][iNumRefIdx]->getPOC();
+    }
+  }
+
+}
