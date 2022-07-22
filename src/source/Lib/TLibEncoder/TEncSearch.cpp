@@ -1098,3 +1098,103 @@ TEncSearch::xGetIntraBitsQT(TComTU &rTu,
   TComDataCU* pcCU=rTu.getCU();
   const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
   const UInt uiTrDepth=rTu.GetTransformDepthRel();
+  m_pcEntropyCoder->resetBits();
+  xEncIntraHeader ( pcCU, uiTrDepth, uiAbsPartIdx, bLuma, bChroma );
+  xEncSubdivCbfQT ( rTu, bLuma, bChroma );
+
+  if( bLuma )
+  {
+    xEncCoeffQT   ( rTu, COMPONENT_Y,      bRealCoeff );
+  }
+  if( bChroma )
+  {
+    xEncCoeffQT   ( rTu, COMPONENT_Cb,  bRealCoeff );
+    xEncCoeffQT   ( rTu, COMPONENT_Cr,  bRealCoeff );
+  }
+  UInt   uiBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+
+  return uiBits;
+}
+
+UInt TEncSearch::xGetIntraBitsQTChroma(TComTU &rTu,
+                                       ComponentID compID,
+                                       Bool         bRealCoeff /* just for test */ )
+{
+  m_pcEntropyCoder->resetBits();
+  xEncCoeffQT   ( rTu, compID,  bRealCoeff );
+  UInt   uiBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+  return uiBits;
+}
+
+Void TEncSearch::xIntraCodingTUBlock(       TComYuv*    pcOrgYuv,
+                                            TComYuv*    pcPredYuv,
+                                            TComYuv*    pcResiYuv,
+                                            Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                      const Bool        checkCrossCPrediction,
+                                            Distortion& ruiDist,
+                                      const ComponentID compID,
+                                            TComTU&     rTu
+                                      DEBUG_STRING_FN_DECLARE(sDebug)
+                                           ,Int         default0Save1Load2
+                                     )
+{
+  if (!rTu.ProcessComponentSection(compID))
+  {
+    return;
+  }
+  const Bool           bIsLuma          = isLuma(compID);
+  const TComRectangle &rect             = rTu.getRect(compID);
+        TComDataCU    *pcCU             = rTu.getCU();
+  const UInt           uiAbsPartIdx     = rTu.GetAbsPartIdxTU();
+  const TComSPS       &sps              = *(pcCU->getSlice()->getSPS());
+
+  const UInt           uiTrDepth        = rTu.GetTransformDepthRelAdj(compID);
+  const UInt           uiFullDepth      = rTu.GetTransformDepthTotal();
+  const UInt           uiLog2TrSize     = rTu.GetLog2LumaTrSize();
+  const ChromaFormat   chFmt            = pcOrgYuv->getChromaFormat();
+  const ChannelType    chType           = toChannelType(compID);
+  const Int            bitDepth         = sps.getBitDepth(chType);
+
+  const UInt           uiWidth          = rect.width;
+  const UInt           uiHeight         = rect.height;
+  const UInt           uiStride         = pcOrgYuv ->getStride (compID);
+        Pel           *piOrg            = pcOrgYuv ->getAddr( compID, uiAbsPartIdx );
+        Pel           *piPred           = pcPredYuv->getAddr( compID, uiAbsPartIdx );
+        Pel           *piResi           = pcResiYuv->getAddr( compID, uiAbsPartIdx );
+        Pel           *piReco           = pcPredYuv->getAddr( compID, uiAbsPartIdx );
+  const UInt           uiQTLayer        = sps.getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+        Pel           *piRecQt          = m_pcQTTempTComYuv[ uiQTLayer ].getAddr( compID, uiAbsPartIdx );
+  const UInt           uiRecQtStride    = m_pcQTTempTComYuv[ uiQTLayer ].getStride(compID);
+  const UInt           uiZOrder         = pcCU->getZorderIdxInCtu() + uiAbsPartIdx;
+        Pel           *piRecIPred       = pcCU->getPic()->getPicYuvRec()->getAddr( compID, pcCU->getCtuRsAddr(), uiZOrder );
+        UInt           uiRecIPredStride = pcCU->getPic()->getPicYuvRec()->getStride  ( compID );
+        TCoeff        *pcCoeff          = m_ppcQTTempCoeff[compID][uiQTLayer] + rTu.getCoefficientOffset(compID);
+        Bool           useTransformSkip = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+
+#if ADAPTIVE_QP_SELECTION
+        TCoeff        *pcArlCoeff       = m_ppcQTTempArlCoeff[compID][ uiQTLayer ] + rTu.getCoefficientOffset(compID);
+#endif
+
+  const UInt           uiChPredMode     = pcCU->getIntraDir( chType, uiAbsPartIdx );
+  const UInt           partsPerMinCU    = 1<<(2*(sps.getMaxTotalCUDepth() - sps.getLog2DiffMaxMinCodingBlockSize()));
+  const UInt           uiChCodedMode    = (uiChPredMode==DM_CHROMA_IDX && !bIsLuma) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
+  const UInt           uiChFinalMode    = ((chFmt == CHROMA_422)       && !bIsLuma) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
+
+  const Int            blkX                                 = g_auiRasterToPelX[ g_auiZscanToRaster[ uiAbsPartIdx ] ];
+  const Int            blkY                                 = g_auiRasterToPelY[ g_auiZscanToRaster[ uiAbsPartIdx ] ];
+  const Int            bufferOffset                         = blkX + (blkY * MAX_CU_SIZE);
+        Pel  *const    encoderLumaResidual                  = resiLuma[RESIDUAL_ENCODER_SIDE ] + bufferOffset;
+        Pel  *const    reconstructedLumaResidual            = resiLuma[RESIDUAL_RECONSTRUCTED] + bufferOffset;
+  const Bool           bUseCrossCPrediction                 = isChroma(compID) && (uiChPredMode == DM_CHROMA_IDX) && checkCrossCPrediction;
+  const Bool           bUseReconstructedResidualForEstimate = m_pcEncCfg->getUseReconBasedCrossCPredictionEstimate();
+        Pel *const     lumaResidualForEstimate              = bUseReconstructedResidualForEstimate ? reconstructedLumaResidual : encoderLumaResidual;
+
+#if DEBUG_STRING
+  const Int debugPredModeMask=DebugStringGetPredModeMask(MODE_INTRA);
+#endif
+
+  //===== init availability pattern =====
+  DEBUG_STRING_NEW(sTemp)
+
+#if !DEBUG_STRING
+  if( default0Save1Load2 != 2 )
