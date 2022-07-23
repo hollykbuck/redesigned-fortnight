@@ -298,3 +298,103 @@ Void TComSlice::setRefPOCList       ()
   }
 
 }
+
+Void TComSlice::setList1IdxToList0Idx()
+{
+  Int idxL0, idxL1;
+  for ( idxL1 = 0; idxL1 < getNumRefIdx( REF_PIC_LIST_1 ); idxL1++ )
+  {
+    m_list1IdxToList0Idx[idxL1] = -1;
+    for ( idxL0 = 0; idxL0 < getNumRefIdx( REF_PIC_LIST_0 ); idxL0++ )
+    {
+      if ( m_apcRefPicList[REF_PIC_LIST_0][idxL0]->getPOC() == m_apcRefPicList[REF_PIC_LIST_1][idxL1]->getPOC() )
+      {
+        m_list1IdxToList0Idx[idxL1] = idxL0;
+        break;
+      }
+    }
+  }
+}
+
+Void TComSlice::setRefPicList( TComList<TComPic*>& rcListPic, Bool checkNumPocTotalCurr )
+{
+  if ( m_eSliceType == I_SLICE)
+  {
+    ::memset( m_apcRefPicList, 0, sizeof (m_apcRefPicList));
+    ::memset( m_aiNumRefIdx,   0, sizeof ( m_aiNumRefIdx ));
+
+    if (!checkNumPocTotalCurr)
+    {
+      return;
+    }
+  }
+
+  TComPic*  pcRefPic= NULL;
+  static const UInt MAX_NUM_NEGATIVE_PICTURES=16;
+  TComPic*  RefPicSetStCurr0[MAX_NUM_NEGATIVE_PICTURES];
+  TComPic*  RefPicSetStCurr1[MAX_NUM_NEGATIVE_PICTURES];
+  TComPic*  RefPicSetLtCurr[MAX_NUM_NEGATIVE_PICTURES];
+  UInt NumPicStCurr0 = 0;
+  UInt NumPicStCurr1 = 0;
+  UInt NumPicLtCurr = 0;
+  Int i;
+
+  for(i=0; i < m_pRPS->getNumberOfNegativePictures(); i++)
+  {
+    if(m_pRPS->getUsed(i))
+    {
+      pcRefPic = xGetRefPic(rcListPic, getPOC()+m_pRPS->getDeltaPOC(i));
+      pcRefPic->setIsLongTerm(0);
+      pcRefPic->getPicYuvRec()->extendPicBorder();
+      RefPicSetStCurr0[NumPicStCurr0] = pcRefPic;
+      NumPicStCurr0++;
+      pcRefPic->setCheckLTMSBPresent(false);
+    }
+  }
+
+  for(; i < m_pRPS->getNumberOfNegativePictures()+m_pRPS->getNumberOfPositivePictures(); i++)
+  {
+    if(m_pRPS->getUsed(i))
+    {
+      pcRefPic = xGetRefPic(rcListPic, getPOC()+m_pRPS->getDeltaPOC(i));
+      pcRefPic->setIsLongTerm(0);
+      pcRefPic->getPicYuvRec()->extendPicBorder();
+      RefPicSetStCurr1[NumPicStCurr1] = pcRefPic;
+      NumPicStCurr1++;
+      pcRefPic->setCheckLTMSBPresent(false);
+    }
+  }
+
+  for(i = m_pRPS->getNumberOfNegativePictures()+m_pRPS->getNumberOfPositivePictures()+m_pRPS->getNumberOfLongtermPictures()-1; i > m_pRPS->getNumberOfNegativePictures()+m_pRPS->getNumberOfPositivePictures()-1 ; i--)
+  {
+    if(m_pRPS->getUsed(i))
+    {
+      pcRefPic = xGetLongTermRefPic(rcListPic, m_pRPS->getPOC(i), m_pRPS->getCheckLTMSBPresent(i));
+      pcRefPic->setIsLongTerm(1);
+      pcRefPic->getPicYuvRec()->extendPicBorder();
+      RefPicSetLtCurr[NumPicLtCurr] = pcRefPic;
+      NumPicLtCurr++;
+    }
+    if(pcRefPic==NULL)
+    {
+      pcRefPic = xGetLongTermRefPic(rcListPic, m_pRPS->getPOC(i), m_pRPS->getCheckLTMSBPresent(i));
+    }
+    pcRefPic->setCheckLTMSBPresent(m_pRPS->getCheckLTMSBPresent(i));
+  }
+
+  // ref_pic_list_init
+  TComPic*  rpsCurrList0[MAX_NUM_REF+1];
+  TComPic*  rpsCurrList1[MAX_NUM_REF+1];
+  Int numPicTotalCurr = NumPicStCurr0 + NumPicStCurr1 + NumPicLtCurr;
+
+  if (checkNumPocTotalCurr)
+  {
+    // The variable NumPocTotalCurr is derived as specified in subclause 7.4.7.2. It is a requirement of bitstream conformance that the following applies to the value of NumPocTotalCurr:
+    // - If the current picture is a BLA or CRA picture, the value of NumPocTotalCurr shall be equal to 0.
+    // - Otherwise, when the current picture contains a P or B slice, the value of NumPocTotalCurr shall not be equal to 0.
+    if (getRapPicFlag())
+    {
+      assert(numPicTotalCurr == 0);
+    }
+
+    if (m_eSliceType == I_SLICE)
