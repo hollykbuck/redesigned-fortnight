@@ -498,3 +498,103 @@ Void TComSlice::initEqualRef()
   }
 }
 
+Void TComSlice::checkColRefIdx(UInt curSliceIdx, TComPic* pic)
+{
+  Int i;
+  TComSlice* curSlice = pic->getSlice(curSliceIdx);
+  Int currColRefPOC =  curSlice->getRefPOC( RefPicList(1 - curSlice->getColFromL0Flag()), curSlice->getColRefIdx());
+  TComSlice* preSlice;
+  Int preColRefPOC;
+  for(i=curSliceIdx-1; i>=0; i--)
+  {
+    preSlice = pic->getSlice(i);
+    if(preSlice->getSliceType() != I_SLICE)
+    {
+      preColRefPOC  = preSlice->getRefPOC( RefPicList(1 - preSlice->getColFromL0Flag()), preSlice->getColRefIdx());
+      if(currColRefPOC != preColRefPOC)
+      {
+        printf("Collocated_ref_idx shall always be the same for all slices of a coded picture!\n");
+        exit(EXIT_FAILURE);
+      }
+      else
+      {
+        break;
+      }
+    }
+  }
+}
+
+Void TComSlice::checkCRA(const TComReferencePictureSet *pReferencePictureSet, Int& pocCRA, NalUnitType& associatedIRAPType, TComList<TComPic *>& rcListPic)
+{
+  for(Int i = 0; i < pReferencePictureSet->getNumberOfNegativePictures()+pReferencePictureSet->getNumberOfPositivePictures(); i++)
+  {
+    if(pocCRA < MAX_UINT && getPOC() > pocCRA)
+    {
+      assert(getPOC()+pReferencePictureSet->getDeltaPOC(i) >= pocCRA);
+    }
+  }
+  for(Int i = pReferencePictureSet->getNumberOfNegativePictures()+pReferencePictureSet->getNumberOfPositivePictures(); i < pReferencePictureSet->getNumberOfPictures(); i++)
+  {
+    if(pocCRA < MAX_UINT && getPOC() > pocCRA)
+    {
+      if (!pReferencePictureSet->getCheckLTMSBPresent(i))
+      {
+        assert(xGetLongTermRefPic(rcListPic, pReferencePictureSet->getPOC(i), false)->getPOC() >= pocCRA);
+      }
+      else
+      {
+        assert(pReferencePictureSet->getPOC(i) >= pocCRA);
+      }
+    }
+  }
+  if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL || getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP ) // IDR picture found
+  {
+    pocCRA = getPOC();
+    associatedIRAPType = getNalUnitType();
+  }
+  else if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA ) // CRA picture found
+  {
+    pocCRA = getPOC();
+    associatedIRAPType = getNalUnitType();
+  }
+  else if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+         || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+         || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP ) // BLA picture found
+  {
+    pocCRA = getPOC();
+    associatedIRAPType = getNalUnitType();
+  }
+}
+
+/** Function for marking the reference pictures when an IDR/CRA/CRANT/BLA/BLANT is encountered.
+ * \param pocCRA POC of the CRA/CRANT/BLA/BLANT picture
+ * \param bRefreshPending flag indicating if a deferred decoding refresh is pending
+ * \param rcListPic reference to the reference picture list
+ * This function marks the reference pictures as "unused for reference" in the following conditions.
+ * If the nal_unit_type is IDR/BLA/BLANT, all pictures in the reference picture list
+ * are marked as "unused for reference"
+ *    If the nal_unit_type is BLA/BLANT, set the pocCRA to the temporal reference of the current picture.
+ * Otherwise
+ *    If the bRefreshPending flag is true (a deferred decoding refresh is pending) and the current
+ *    temporal reference is greater than the temporal reference of the latest CRA/CRANT/BLA/BLANT picture (pocCRA),
+ *    mark all reference pictures except the latest CRA/CRANT/BLA/BLANT picture as "unused for reference" and set
+ *    the bRefreshPending flag to false.
+ *    If the nal_unit_type is CRA/CRANT, set the bRefreshPending flag to true and pocCRA to the temporal
+ *    reference of the current picture.
+ * Note that the current picture is already placed in the reference list and its marking is not changed.
+ * If the current picture has a nal_ref_idc that is not 0, it will remain marked as "used for reference".
+ */
+Void TComSlice::decodingRefreshMarking(Int& pocCRA, Bool& bRefreshPending, TComList<TComPic*>& rcListPic, const bool bEfficientFieldIRAPEnabled)
+{
+  TComPic* rpcPic;
+  Int      pocCurr = getPOC();
+
+  if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+    || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+    || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP
+    || getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL
+    || getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP )  // IDR or BLA picture
+  {
+    // mark all pictures as not used for reference
+    TComList<TComPic*>::iterator        iterPic       = rcListPic.begin();
+    while (iterPic != rcListPic.end())
