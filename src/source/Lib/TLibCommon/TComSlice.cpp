@@ -598,3 +598,103 @@ Void TComSlice::decodingRefreshMarking(Int& pocCRA, Bool& bRefreshPending, TComL
     // mark all pictures as not used for reference
     TComList<TComPic*>::iterator        iterPic       = rcListPic.begin();
     while (iterPic != rcListPic.end())
+    {
+      rpcPic = *(iterPic);
+      rpcPic->setCurrSliceIdx(0);
+      if (rpcPic->getPOC() != pocCurr)
+      {
+        rpcPic->getSlice(0)->setReferenced(false);
+      }
+      iterPic++;
+    }
+    if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+      || getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP )
+    {
+      pocCRA = pocCurr;
+    }
+    if (bEfficientFieldIRAPEnabled)
+    {
+      bRefreshPending = true;
+    }
+  }
+  else // CRA or No DR
+  {
+    if(bEfficientFieldIRAPEnabled && (getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_IDR_N_LP || getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL))
+    {
+      if (bRefreshPending==true && pocCurr > m_iLastIDR) // IDR reference marking pending 
+      {
+        TComList<TComPic*>::iterator        iterPic       = rcListPic.begin();
+        while (iterPic != rcListPic.end())
+        {
+          rpcPic = *(iterPic);
+          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != m_iLastIDR)
+          {
+            rpcPic->getSlice(0)->setReferenced(false);
+          }
+          iterPic++;
+        }
+        bRefreshPending = false; 
+      }
+    }
+    else
+    {
+      if (bRefreshPending==true && pocCurr > pocCRA) // CRA reference marking pending
+      {
+        TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+        while (iterPic != rcListPic.end())
+        {
+          rpcPic = *(iterPic);
+          if (rpcPic->getPOC() != pocCurr && rpcPic->getPOC() != pocCRA)
+          {
+            rpcPic->getSlice(0)->setReferenced(false);
+          }
+          iterPic++;
+        }
+        bRefreshPending = false;
+      }
+    }
+    if ( getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA ) // CRA picture found
+    {
+      bRefreshPending = true;
+      pocCRA = pocCurr;
+    }
+  }
+}
+
+Void TComSlice::copySliceInfo(TComSlice *pSrc)
+{
+  assert( pSrc != NULL );
+
+  Int i, j, k;
+
+  m_iPOC                 = pSrc->m_iPOC;
+  m_eNalUnitType         = pSrc->m_eNalUnitType;
+  m_eSliceType           = pSrc->m_eSliceType;
+  m_iSliceQp             = pSrc->m_iSliceQp;
+#if ADAPTIVE_QP_SELECTION
+  m_iSliceQpBase         = pSrc->m_iSliceQpBase;
+#endif
+  m_ChromaQpAdjEnabled = pSrc->m_ChromaQpAdjEnabled;
+  m_deblockingFilterDisable   = pSrc->m_deblockingFilterDisable;
+  m_deblockingFilterOverrideFlag = pSrc->m_deblockingFilterOverrideFlag;
+  m_deblockingFilterBetaOffsetDiv2 = pSrc->m_deblockingFilterBetaOffsetDiv2;
+  m_deblockingFilterTcOffsetDiv2 = pSrc->m_deblockingFilterTcOffsetDiv2;
+
+  for (i = 0; i < NUM_REF_PIC_LIST_01; i++)
+  {
+    m_aiNumRefIdx[i]     = pSrc->m_aiNumRefIdx[i];
+  }
+
+  for (i = 0; i < MAX_NUM_REF; i++)
+  {
+    m_list1IdxToList0Idx[i] = pSrc->m_list1IdxToList0Idx[i];
+  }
+
+  m_bCheckLDC             = pSrc->m_bCheckLDC;
+  m_iSliceQpDelta        = pSrc->m_iSliceQpDelta;
+  for (UInt component = 0; component < MAX_NUM_COMPONENT; component++)
+  {
+    m_iSliceChromaQpDelta[component] = pSrc->m_iSliceChromaQpDelta[component];
+  }
+  for (i = 0; i < NUM_REF_PIC_LIST_01; i++)
