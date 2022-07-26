@@ -698,3 +698,103 @@ Void TComSlice::copySliceInfo(TComSlice *pSrc)
     m_iSliceChromaQpDelta[component] = pSrc->m_iSliceChromaQpDelta[component];
   }
   for (i = 0; i < NUM_REF_PIC_LIST_01; i++)
+  {
+    for (j = 0; j < MAX_NUM_REF; j++)
+    {
+      m_apcRefPicList[i][j]  = pSrc->m_apcRefPicList[i][j];
+      m_aiRefPOCList[i][j]   = pSrc->m_aiRefPOCList[i][j];
+      m_bIsUsedAsLongTerm[i][j] = pSrc->m_bIsUsedAsLongTerm[i][j];
+    }
+    m_bIsUsedAsLongTerm[i][MAX_NUM_REF] = pSrc->m_bIsUsedAsLongTerm[i][MAX_NUM_REF];
+  }
+  m_iDepth               = pSrc->m_iDepth;
+
+  // referenced slice
+  m_bRefenced            = pSrc->m_bRefenced;
+
+  // access channel
+  m_pRPS                = pSrc->m_pRPS;
+  m_iLastIDR             = pSrc->m_iLastIDR;
+
+  m_pcPic                = pSrc->m_pcPic;
+
+  m_colFromL0Flag        = pSrc->m_colFromL0Flag;
+  m_colRefIdx            = pSrc->m_colRefIdx;
+
+  setLambdas(pSrc->getLambdas());
+
+  for (i = 0; i < NUM_REF_PIC_LIST_01; i++)
+  {
+    for (j = 0; j < MAX_NUM_REF; j++)
+    {
+      for (k =0; k < MAX_NUM_REF; k++)
+      {
+        m_abEqualRef[i][j][k] = pSrc->m_abEqualRef[i][j][k];
+      }
+    }
+  }
+
+  m_uiTLayer                      = pSrc->m_uiTLayer;
+  m_bTLayerSwitchingFlag          = pSrc->m_bTLayerSwitchingFlag;
+
+  m_sliceMode                     = pSrc->m_sliceMode;
+  m_sliceArgument                 = pSrc->m_sliceArgument;
+  m_sliceCurStartCtuTsAddr        = pSrc->m_sliceCurStartCtuTsAddr;
+  m_sliceCurEndCtuTsAddr          = pSrc->m_sliceCurEndCtuTsAddr;
+  m_sliceIdx                      = pSrc->m_sliceIdx;
+  m_sliceSegmentMode              = pSrc->m_sliceSegmentMode;
+  m_sliceSegmentArgument          = pSrc->m_sliceSegmentArgument;
+  m_sliceSegmentCurStartCtuTsAddr = pSrc->m_sliceSegmentCurStartCtuTsAddr;
+  m_sliceSegmentCurEndCtuTsAddr   = pSrc->m_sliceSegmentCurEndCtuTsAddr;
+  m_nextSlice                     = pSrc->m_nextSlice;
+  m_nextSliceSegment              = pSrc->m_nextSliceSegment;
+
+  for ( UInt e=0 ; e<NUM_REF_PIC_LIST_01 ; e++ )
+  {
+    for ( UInt n=0 ; n<MAX_NUM_REF ; n++ )
+    {
+      memcpy(m_weightPredTable[e][n], pSrc->m_weightPredTable[e][n], sizeof(WPScalingParam)*MAX_NUM_COMPONENT );
+    }
+  }
+
+  for( UInt ch = 0 ; ch < MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    m_saoEnabledFlag[ch] = pSrc->m_saoEnabledFlag[ch];
+  }
+
+  m_cabacInitFlag                 = pSrc->m_cabacInitFlag;
+
+  m_bLMvdL1Zero                   = pSrc->m_bLMvdL1Zero;
+  m_LFCrossSliceBoundaryFlag      = pSrc->m_LFCrossSliceBoundaryFlag;
+  m_enableTMVPFlag                = pSrc->m_enableTMVPFlag;
+  m_maxNumMergeCand               = pSrc->m_maxNumMergeCand;
+  m_encCABACTableIdx              = pSrc->m_encCABACTableIdx;
+}
+
+
+/** Function for setting the slice's temporal layer ID and corresponding temporal_layer_switching_point_flag.
+ * \param uiTLayer Temporal layer ID of the current slice
+ * The decoder calls this function to set temporal_layer_switching_point_flag for each temporal layer based on
+ * the SPS's temporal_id_nesting_flag and the parsed PPS.  Then, current slice's temporal layer ID and
+ * temporal_layer_switching_point_flag is set accordingly.
+ */
+Void TComSlice::setTLayerInfo( UInt uiTLayer )
+{
+  m_uiTLayer = uiTLayer;
+}
+
+/** Function for checking if this is a switching-point
+*/
+Bool TComSlice::isTemporalLayerSwitchingPoint(TComList<TComPic*>& rcListPic)
+{
+  TComPic* rpcPic;
+  // loop through all pictures in the reference picture buffer
+  TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+  while ( iterPic != rcListPic.end())
+  {
+    rpcPic = *(iterPic++);
+    if(rpcPic->getSlice(0)->isReferenced() && rpcPic->getPOC() != getPOC())
+    {
+      if(rpcPic->getTLayer() >= getTLayer())
+      {
+        return false;
