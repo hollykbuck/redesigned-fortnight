@@ -1498,3 +1498,103 @@ TEncSearch::xRecurIntraCodingLumaQT(TComYuv*    pcOrgYuv,
 
   assert (rTu.ProcessComponentSection(COMPONENT_Y));
   const UInt totalAdjustedDepthChan   = rTu.GetTransformDepthTotalAdj(COMPONENT_Y);
+
+  if ( m_pcEncCfg->getUseTransformSkipFast() )
+  {
+    checkTransformSkip       &= (pcCU->getPartitionSize(uiAbsPartIdx)==SIZE_NxN);
+  }
+
+  if( bCheckFull )
+  {
+    if(checkTransformSkip == true)
+    {
+      //----- store original entropy coding status -----
+      m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+
+      Distortion singleDistTmpLuma                    = 0;
+      UInt       singleCbfTmpLuma                     = 0;
+      Double     singleCostTmp                        = 0;
+      Int        firstCheckId                         = 0;
+
+      for(Int modeId = firstCheckId; modeId < 2; modeId ++)
+      {
+        DEBUG_STRING_NEW(sModeString)
+        Int  default0Save1Load2 = 0;
+        singleDistTmpLuma=0;
+        if(modeId == firstCheckId)
+        {
+          default0Save1Load2 = 1;
+        }
+        else
+        {
+          default0Save1Load2 = 2;
+        }
+
+
+        pcCU->setTransformSkipSubParts ( modeId, COMPONENT_Y, uiAbsPartIdx, totalAdjustedDepthChan );
+        xIntraCodingTUBlock( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaSingle, false, singleDistTmpLuma, COMPONENT_Y, rTu DEBUG_STRING_PASS_INTO(sModeString), default0Save1Load2 );
+
+        singleCbfTmpLuma = pcCU->getCbf( uiAbsPartIdx, COMPONENT_Y, uiTrDepth );
+
+        //----- determine rate and r-d cost -----
+        if(modeId == 1 && singleCbfTmpLuma == 0)
+        {
+          //In order not to code TS flag when cbf is zero, the case for TS with cbf being zero is forbidden.
+          singleCostTmp = MAX_DOUBLE;
+        }
+        else
+        {
+          UInt uiSingleBits = xGetIntraBitsQT( rTu, true, false, false );
+          singleCostTmp     = m_pcRdCost->calcRdCost( uiSingleBits, singleDistTmpLuma );
+        }
+        if(singleCostTmp < dSingleCost)
+        {
+          DEBUG_STRING_SWAP(sDebug, sModeString)
+          dSingleCost   = singleCostTmp;
+          uiSingleDistLuma = singleDistTmpLuma;
+          uiSingleCbfLuma = singleCbfTmpLuma;
+
+          bestModeId[COMPONENT_Y] = modeId;
+          if(bestModeId[COMPONENT_Y] == firstCheckId)
+          {
+            xStoreIntraResultQT(COMPONENT_Y, rTu );
+            m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_TEMP_BEST ] );
+          }
+
+          if (pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+          {
+            const Int xOffset = rTu.getRect( COMPONENT_Y ).x0;
+            const Int yOffset = rTu.getRect( COMPONENT_Y ).y0;
+            for (UInt storedResidualIndex = 0; storedResidualIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; storedResidualIndex++)
+            {
+              if (bMaintainResidual[storedResidualIndex])
+              {
+                xStoreCrossComponentPredictionResult(resiLuma[storedResidualIndex], resiLumaSingle[storedResidualIndex], rTu, xOffset, yOffset, MAX_CU_SIZE, MAX_CU_SIZE);
+              }
+            }
+          }
+        }
+        if (modeId == firstCheckId)
+        {
+          m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+        }
+      }
+
+      pcCU ->setTransformSkipSubParts ( bestModeId[COMPONENT_Y], COMPONENT_Y, uiAbsPartIdx, totalAdjustedDepthChan );
+
+      if(bestModeId[COMPONENT_Y] == firstCheckId)
+      {
+        xLoadIntraResultQT(COMPONENT_Y, rTu );
+        pcCU->setCbfSubParts  ( uiSingleCbfLuma << uiTrDepth, COMPONENT_Y, uiAbsPartIdx, rTu.GetTransformDepthTotalAdj(COMPONENT_Y) );
+
+        m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiFullDepth ][ CI_TEMP_BEST ] );
+      }
+    }
+    else
+    {
+      //----- store original entropy coding status -----
+      if( bCheckSplit )
+      {
+        m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+      }
+      //----- code luma/chroma block with given intra prediction mode and store Cbf-----
