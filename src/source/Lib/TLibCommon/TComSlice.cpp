@@ -798,3 +798,103 @@ Bool TComSlice::isTemporalLayerSwitchingPoint(TComList<TComPic*>& rcListPic)
       if(rpcPic->getTLayer() >= getTLayer())
       {
         return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** Function for checking if this is a STSA candidate
+ */
+Bool TComSlice::isStepwiseTemporalLayerSwitchingPointCandidate(TComList<TComPic*>& rcListPic)
+{
+  TComPic* rpcPic;
+
+  TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+  while ( iterPic != rcListPic.end())
+  {
+    rpcPic = *(iterPic++);
+    if(rpcPic->getSlice(0)->isReferenced() &&  (rpcPic->getUsedByCurr()==true) && rpcPic->getPOC() != getPOC())
+    {
+      if(rpcPic->getTLayer() >= getTLayer())
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+
+Void TComSlice::checkLeadingPictureRestrictions(TComList<TComPic*>& rcListPic)
+{
+  TComPic* rpcPic;
+
+  Int nalUnitType = this->getNalUnitType();
+
+  // When a picture is a leading picture, it shall be a RADL or RASL picture.
+  if(this->getAssociatedIRAPPOC() > this->getPOC())
+  {
+    // Do not check IRAP pictures since they may get a POC lower than their associated IRAP
+    if(nalUnitType < NAL_UNIT_CODED_SLICE_BLA_W_LP ||
+       nalUnitType > NAL_UNIT_RESERVED_IRAP_VCL23)
+    {
+      assert(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+             nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R ||
+             nalUnitType == NAL_UNIT_CODED_SLICE_RADL_N ||
+             nalUnitType == NAL_UNIT_CODED_SLICE_RADL_R);
+    }
+  }
+
+  // When a picture is a trailing picture, it shall not be a RADL or RASL picture.
+  if(this->getAssociatedIRAPPOC() < this->getPOC())
+  {
+    assert(nalUnitType != NAL_UNIT_CODED_SLICE_RASL_N &&
+           nalUnitType != NAL_UNIT_CODED_SLICE_RASL_R &&
+           nalUnitType != NAL_UNIT_CODED_SLICE_RADL_N &&
+           nalUnitType != NAL_UNIT_CODED_SLICE_RADL_R);
+  }
+
+  // No RASL pictures shall be present in the bitstream that are associated
+  // with a BLA picture having nal_unit_type equal to BLA_W_RADL or BLA_N_LP.
+  if(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+     nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R)
+  {
+    assert(this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_BLA_W_RADL &&
+           this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_BLA_N_LP);
+  }
+
+  // No RASL pictures shall be present in the bitstream that are associated with
+  // an IDR picture.
+  if(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+     nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R)
+  {
+    assert(this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_IDR_N_LP   &&
+           this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_IDR_W_RADL);
+  }
+
+  // No RADL pictures shall be present in the bitstream that are associated with
+  // a BLA picture having nal_unit_type equal to BLA_N_LP or that are associated
+  // with an IDR picture having nal_unit_type equal to IDR_N_LP.
+  if(nalUnitType == NAL_UNIT_CODED_SLICE_RADL_N ||
+     nalUnitType == NAL_UNIT_CODED_SLICE_RADL_R)
+  {
+    assert(this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_BLA_N_LP   &&
+           this->getAssociatedIRAPType() != NAL_UNIT_CODED_SLICE_IDR_N_LP);
+  }
+
+  // loop through all pictures in the reference picture buffer
+  TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+  while ( iterPic != rcListPic.end())
+  {
+    rpcPic = *(iterPic++);
+    if(!rpcPic->getReconMark())
+    {
+      continue;
+    }
+    if (rpcPic->getPOC() == this->getPOC())
+    {
+      continue;
+    }
+
+    // Any picture that has PicOutputFlag equal to 1 that precedes an IRAP picture
