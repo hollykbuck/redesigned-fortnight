@@ -898,3 +898,103 @@ Void TComSlice::checkLeadingPictureRestrictions(TComList<TComPic*>& rcListPic)
     }
 
     // Any picture that has PicOutputFlag equal to 1 that precedes an IRAP picture
+    // in decoding order shall precede the IRAP picture in output order.
+    // (Note that any picture following in output order would be present in the DPB)
+    if(rpcPic->getSlice(0)->getPicOutputFlag() == 1 && !this->getNoOutputPriorPicsFlag())
+    {
+      if(nalUnitType == NAL_UNIT_CODED_SLICE_BLA_N_LP    ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_BLA_W_LP    ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_BLA_W_RADL  ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_CRA         ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_IDR_N_LP    ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_IDR_W_RADL)
+      {
+        assert(rpcPic->getPOC() < this->getPOC());
+      }
+    }
+
+    // Any picture that has PicOutputFlag equal to 1 that precedes an IRAP picture
+    // in decoding order shall precede any RADL picture associated with the IRAP
+    // picture in output order.
+    if(rpcPic->getSlice(0)->getPicOutputFlag() == 1)
+    {
+      if((nalUnitType == NAL_UNIT_CODED_SLICE_RADL_N ||
+          nalUnitType == NAL_UNIT_CODED_SLICE_RADL_R))
+      {
+        // rpcPic precedes the IRAP in decoding order
+        if(this->getAssociatedIRAPPOC() > rpcPic->getSlice(0)->getAssociatedIRAPPOC())
+        {
+          // rpcPic must not be the IRAP picture
+          if(this->getAssociatedIRAPPOC() != rpcPic->getPOC())
+          {
+            assert(rpcPic->getPOC() < this->getPOC());
+          }
+        }
+      }
+    }
+
+    // When a picture is a leading picture, it shall precede, in decoding order,
+    // all trailing pictures that are associated with the same IRAP picture.
+      if(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_RADL_N ||
+         nalUnitType == NAL_UNIT_CODED_SLICE_RADL_R)
+      {
+        if(rpcPic->getSlice(0)->getAssociatedIRAPPOC() == this->getAssociatedIRAPPOC())
+        {
+          // rpcPic is a picture that preceded the leading in decoding order since it exist in the DPB
+          // rpcPic would violate the constraint if it was a trailing picture
+          assert(rpcPic->getPOC() <= this->getAssociatedIRAPPOC());
+        }
+      }
+
+    // Any RASL picture associated with a CRA or BLA picture shall precede any
+    // RADL picture associated with the CRA or BLA picture in output order
+    if(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+       nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R)
+    {
+      if((this->getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_BLA_N_LP   ||
+          this->getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_BLA_W_LP   ||
+          this->getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL ||
+          this->getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_CRA)       &&
+          this->getAssociatedIRAPPOC() == rpcPic->getSlice(0)->getAssociatedIRAPPOC())
+      {
+        if(rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_RADL_N ||
+           rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_RADL_R)
+        {
+          assert(rpcPic->getPOC() > this->getPOC());
+        }
+      }
+    }
+
+    // Any RASL picture associated with a CRA picture shall follow, in output
+    // order, any IRAP picture that precedes the CRA picture in decoding order.
+    if(nalUnitType == NAL_UNIT_CODED_SLICE_RASL_N ||
+       nalUnitType == NAL_UNIT_CODED_SLICE_RASL_R)
+    {
+      if(this->getAssociatedIRAPType() == NAL_UNIT_CODED_SLICE_CRA)
+      {
+        if(rpcPic->getSlice(0)->getPOC() < this->getAssociatedIRAPPOC() &&
+           (rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP   ||
+            rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP   ||
+            rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL ||
+            rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP   ||
+            rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL ||
+            rpcPic->getSlice(0)->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA))
+        {
+          assert(this->getPOC() > rpcPic->getSlice(0)->getPOC());
+        }
+      }
+    }
+  }
+}
+
+
+
+/** Function for applying picture marking based on the Reference Picture Set in pReferencePictureSet.
+*/
+Void TComSlice::applyReferencePictureSet( TComList<TComPic*>& rcListPic, const TComReferencePictureSet *pReferencePictureSet)
+{
+  TComPic* rpcPic;
+  Int i, isReference;
+
