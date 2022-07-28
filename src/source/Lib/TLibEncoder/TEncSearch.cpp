@@ -1698,3 +1698,103 @@ TEncSearch::xRecurIntraCodingLumaQT(TComYuv*    pcOrgYuv,
         {
           if (bMaintainResidual[storedResidualIndex])
           {
+            xStoreCrossComponentPredictionResult(resiLuma[storedResidualIndex], resiLumaSplit[storedResidualIndex], rTu, xOffset, yOffset, MAX_CU_SIZE, MAX_CU_SIZE);
+          }
+        }
+      }
+
+      return;
+    }
+
+    //----- set entropy coding status -----
+    m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_TEST ] );
+
+    //--- set transform index and Cbf values ---
+    pcCU->setTrIdxSubParts( uiTrDepth, uiAbsPartIdx, uiFullDepth );
+    const TComRectangle &tuRect=rTu.getRect(COMPONENT_Y);
+    pcCU->setCbfSubParts  ( uiSingleCbfLuma << uiTrDepth, COMPONENT_Y, uiAbsPartIdx, totalAdjustedDepthChan );
+    pcCU ->setTransformSkipSubParts  ( bestModeId[COMPONENT_Y], COMPONENT_Y, uiAbsPartIdx, totalAdjustedDepthChan );
+
+    //--- set reconstruction for next intra prediction blocks ---
+    const UInt  uiQTLayer   = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+    const UInt  uiZOrder    = pcCU->getZorderIdxInCtu() + uiAbsPartIdx;
+    const UInt  uiWidth     = tuRect.width;
+    const UInt  uiHeight    = tuRect.height;
+    Pel*  piSrc       = m_pcQTTempTComYuv[ uiQTLayer ].getAddr( COMPONENT_Y, uiAbsPartIdx );
+    UInt  uiSrcStride = m_pcQTTempTComYuv[ uiQTLayer ].getStride  ( COMPONENT_Y );
+    Pel*  piDes       = pcCU->getPic()->getPicYuvRec()->getAddr( COMPONENT_Y, pcCU->getCtuRsAddr(), uiZOrder );
+    UInt  uiDesStride = pcCU->getPic()->getPicYuvRec()->getStride  ( COMPONENT_Y );
+
+    for( UInt uiY = 0; uiY < uiHeight; uiY++, piSrc += uiSrcStride, piDes += uiDesStride )
+    {
+      for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+      {
+        piDes[ uiX ] = piSrc[ uiX ];
+      }
+    }
+  }
+  ruiDistY += uiSingleDistLuma;
+  dRDCost  += dSingleCost;
+}
+
+
+Void
+TEncSearch::xSetIntraResultLumaQT(TComYuv* pcRecoYuv, TComTU &rTu)
+{
+  TComDataCU *pcCU        = rTu.getCU();
+  const UInt uiTrDepth    = rTu.GetTransformDepthRel();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  UInt uiTrMode     = pcCU->getTransformIdx( uiAbsPartIdx );
+  if(  uiTrMode == uiTrDepth )
+  {
+    UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+    UInt uiQTLayer    = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+
+    //===== copy transform coefficients =====
+
+    const TComRectangle &tuRect=rTu.getRect(COMPONENT_Y);
+    const UInt coeffOffset = rTu.getCoefficientOffset(COMPONENT_Y);
+    const UInt numCoeffInBlock = tuRect.width * tuRect.height;
+
+    if (numCoeffInBlock!=0)
+    {
+      const TCoeff* srcCoeff = m_ppcQTTempCoeff[COMPONENT_Y][uiQTLayer] + coeffOffset;
+      TCoeff* destCoeff      = pcCU->getCoeff(COMPONENT_Y) + coeffOffset;
+      ::memcpy( destCoeff, srcCoeff, sizeof(TCoeff)*numCoeffInBlock );
+#if ADAPTIVE_QP_SELECTION
+      const TCoeff* srcArlCoeff = m_ppcQTTempArlCoeff[COMPONENT_Y][ uiQTLayer ] + coeffOffset;
+      TCoeff* destArlCoeff      = pcCU->getArlCoeff (COMPONENT_Y)               + coeffOffset;
+      ::memcpy( destArlCoeff, srcArlCoeff, sizeof( TCoeff ) * numCoeffInBlock );
+#endif
+      m_pcQTTempTComYuv[ uiQTLayer ].copyPartToPartComponent( COMPONENT_Y, pcRecoYuv, uiAbsPartIdx, tuRect.width, tuRect.height );
+    }
+
+  }
+  else
+  {
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      xSetIntraResultLumaQT( pcRecoYuv, tuRecurseChild );
+    } while (tuRecurseChild.nextSection(rTu));
+  }
+}
+
+
+Void
+TEncSearch::xStoreIntraResultQT(const ComponentID compID, TComTU &rTu )
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiTrDepth = rTu.GetTransformDepthRel();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiTrMode     = pcCU->getTransformIdx( uiAbsPartIdx );
+  if ( compID==COMPONENT_Y || uiTrMode == uiTrDepth )
+  {
+    assert(uiTrMode == uiTrDepth);
+    const UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+    const UInt uiQTLayer    = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+
+    if (rTu.ProcessComponentSection(compID))
+    {
+      const TComRectangle &tuRect=rTu.getRect(compID);
+
