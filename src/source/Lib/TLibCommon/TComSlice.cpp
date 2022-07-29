@@ -1098,3 +1098,103 @@ Int TComSlice::checkThatAllRefPicsAreAvailable( TComList<TComPic*>& rcListPic, c
           if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess && this->getPOC() + pReferencePictureSet->getDeltaPOC(i) < pocRandomAccess)
           {
             isAvailable = 0;
+          }
+          else
+          {
+            isAvailable = 1;
+          }
+        }
+      }
+      else
+      {
+        Int pocCycle = 1<<rpcPic->getPicSym()->getSlice(0)->getSPS()->getBitsForPOC();
+        Int curPoc = rpcPic->getPicSym()->getSlice(0)->getPOC() & (pocCycle-1);
+        Int refPoc = pReferencePictureSet->getPOC(i) & (pocCycle-1);
+        if(rpcPic->getIsLongTerm() && curPoc == refPoc && rpcPic->getSlice(0)->isReferenced())
+        {
+          if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess && this->getPOC() + pReferencePictureSet->getDeltaPOC(i) < pocRandomAccess)
+          {
+            isAvailable = 0;
+          }
+          else
+          {
+            isAvailable = 1;
+          }
+        }
+      }
+    }
+    // if there was no such long-term check the short terms
+    if(!isAvailable)
+    {
+      iterPic = rcListPic.begin();
+      while ( iterPic != rcListPic.end())
+      {
+        rpcPic = *(iterPic++);
+
+        Int pocCycle = 1 << rpcPic->getPicSym()->getSlice(0)->getSPS()->getBitsForPOC();
+        Int curPoc = rpcPic->getPicSym()->getSlice(0)->getPOC();
+        Int refPoc = pReferencePictureSet->getPOC(i);
+        if (!pReferencePictureSet->getCheckLTMSBPresent(i))
+        {
+          curPoc = curPoc & (pocCycle - 1);
+          refPoc = refPoc & (pocCycle - 1);
+        }
+
+        if (rpcPic->getSlice(0)->isReferenced() && curPoc == refPoc)
+        {
+          if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess && this->getPOC() + pReferencePictureSet->getDeltaPOC(i) < pocRandomAccess)
+          {
+            isAvailable = 0;
+          }
+          else
+          {
+            isAvailable = 1;
+            rpcPic->setIsLongTerm(1);
+            break;
+          }
+        }
+      }
+    }
+    // report that a picture is lost if it is in the Reference Picture Set
+    // but not available as reference picture
+    if(isAvailable == 0)
+    {
+      if (this->getPOC() + pReferencePictureSet->getDeltaPOC(i) >= pocRandomAccess)
+      {
+        if(!pReferencePictureSet->getUsed(i) )
+        {
+          if(printErrors)
+          {
+            printf("\nLong-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", this->getPOC() + pReferencePictureSet->getDeltaPOC(i));
+          }
+          atLeastOneRemoved = 1;
+        }
+        else
+        {
+          if(printErrors)
+          {
+            printf("\nLong-term reference picture with POC = %3d is lost or not correctly decoded!", this->getPOC() + pReferencePictureSet->getDeltaPOC(i));
+          }
+          atLeastOneLost = 1;
+          iPocLost=this->getPOC() + pReferencePictureSet->getDeltaPOC(i);
+        }
+      }
+      else if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess)
+      {
+        atLeastOneUnabledByRecoveryPoint = 1;
+      }
+      else if(bUseRecoveryPoint && (this->getAssociatedIRAPType()==NAL_UNIT_CODED_SLICE_IDR_N_LP || this->getAssociatedIRAPType()==NAL_UNIT_CODED_SLICE_IDR_W_RADL))
+      {
+        atLeastOneFlushedByPreviousIDR = 1;
+      }
+    }
+  }
+  // loop through all short-term pictures in the Reference Picture Set
+  // to see if the picture should be kept as reference picture
+  for(i=0;i<pReferencePictureSet->getNumberOfNegativePictures()+pReferencePictureSet->getNumberOfPositivePictures();i++)
+  {
+    isAvailable = 0;
+    // loop through all pictures in the reference picture buffer
+    TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+    while ( iterPic != rcListPic.end())
+    {
