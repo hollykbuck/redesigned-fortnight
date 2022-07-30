@@ -1198,3 +1198,103 @@ Int TComSlice::checkThatAllRefPicsAreAvailable( TComList<TComPic*>& rcListPic, c
     TComList<TComPic*>::iterator iterPic = rcListPic.begin();
     while ( iterPic != rcListPic.end())
     {
+      rpcPic = *(iterPic++);
+
+      if(!rpcPic->getIsLongTerm() && rpcPic->getPicSym()->getSlice(0)->getPOC() == this->getPOC() + pReferencePictureSet->getDeltaPOC(i) && rpcPic->getSlice(0)->isReferenced())
+      {
+        if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess && this->getPOC() + pReferencePictureSet->getDeltaPOC(i) < pocRandomAccess)
+        {
+          isAvailable = 0;
+        }
+        else
+        {
+          isAvailable = 1;
+        }
+      }
+    }
+    // report that a picture is lost if it is in the Reference Picture Set
+    // but not available as reference picture
+    if(isAvailable == 0)
+    {
+      if (this->getPOC() + pReferencePictureSet->getDeltaPOC(i) >= pocRandomAccess)
+      {
+        if(!pReferencePictureSet->getUsed(i) )
+        {
+          if(printErrors)
+          {
+            printf("\nShort-term reference picture with POC = %3d seems to have been removed or not correctly decoded.", this->getPOC() + pReferencePictureSet->getDeltaPOC(i));
+          }
+          atLeastOneRemoved = 1;
+        }
+        else
+        {
+          if(printErrors)
+          {
+            printf("\nShort-term reference picture with POC = %3d is lost or not correctly decoded!", this->getPOC() + pReferencePictureSet->getDeltaPOC(i));
+          }
+          atLeastOneLost = 1;
+          iPocLost=this->getPOC() + pReferencePictureSet->getDeltaPOC(i);
+        }
+      }
+      else if(bUseRecoveryPoint && this->getPOC() > pocRandomAccess)
+      {
+        atLeastOneUnabledByRecoveryPoint = 1;
+      }
+      else if(bUseRecoveryPoint && (this->getAssociatedIRAPType()==NAL_UNIT_CODED_SLICE_IDR_N_LP || this->getAssociatedIRAPType()==NAL_UNIT_CODED_SLICE_IDR_W_RADL))
+      {
+        atLeastOneFlushedByPreviousIDR = 1;
+      }
+    }
+  }
+
+  if(atLeastOneUnabledByRecoveryPoint || atLeastOneFlushedByPreviousIDR)
+  {
+    return -1;
+  }    
+  if(atLeastOneLost)
+  {
+    return iPocLost+1;
+  }
+  if(atLeastOneRemoved)
+  {
+    return -2;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+/** Function for constructing an explicit Reference Picture Set out of the available pictures in a referenced Reference Picture Set
+*/
+Void TComSlice::createExplicitReferencePictureSetFromReference( TComList<TComPic*>& rcListPic, const TComReferencePictureSet *pReferencePictureSet, Bool isRAP, Int pocRandomAccess, Bool bUseRecoveryPoint, const Bool bEfficientFieldIRAPEnabled)
+{
+  TComPic* rpcPic;
+  Int i, j;
+  Int k = 0;
+  Int nrOfNegativePictures = 0;
+  Int nrOfPositivePictures = 0;
+  TComReferencePictureSet* pLocalRPS = this->getLocalRPS();
+  (*pLocalRPS)=TComReferencePictureSet();
+
+  Bool irapIsInRPS = false; // Used when bEfficientFieldIRAPEnabled==true
+
+  // loop through all pictures in the Reference Picture Set
+  for(i=0;i<pReferencePictureSet->getNumberOfPictures();i++)
+  {
+    j = 0;
+    // loop through all pictures in the reference picture buffer
+    TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+    while ( iterPic != rcListPic.end())
+    {
+      j++;
+      rpcPic = *(iterPic++);
+
+      if(rpcPic->getPicSym()->getSlice(0)->getPOC() == this->getPOC() + pReferencePictureSet->getDeltaPOC(i) && rpcPic->getSlice(0)->isReferenced())
+      {
+        // This picture exists as a reference picture
+        // and should be added to the explicit Reference Picture Set
+        pLocalRPS->setDeltaPOC(k, pReferencePictureSet->getDeltaPOC(i));
+        pLocalRPS->setUsed(k, pReferencePictureSet->getUsed(i) && (!isRAP));
+        if (bEfficientFieldIRAPEnabled)
+        {
