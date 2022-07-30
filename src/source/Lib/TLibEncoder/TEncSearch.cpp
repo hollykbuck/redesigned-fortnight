@@ -2098,3 +2098,103 @@ TEncSearch::xRecurIntraChromaCodingQT(TComYuv*    pcOrgYuv,
         pcCU ->setCrossComponentPredictionAlphaPartRange( bestCrossCPredictionAlpha, compID, subTUAbsPartIdx, partIdxesPerSubTU );
         ruiDist += singleDistC;
       } while (TUIterator.nextSection(rTu));
+
+      if (splitIntoSubTUs)
+      {
+        offsetSubTUCBFs(rTu, compID);
+      }
+    }
+  }
+  else
+  {
+    UInt    uiSplitCbf[MAX_NUM_COMPONENT] = {0,0,0};
+
+    TComTURecurse tuRecurseChild(rTu, false);
+    const UInt uiTrDepthChild   = tuRecurseChild.GetTransformDepthRel();
+    do
+    {
+      DEBUG_STRING_NEW(sChild)
+
+      xRecurIntraChromaCodingQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLuma, ruiDist, tuRecurseChild DEBUG_STRING_PASS_INTO(sChild) );
+
+      DEBUG_STRING_APPEND(sDebug, sChild)
+      const UInt uiAbsPartIdxSub=tuRecurseChild.GetAbsPartIdxTU();
+
+      for(UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+      {
+        uiSplitCbf[ch] |= pcCU->getCbf( uiAbsPartIdxSub, ComponentID(ch), uiTrDepthChild );
+      }
+    } while ( tuRecurseChild.nextSection(rTu) );
+
+
+    UInt uiPartsDiv = rTu.GetAbsPartIdxNumParts();
+    for(UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+    {
+      if (uiSplitCbf[ch])
+      {
+        const UInt flag=1<<uiTrDepth;
+        ComponentID compID=ComponentID(ch);
+        UChar *pBase=pcCU->getCbf( compID );
+        for( UInt uiOffs = 0; uiOffs < uiPartsDiv; uiOffs++ )
+        {
+          pBase[ uiAbsPartIdx + uiOffs ] |= flag;
+        }
+      }
+    }
+  }
+}
+
+
+
+
+Void
+TEncSearch::xSetIntraResultChromaQT(TComYuv*    pcRecoYuv, TComTU &rTu)
+{
+  if (!rTu.ProcessChannelSection(CHANNEL_TYPE_CHROMA))
+  {
+    return;
+  }
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiTrDepth   = rTu.GetTransformDepthRel();
+  UInt uiTrMode     = pcCU->getTransformIdx( uiAbsPartIdx );
+  if(  uiTrMode == uiTrDepth )
+  {
+    UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+    UInt uiQTLayer    = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+
+    //===== copy transform coefficients =====
+    const TComRectangle &tuRectCb=rTu.getRect(COMPONENT_Cb);
+    UInt uiNumCoeffC    = tuRectCb.width*tuRectCb.height;//( pcCU->getSlice()->getSPS()->getMaxCUWidth() * pcCU->getSlice()->getSPS()->getMaxCUHeight() ) >> ( uiFullDepth << 1 );
+    const UInt offset = rTu.getCoefficientOffset(COMPONENT_Cb);
+
+    const UInt numberValidComponents = getNumberValidComponents(rTu.GetChromaFormat());
+    for (UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+    {
+      const ComponentID component = ComponentID(ch);
+      const TCoeff* src           = m_ppcQTTempCoeff[component][uiQTLayer] + offset;//(uiNumCoeffIncC*uiAbsPartIdx);
+      TCoeff* dest                = pcCU->getCoeff(component) + offset;//(uiNumCoeffIncC*uiAbsPartIdx);
+      ::memcpy( dest, src, sizeof(TCoeff)*uiNumCoeffC );
+#if ADAPTIVE_QP_SELECTION
+      TCoeff* pcArlCoeffSrc = m_ppcQTTempArlCoeff[component][ uiQTLayer ] + offset;//( uiNumCoeffIncC * uiAbsPartIdx );
+      TCoeff* pcArlCoeffDst = pcCU->getArlCoeff(component)                + offset;//( uiNumCoeffIncC * uiAbsPartIdx );
+      ::memcpy( pcArlCoeffDst, pcArlCoeffSrc, sizeof( TCoeff ) * uiNumCoeffC );
+#endif
+    }
+
+    //===== copy reconstruction =====
+
+    m_pcQTTempTComYuv[ uiQTLayer ].copyPartToPartComponent( COMPONENT_Cb, pcRecoYuv, uiAbsPartIdx, tuRectCb.width, tuRectCb.height );
+    m_pcQTTempTComYuv[ uiQTLayer ].copyPartToPartComponent( COMPONENT_Cr, pcRecoYuv, uiAbsPartIdx, tuRectCb.width, tuRectCb.height );
+  }
+  else
+  {
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      xSetIntraResultChromaQT( pcRecoYuv, tuRecurseChild );
+    } while (tuRecurseChild.nextSection(rTu));
+  }
+}
+
+
