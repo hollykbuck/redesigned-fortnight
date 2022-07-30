@@ -1998,3 +1998,103 @@ TEncSearch::xRecurIntraChromaCodingQT(TComYuv*    pcOrgYuv,
 
       do
       {
+        const UInt subTUAbsPartIdx   = TUIterator.GetAbsPartIdxTU(compID);
+
+        Double     dSingleCost               = MAX_DOUBLE;
+        Int        bestModeId                = 0;
+        Distortion singleDistC               = 0;
+        UInt       singleCbfC                = 0;
+        Distortion singleDistCTmp            = 0;
+        Double     singleCostTmp             = 0;
+        UInt       singleCbfCTmp             = 0;
+        SChar      bestCrossCPredictionAlpha = 0;
+        Int        bestTransformSkipMode     = 0;
+
+        const Bool checkCrossComponentPrediction =    (pcCU->getIntraDir(CHANNEL_TYPE_CHROMA, subTUAbsPartIdx) == DM_CHROMA_IDX)
+                                                   &&  pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag()
+                                                   && (pcCU->getCbf(subTUAbsPartIdx,  COMPONENT_Y, uiTrDepth) != 0);
+
+        const Int  crossCPredictionModesToTest = checkCrossComponentPrediction ? 2 : 1;
+        const Int  transformSkipModesToTest    = checkTransformSkip            ? 2 : 1;
+        const Int  totalModesToTest            = crossCPredictionModesToTest * transformSkipModesToTest;
+              Int  currModeId                  = 0;
+              Int  default0Save1Load2          = 0;
+
+        for(Int transformSkipModeId = 0; transformSkipModeId < transformSkipModesToTest; transformSkipModeId++)
+        {
+          for(Int crossCPredictionModeId = 0; crossCPredictionModeId < crossCPredictionModesToTest; crossCPredictionModeId++)
+          {
+            pcCU->setCrossComponentPredictionAlphaPartRange(0, compID, subTUAbsPartIdx, partIdxesPerSubTU);
+            DEBUG_STRING_NEW(sDebugMode)
+            pcCU->setTransformSkipPartRange( transformSkipModeId, compID, subTUAbsPartIdx, partIdxesPerSubTU );
+            currModeId++;
+
+            const Bool isOneMode  = (totalModesToTest == 1);
+            const Bool isLastMode = (currModeId == totalModesToTest); // currModeId is indexed from 1
+
+            if (isOneMode)
+            {
+              default0Save1Load2 = 0;
+            }
+            else if (!isOneMode && (transformSkipModeId == 0) && (crossCPredictionModeId == 0))
+            {
+              default0Save1Load2 = 1; //save prediction on first mode
+            }
+            else
+            {
+              default0Save1Load2 = 2; //load it on subsequent modes
+            }
+
+            singleDistCTmp = 0;
+
+            xIntraCodingTUBlock( pcOrgYuv, pcPredYuv, pcResiYuv, resiLuma, (crossCPredictionModeId != 0), singleDistCTmp, compID, TUIterator DEBUG_STRING_PASS_INTO(sDebugMode), default0Save1Load2);
+            singleCbfCTmp = pcCU->getCbf( subTUAbsPartIdx, compID, uiTrDepth);
+
+            if (  ((crossCPredictionModeId == 1) && (pcCU->getCrossComponentPredictionAlpha(subTUAbsPartIdx, compID) == 0))
+               || ((transformSkipModeId    == 1) && (singleCbfCTmp == 0))) //In order not to code TS flag when cbf is zero, the case for TS with cbf being zero is forbidden.
+            {
+              singleCostTmp = MAX_DOUBLE;
+            }
+            else if (!isOneMode)
+            {
+              UInt bitsTmp = xGetIntraBitsQTChroma( TUIterator, compID, false );
+              singleCostTmp  = m_pcRdCost->calcRdCost( bitsTmp, singleDistCTmp);
+            }
+
+            if(singleCostTmp < dSingleCost)
+            {
+              DEBUG_STRING_SWAP(sDebugBestMode, sDebugMode)
+              dSingleCost               = singleCostTmp;
+              singleDistC               = singleDistCTmp;
+              bestCrossCPredictionAlpha = (crossCPredictionModeId != 0) ? pcCU->getCrossComponentPredictionAlpha(subTUAbsPartIdx, compID) : 0;
+              bestTransformSkipMode     = transformSkipModeId;
+              bestModeId                = currModeId;
+              singleCbfC                = singleCbfCTmp;
+
+              if (!isOneMode && !isLastMode)
+              {
+                xStoreIntraResultQT(compID, TUIterator);
+                m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_TEMP_BEST ] );
+              }
+            }
+
+            if (!isOneMode && !isLastMode)
+            {
+              m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+            }
+          }
+        }
+
+        if(bestModeId < totalModesToTest)
+        {
+          xLoadIntraResultQT(compID, TUIterator);
+          pcCU->setCbfPartRange( singleCbfC << uiTrDepth, compID, subTUAbsPartIdx, partIdxesPerSubTU );
+
+          m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiFullDepth ][ CI_TEMP_BEST ] );
+        }
+
+        DEBUG_STRING_APPEND(sDebug, sDebugBestMode)
+        pcCU ->setTransformSkipPartRange                ( bestTransformSkipMode,     compID, subTUAbsPartIdx, partIdxesPerSubTU );
+        pcCU ->setCrossComponentPredictionAlphaPartRange( bestCrossCPredictionAlpha, compID, subTUAbsPartIdx, partIdxesPerSubTU );
+        ruiDist += singleDistC;
+      } while (TUIterator.nextSection(rTu));
