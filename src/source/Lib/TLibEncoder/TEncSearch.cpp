@@ -1798,3 +1798,103 @@ TEncSearch::xStoreIntraResultQT(const ComponentID compID, TComTU &rTu )
     {
       const TComRectangle &tuRect=rTu.getRect(compID);
 
+      //===== copy transform coefficients =====
+      const UInt uiNumCoeff    = tuRect.width * tuRect.height;
+      TCoeff* pcCoeffSrc = m_ppcQTTempCoeff[compID] [ uiQTLayer ] + rTu.getCoefficientOffset(compID);
+      TCoeff* pcCoeffDst = m_pcQTTempTUCoeff[compID];
+
+      ::memcpy( pcCoeffDst, pcCoeffSrc, sizeof( TCoeff ) * uiNumCoeff );
+#if ADAPTIVE_QP_SELECTION
+      TCoeff* pcArlCoeffSrc = m_ppcQTTempArlCoeff[compID] [ uiQTLayer ] + rTu.getCoefficientOffset(compID);
+      TCoeff* pcArlCoeffDst = m_ppcQTTempTUArlCoeff[compID];
+      ::memcpy( pcArlCoeffDst, pcArlCoeffSrc, sizeof( TCoeff ) * uiNumCoeff );
+#endif
+      //===== copy reconstruction =====
+      m_pcQTTempTComYuv[ uiQTLayer ].copyPartToPartComponent( compID, &m_pcQTTempTransformSkipTComYuv, uiAbsPartIdx, tuRect.width, tuRect.height );
+    }
+  }
+}
+
+
+Void
+TEncSearch::xLoadIntraResultQT(const ComponentID compID, TComTU &rTu)
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiTrDepth = rTu.GetTransformDepthRel();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiTrMode     = pcCU->getTransformIdx( uiAbsPartIdx );
+  if ( compID==COMPONENT_Y || uiTrMode == uiTrDepth )
+  {
+    assert(uiTrMode == uiTrDepth);
+    const UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+    const UInt uiQTLayer    = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+    const UInt uiZOrder     = pcCU->getZorderIdxInCtu() + uiAbsPartIdx;
+
+    if (rTu.ProcessComponentSection(compID))
+    {
+      const TComRectangle &tuRect=rTu.getRect(compID);
+
+      //===== copy transform coefficients =====
+      const UInt uiNumCoeff = tuRect.width * tuRect.height;
+      TCoeff* pcCoeffDst = m_ppcQTTempCoeff[compID] [ uiQTLayer ] + rTu.getCoefficientOffset(compID);
+      TCoeff* pcCoeffSrc = m_pcQTTempTUCoeff[compID];
+
+      ::memcpy( pcCoeffDst, pcCoeffSrc, sizeof( TCoeff ) * uiNumCoeff );
+#if ADAPTIVE_QP_SELECTION
+      TCoeff* pcArlCoeffDst = m_ppcQTTempArlCoeff[compID] [ uiQTLayer ] + rTu.getCoefficientOffset(compID);
+      TCoeff* pcArlCoeffSrc = m_ppcQTTempTUArlCoeff[compID];
+      ::memcpy( pcArlCoeffDst, pcArlCoeffSrc, sizeof( TCoeff ) * uiNumCoeff );
+#endif
+      //===== copy reconstruction =====
+      m_pcQTTempTransformSkipTComYuv.copyPartToPartComponent( compID, &m_pcQTTempTComYuv[ uiQTLayer ], uiAbsPartIdx, tuRect.width, tuRect.height );
+
+      Pel*    piRecIPred        = pcCU->getPic()->getPicYuvRec()->getAddr( compID, pcCU->getCtuRsAddr(), uiZOrder );
+      UInt    uiRecIPredStride  = pcCU->getPic()->getPicYuvRec()->getStride (compID);
+      Pel*    piRecQt           = m_pcQTTempTComYuv[ uiQTLayer ].getAddr( compID, uiAbsPartIdx );
+      UInt    uiRecQtStride     = m_pcQTTempTComYuv[ uiQTLayer ].getStride  (compID);
+      UInt    uiWidth           = tuRect.width;
+      UInt    uiHeight          = tuRect.height;
+      Pel* pRecQt               = piRecQt;
+      Pel* pRecIPred            = piRecIPred;
+      for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+      {
+        for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+        {
+          pRecIPred[ uiX ] = pRecQt   [ uiX ];
+        }
+        pRecQt    += uiRecQtStride;
+        pRecIPred += uiRecIPredStride;
+      }
+    }
+  }
+}
+
+Void
+TEncSearch::xStoreCrossComponentPredictionResult(       Pel    *pResiDst,
+                                                  const Pel    *pResiSrc,
+                                                        TComTU &rTu,
+                                                  const Int     xOffset,
+                                                  const Int     yOffset,
+                                                  const Int     strideDst,
+                                                  const Int     strideSrc )
+{
+  const Pel *pSrc = pResiSrc + yOffset * strideSrc + xOffset;
+        Pel *pDst = pResiDst + yOffset * strideDst + xOffset;
+
+  for( Int y = 0; y < rTu.getRect( COMPONENT_Y ).height; y++ )
+  {
+    ::memcpy( pDst, pSrc, sizeof(Pel) * rTu.getRect( COMPONENT_Y ).width );
+    pDst += strideDst;
+    pSrc += strideSrc;
+  }
+}
+
+SChar
+TEncSearch::xCalcCrossComponentPredictionAlpha(       TComTU &rTu,
+                                                const ComponentID compID,
+                                                const Pel*        piResiL,
+                                                const Pel*        piResiC,
+                                                const Int         width,
+                                                const Int         height,
+                                                const Int         strideL,
+                                                const Int         strideC )
