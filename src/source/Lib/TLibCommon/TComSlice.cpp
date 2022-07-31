@@ -1298,3 +1298,103 @@ Void TComSlice::createExplicitReferencePictureSetFromReference( TComList<TComPic
         pLocalRPS->setUsed(k, pReferencePictureSet->getUsed(i) && (!isRAP));
         if (bEfficientFieldIRAPEnabled)
         {
+          pLocalRPS->setUsed(k, pLocalRPS->getUsed(k) && !(bUseRecoveryPoint && this->getPOC() > pocRandomAccess && this->getPOC() + pReferencePictureSet->getDeltaPOC(i) < pocRandomAccess) );
+        }
+
+        if(pLocalRPS->getDeltaPOC(k) < 0)
+        {
+          nrOfNegativePictures++;
+        }
+        else
+        {
+          if(bEfficientFieldIRAPEnabled && rpcPic->getPicSym()->getSlice(0)->getPOC() == this->getAssociatedIRAPPOC() && this->getAssociatedIRAPPOC() == this->getPOC()+1)
+          {
+            irapIsInRPS = true;
+          }
+          nrOfPositivePictures++;
+        }
+        k++;
+      }
+    }
+  }
+
+  Bool useNewRPS = false;
+  // if current picture is complimentary field associated to IRAP, add the IRAP to its RPS. 
+  if(bEfficientFieldIRAPEnabled && m_pcPic->isField() && !irapIsInRPS)
+  {
+    TComList<TComPic*>::iterator iterPic = rcListPic.begin();
+    while ( iterPic != rcListPic.end())
+    {
+      rpcPic = *(iterPic++);
+      if(rpcPic->getPicSym()->getSlice(0)->getPOC() == this->getAssociatedIRAPPOC() && this->getAssociatedIRAPPOC() == this->getPOC()+1)
+      {
+        pLocalRPS->setDeltaPOC(k, 1);
+        pLocalRPS->setUsed(k, true);
+        nrOfPositivePictures++;
+        k ++;
+        useNewRPS = true;
+      }
+    }
+  }
+  pLocalRPS->setNumberOfNegativePictures(nrOfNegativePictures);
+  pLocalRPS->setNumberOfPositivePictures(nrOfPositivePictures);
+  pLocalRPS->setNumberOfPictures(nrOfNegativePictures+nrOfPositivePictures);
+  // This is a simplistic inter rps example. A smarter encoder will look for a better reference RPS to do the
+  // inter RPS prediction with.  Here we just use the reference used by pReferencePictureSet.
+  // If pReferencePictureSet is not inter_RPS_predicted, then inter_RPS_prediction is for the current RPS also disabled.
+  if (!pReferencePictureSet->getInterRPSPrediction() || useNewRPS )
+  {
+    pLocalRPS->setInterRPSPrediction(false);
+    pLocalRPS->setNumRefIdc(0);
+  }
+  else
+  {
+    Int rIdx =  this->getRPSidx() - pReferencePictureSet->getDeltaRIdxMinus1() - 1;
+    Int deltaRPS = pReferencePictureSet->getDeltaRPS();
+    const TComReferencePictureSet* pcRefRPS = this->getSPS()->getRPSList()->getReferencePictureSet(rIdx);
+    Int iRefPics = pcRefRPS->getNumberOfPictures();
+    Int iNewIdc=0;
+    for(i=0; i<= iRefPics; i++)
+    {
+      Int deltaPOC = ((i != iRefPics)? pcRefRPS->getDeltaPOC(i) : 0);  // check if the reference abs POC is >= 0
+      Int iRefIdc = 0;
+      for (j=0; j < pLocalRPS->getNumberOfPictures(); j++) // loop through the  pictures in the new RPS
+      {
+        if ( (deltaPOC + deltaRPS) == pLocalRPS->getDeltaPOC(j))
+        {
+          if (pLocalRPS->getUsed(j))
+          {
+            iRefIdc = 1;
+          }
+          else
+          {
+            iRefIdc = 2;
+          }
+        }
+      }
+      pLocalRPS->setRefIdc(i, iRefIdc);
+      iNewIdc++;
+    }
+    pLocalRPS->setInterRPSPrediction(true);
+    pLocalRPS->setNumRefIdc(iNewIdc);
+    pLocalRPS->setDeltaRPS(deltaRPS);
+    pLocalRPS->setDeltaRIdxMinus1(pReferencePictureSet->getDeltaRIdxMinus1() + this->getSPS()->getRPSList()->getNumberOfReferencePictureSets() - this->getRPSidx());
+  }
+
+  this->setRPS(pLocalRPS);
+  this->setRPSidx(-1);
+}
+
+//! get AC and DC values for weighted pred
+Void  TComSlice::getWpAcDcParam(WPACDCParam *&wp)
+{
+  wp = m_weightACDCParam;
+}
+
+//! init AC and DC values for weighted pred
+Void  TComSlice::initWpAcDcParam()
+{
+  for(Int iComp = 0; iComp < MAX_NUM_COMPONENT; iComp++ )
+  {
+    m_weightACDCParam[iComp].iAC = 0;
+    m_weightACDCParam[iComp].iDC = 0;
