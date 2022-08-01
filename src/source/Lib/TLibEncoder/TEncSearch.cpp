@@ -2598,3 +2598,103 @@ TEncSearch::estIntraPredChromaQT(TComDataCU* pcCU,
 
   TComTURecurse tuRecurseCU(pcCU, 0);
   TComTURecurse tuRecurseWithPU(tuRecurseCU, false, (uiInitTrDepth==0)?TComTU::DONT_SPLIT : TComTU::QUAD_SPLIT);
+  const UInt    uiQNumParts    = tuRecurseWithPU.GetAbsPartIdxNumParts();
+  const UInt    uiDepthCU=tuRecurseWithPU.getCUDepth();
+  const UInt    numberValidComponents = pcCU->getPic()->getNumberValidComponents();
+
+  do
+  {
+    UInt       uiBestMode  = 0;
+    Distortion uiBestDist  = 0;
+    Double     dBestCost   = MAX_DOUBLE;
+
+    //----- init mode list -----
+    if (tuRecurseWithPU.ProcessChannelSection(CHANNEL_TYPE_CHROMA))
+    {
+      UInt uiModeList[FAST_UDI_MAX_RDMODE_NUM];
+      const UInt  uiQPartNum     = uiQNumParts;
+      const UInt  uiPartOffset   = tuRecurseWithPU.GetAbsPartIdxTU();
+      {
+        UInt  uiMinMode = 0;
+        UInt  uiMaxMode = NUM_CHROMA_MODE;
+
+        //----- check chroma modes -----
+        pcCU->getAllowedChromaDir( uiPartOffset, uiModeList );
+
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+        if (DebugOptionList::ForceChromaMode.isSet())
+        {
+          uiMinMode=DebugOptionList::ForceChromaMode.getInt();
+          if (uiModeList[uiMinMode]==34)
+          {
+            uiMinMode=4; // if the fixed mode has been renumbered because DM_CHROMA covers it, use DM_CHROMA.
+          }
+          uiMaxMode=uiMinMode+1;
+        }
+#endif
+
+        DEBUG_STRING_NEW(sPU)
+
+        for( UInt uiMode = uiMinMode; uiMode < uiMaxMode; uiMode++ )
+        {
+          //----- restore context models -----
+          m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[uiDepthCU][CI_CURR_BEST] );
+          
+          DEBUG_STRING_NEW(sMode)
+          //----- chroma coding -----
+          Distortion uiDist = 0;
+          pcCU->setIntraDirSubParts  ( CHANNEL_TYPE_CHROMA, uiModeList[uiMode], uiPartOffset, uiDepthCU+uiInitTrDepth );
+          xRecurIntraChromaCodingQT       ( pcOrgYuv, pcPredYuv, pcResiYuv, resiLuma, uiDist, tuRecurseWithPU DEBUG_STRING_PASS_INTO(sMode) );
+
+          if( pcCU->getSlice()->getPPS()->getUseTransformSkip() )
+          {
+            m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[uiDepthCU][CI_CURR_BEST] );
+          }
+
+          UInt    uiBits = xGetIntraBitsQT( tuRecurseWithPU, false, true, false );
+          Double  dCost  = m_pcRdCost->calcRdCost( uiBits, uiDist );
+
+          //----- compare -----
+          if( dCost < dBestCost )
+          {
+            DEBUG_STRING_SWAP(sPU, sMode);
+            dBestCost   = dCost;
+            uiBestDist  = uiDist;
+            uiBestMode  = uiModeList[uiMode];
+
+            xSetIntraResultChromaQT( pcRecoYuv, tuRecurseWithPU );
+            for (UInt componentIndex = COMPONENT_Cb; componentIndex < numberValidComponents; componentIndex++)
+            {
+              const ComponentID compID = ComponentID(componentIndex);
+              ::memcpy( m_puhQTTempCbf[compID], pcCU->getCbf( compID )+uiPartOffset, uiQPartNum * sizeof( UChar ) );
+              ::memcpy( m_puhQTTempTransformSkipFlag[compID], pcCU->getTransformSkip( compID )+uiPartOffset, uiQPartNum * sizeof( UChar ) );
+              ::memcpy( m_phQTTempCrossComponentPredictionAlpha[compID], pcCU->getCrossComponentPredictionAlpha(compID)+uiPartOffset, uiQPartNum * sizeof( SChar ) );
+            }
+          }
+        }
+
+        DEBUG_STRING_APPEND(sDebug, sPU)
+
+        //----- set data -----
+        for (UInt componentIndex = COMPONENT_Cb; componentIndex < numberValidComponents; componentIndex++)
+        {
+          const ComponentID compID = ComponentID(componentIndex);
+          ::memcpy( pcCU->getCbf( compID )+uiPartOffset, m_puhQTTempCbf[compID], uiQPartNum * sizeof( UChar ) );
+          ::memcpy( pcCU->getTransformSkip( compID )+uiPartOffset, m_puhQTTempTransformSkipFlag[compID], uiQPartNum * sizeof( UChar ) );
+          ::memcpy( pcCU->getCrossComponentPredictionAlpha(compID)+uiPartOffset, m_phQTTempCrossComponentPredictionAlpha[compID], uiQPartNum * sizeof( SChar ) );
+        }
+      }
+
+      if( ! tuRecurseWithPU.IsLastSection() )
+      {
+        for (UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+        {
+          const ComponentID compID    = ComponentID(ch);
+          const TComRectangle &tuRect = tuRecurseWithPU.getRect(compID);
+          const UInt  uiCompWidth     = tuRect.width;
+          const UInt  uiCompHeight    = tuRect.height;
+          const UInt  uiZOrder        = pcCU->getZorderIdxInCtu() + tuRecurseWithPU.GetAbsPartIdxTU();
+                Pel*  piDes           = pcCU->getPic()->getPicYuvRec()->getAddr( compID, pcCU->getCtuRsAddr(), uiZOrder );
+          const UInt  uiDesStride     = pcCU->getPic()->getPicYuvRec()->getStride( compID);
+          const Pel*  piSrc           = pcRecoYuv->getAddr( compID, uiPartOffset );
+          const UInt  uiSrcStride     = pcRecoYuv->getStride( compID);
