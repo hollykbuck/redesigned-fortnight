@@ -1398,3 +1398,103 @@ Void  TComSlice::initWpAcDcParam()
   {
     m_weightACDCParam[iComp].iAC = 0;
     m_weightACDCParam[iComp].iDC = 0;
+  }
+}
+
+//! get tables for weighted prediction
+Void  TComSlice::getWpScaling( RefPicList e, Int iRefIdx, WPScalingParam *&wp )
+{
+  assert (e<NUM_REF_PIC_LIST_01);
+  wp = m_weightPredTable[e][iRefIdx];
+}
+
+//! reset Default WP tables settings : no weight.
+Void  TComSlice::resetWpScaling()
+{
+  for ( Int e=0 ; e<NUM_REF_PIC_LIST_01 ; e++ )
+  {
+    for ( Int i=0 ; i<MAX_NUM_REF ; i++ )
+    {
+      for ( Int yuv=0 ; yuv<MAX_NUM_COMPONENT ; yuv++ )
+      {
+        WPScalingParam  *pwp = &(m_weightPredTable[e][i][yuv]);
+        pwp->bPresentFlag      = false;
+        pwp->uiLog2WeightDenom = 0;
+        pwp->uiLog2WeightDenom = 0;
+        pwp->iWeight           = 1;
+        pwp->iOffset           = 0;
+      }
+    }
+  }
+}
+
+//! init WP table
+Void  TComSlice::initWpScaling(const TComSPS *sps)
+{
+  const Bool bUseHighPrecisionPredictionWeighting = sps->getSpsRangeExtension().getHighPrecisionOffsetsEnabledFlag();
+  for ( Int e=0 ; e<NUM_REF_PIC_LIST_01 ; e++ )
+  {
+    for ( Int i=0 ; i<MAX_NUM_REF ; i++ )
+    {
+      for ( Int yuv=0 ; yuv<MAX_NUM_COMPONENT ; yuv++ )
+      {
+        WPScalingParam  *pwp = &(m_weightPredTable[e][i][yuv]);
+        if ( !pwp->bPresentFlag )
+        {
+          // Inferring values not present :
+          pwp->iWeight = (1 << pwp->uiLog2WeightDenom);
+          pwp->iOffset = 0;
+        }
+
+        const Int offsetScalingFactor = bUseHighPrecisionPredictionWeighting ? 1 : (1 << (sps->getBitDepth(toChannelType(ComponentID(yuv)))-8));
+
+        pwp->w      = pwp->iWeight;
+        pwp->o      = pwp->iOffset * offsetScalingFactor; //NOTE: This value of the ".o" variable is never used - .o is set immediately before it gets used
+        pwp->shift  = pwp->uiLog2WeightDenom;
+        pwp->round  = (pwp->uiLog2WeightDenom>=1) ? (1 << (pwp->uiLog2WeightDenom-1)) : (0);
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Video parameter set (VPS)
+// ------------------------------------------------------------------------------------------------
+TComVPS::TComVPS()
+: m_VPSId                     (  0)
+, m_uiMaxTLayers              (  1)
+, m_uiMaxLayers               (  1)
+, m_bTemporalIdNestingFlag    (false)
+, m_numHrdParameters          (  0)
+, m_maxNuhReservedZeroLayerId (  0)
+, m_hrdParameters             ()
+, m_hrdOpSetIdx               ()
+, m_cprmsPresentFlag          ()
+{
+
+  for( Int i = 0; i < MAX_TLAYER; i++)
+  {
+    m_numReorderPics[i] = 0;
+    m_uiMaxDecPicBuffering[i] = 1;
+    m_uiMaxLatencyIncrease[i] = 0;
+  }
+}
+
+TComVPS::~TComVPS()
+{
+}
+
+// ------------------------------------------------------------------------------------------------
+// Sequence parameter set (SPS)
+// ------------------------------------------------------------------------------------------------
+
+TComSPSRExt::TComSPSRExt()
+ : m_transformSkipRotationEnabledFlag   (false)
+ , m_transformSkipContextEnabledFlag    (false)
+// m_rdpcmEnabledFlag initialized below
+ , m_extendedPrecisionProcessingFlag    (false)
+ , m_intraSmoothingDisabledFlag         (false)
+ , m_highPrecisionOffsetsEnabledFlag    (false)
+ , m_persistentRiceAdaptationEnabledFlag(false)
+ , m_cabacBypassAlignmentEnabledFlag    (false)
+{
