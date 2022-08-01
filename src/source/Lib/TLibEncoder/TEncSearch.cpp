@@ -2298,3 +2298,103 @@ TEncSearch::estIntraPredLumaQT(TComDataCU* pcCU,
         UInt       uiMode = modeIdx;
         Distortion uiSad  = 0;
 
+        const Bool bUseFilter=TComPrediction::filteringIntraReferenceSamples(COMPONENT_Y, uiMode, puRect.width, puRect.height, chFmt, sps.getSpsRangeExtension().getIntraSmoothingDisabledFlag());
+
+        predIntraAng( COMPONENT_Y, uiMode, piOrg, uiStride, piPred, uiStride, tuRecurseWithPU, bUseFilter, TComPrediction::UseDPCMForFirstPassIntraEstimation(tuRecurseWithPU, uiMode) );
+
+        // use hadamard transform here
+        uiSad+=distParam.DistFunc(&distParam);
+
+        UInt   iModeBits = 0;
+
+        // NB xModeBitsIntra will not affect the mode for chroma that may have already been pre-estimated.
+        iModeBits+=xModeBitsIntra( pcCU, uiMode, uiPartOffset, uiDepth, CHANNEL_TYPE_LUMA );
+
+        Double cost      = (Double)uiSad + (Double)iModeBits * sqrtLambdaForFirstPass;
+
+#if DEBUG_INTRA_SEARCH_COSTS
+        std::cout << "1st pass mode " << uiMode << " SAD = " << uiSad << ", mode bits = " << iModeBits << ", cost = " << cost << "\n";
+#endif
+
+        CandNum += xUpdateCandList( uiMode, cost, numModesForFullRD, uiRdModeList, CandCostList );
+      }
+      (Void)CandNum; // Avoid compiler warning: CandNum is never used
+
+      if (m_pcEncCfg->getFastUDIUseMPMEnabled())
+      {
+        Int uiPreds[NUM_MOST_PROBABLE_MODES] = {-1, -1, -1};
+
+        Int iMode = -1;
+        pcCU->getIntraDirPredictor( uiPartOffset, uiPreds, COMPONENT_Y, &iMode );
+
+        const Int numCand = ( iMode >= 0 ) ? iMode : Int(NUM_MOST_PROBABLE_MODES);
+
+        for( Int j=0; j < numCand; j++)
+        {
+          Bool mostProbableModeIncluded = false;
+          Int mostProbableMode = uiPreds[j];
+
+          for( Int i=0; i < numModesForFullRD; i++)
+          {
+            mostProbableModeIncluded |= (mostProbableMode == uiRdModeList[i]);
+          }
+          if (!mostProbableModeIncluded)
+          {
+            uiRdModeList[numModesForFullRD++] = mostProbableMode;
+          }
+        }
+      }
+    }
+    else
+    {
+      for( Int i=0; i < numModesForFullRD; i++)
+      {
+        uiRdModeList[i] = i;
+      }
+    }
+
+    //===== check modes (using r-d costs) =====
+#if HHI_RQT_INTRA_SPEEDUP_MOD
+    UInt   uiSecondBestMode  = MAX_UINT;
+    Double dSecondBestPUCost = MAX_DOUBLE;
+#endif
+    DEBUG_STRING_NEW(sPU)
+    UInt       uiBestPUMode  = 0;
+    Distortion uiBestPUDistY = 0;
+    Double     dBestPUCost   = MAX_DOUBLE;
+
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+    UInt max=numModesForFullRD;
+
+    if (DebugOptionList::ForceLumaMode.isSet())
+    {
+      max=0;  // we are forcing a direction, so don't bother with mode check
+    }
+    for ( UInt uiMode = 0; uiMode < max; uiMode++)
+#else
+    for( UInt uiMode = 0; uiMode < numModesForFullRD; uiMode++ )
+#endif
+    {
+      // set luma prediction mode
+      UInt uiOrgMode = uiRdModeList[uiMode];
+
+      pcCU->setIntraDirSubParts ( CHANNEL_TYPE_LUMA, uiOrgMode, uiPartOffset, uiDepth + uiInitTrDepth );
+
+      DEBUG_STRING_NEW(sMode)
+      // set context models
+      m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST] );
+
+      // determine residual for partition
+      Distortion uiPUDistY = 0;
+      Double     dPUCost   = 0.0;
+#if HHI_RQT_INTRA_SPEEDUP
+      xRecurIntraCodingLumaQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaPU, uiPUDistY, true, dPUCost, tuRecurseWithPU DEBUG_STRING_PASS_INTO(sMode) );
+#else
+      xRecurIntraCodingLumaQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaPU, uiPUDistY, dPUCost, tuRecurseWithPU DEBUG_STRING_PASS_INTO(sMode) );
+#endif
+
+#if DEBUG_INTRA_SEARCH_COSTS
+      std::cout << "2nd pass [luma,chroma] mode [" << Int(pcCU->getIntraDir(CHANNEL_TYPE_LUMA, uiPartOffset)) << "," << Int(pcCU->getIntraDir(CHANNEL_TYPE_CHROMA, uiPartOffset)) << "] cost = " << dPUCost << "\n";
+#endif
+
+      // check r-d cost
