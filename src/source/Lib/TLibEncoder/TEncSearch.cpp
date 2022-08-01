@@ -2398,3 +2398,103 @@ TEncSearch::estIntraPredLumaQT(TComDataCU* pcCU,
 #endif
 
       // check r-d cost
+      if( dPUCost < dBestPUCost )
+      {
+        DEBUG_STRING_SWAP(sPU, sMode)
+#if HHI_RQT_INTRA_SPEEDUP_MOD
+        uiSecondBestMode  = uiBestPUMode;
+        dSecondBestPUCost = dBestPUCost;
+#endif
+        uiBestPUMode  = uiOrgMode;
+        uiBestPUDistY = uiPUDistY;
+        dBestPUCost   = dPUCost;
+
+        xSetIntraResultLumaQT( pcRecoYuv, tuRecurseWithPU );
+
+        if (pps.getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+        {
+          const Int xOffset = tuRecurseWithPU.getRect( COMPONENT_Y ).x0;
+          const Int yOffset = tuRecurseWithPU.getRect( COMPONENT_Y ).y0;
+          for (UInt storedResidualIndex = 0; storedResidualIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; storedResidualIndex++)
+          {
+            if (bMaintainResidual[storedResidualIndex])
+            {
+              xStoreCrossComponentPredictionResult(resiLuma[storedResidualIndex], resiLumaPU[storedResidualIndex], tuRecurseWithPU, xOffset, yOffset, MAX_CU_SIZE, MAX_CU_SIZE );
+            }
+          }
+        }
+
+        UInt uiQPartNum = tuRecurseWithPU.GetAbsPartIdxNumParts();
+
+        ::memcpy( m_puhQTTempTrIdx,  pcCU->getTransformIdx()       + uiPartOffset, uiQPartNum * sizeof( UChar ) );
+        for (UInt component = 0; component < numberValidComponents; component++)
+        {
+          const ComponentID compID = ComponentID(component);
+          ::memcpy( m_puhQTTempCbf[compID], pcCU->getCbf( compID  ) + uiPartOffset, uiQPartNum * sizeof( UChar ) );
+          ::memcpy( m_puhQTTempTransformSkipFlag[compID],  pcCU->getTransformSkip(compID)  + uiPartOffset, uiQPartNum * sizeof( UChar ) );
+        }
+      }
+#if HHI_RQT_INTRA_SPEEDUP_MOD
+      else if( dPUCost < dSecondBestPUCost )
+      {
+        uiSecondBestMode  = uiOrgMode;
+        dSecondBestPUCost = dPUCost;
+      }
+#endif
+    } // Mode loop
+
+#if HHI_RQT_INTRA_SPEEDUP
+#if HHI_RQT_INTRA_SPEEDUP_MOD
+    for( UInt ui =0; ui < 2; ++ui )
+#endif
+    {
+#if HHI_RQT_INTRA_SPEEDUP_MOD
+      UInt uiOrgMode   = ui ? uiSecondBestMode  : uiBestPUMode;
+      if( uiOrgMode == MAX_UINT )
+      {
+        break;
+      }
+#else
+      UInt uiOrgMode = uiBestPUMode;
+#endif
+
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+      if (DebugOptionList::ForceLumaMode.isSet())
+      {
+        uiOrgMode = DebugOptionList::ForceLumaMode.getInt();
+      }
+#endif
+
+      pcCU->setIntraDirSubParts ( CHANNEL_TYPE_LUMA, uiOrgMode, uiPartOffset, uiDepth + uiInitTrDepth );
+      DEBUG_STRING_NEW(sModeTree)
+
+      // set context models
+      m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST] );
+
+      // determine residual for partition
+      Distortion uiPUDistY = 0;
+      Double     dPUCost   = 0.0;
+
+      xRecurIntraCodingLumaQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaPU, uiPUDistY, false, dPUCost, tuRecurseWithPU DEBUG_STRING_PASS_INTO(sModeTree));
+
+      // check r-d cost
+      if( dPUCost < dBestPUCost )
+      {
+        DEBUG_STRING_SWAP(sPU, sModeTree)
+        uiBestPUMode  = uiOrgMode;
+        uiBestPUDistY = uiPUDistY;
+        dBestPUCost   = dPUCost;
+
+        xSetIntraResultLumaQT( pcRecoYuv, tuRecurseWithPU );
+
+        if (pps.getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+        {
+          const Int xOffset = tuRecurseWithPU.getRect( COMPONENT_Y ).x0;
+          const Int yOffset = tuRecurseWithPU.getRect( COMPONENT_Y ).y0;
+          for (UInt storedResidualIndex = 0; storedResidualIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; storedResidualIndex++)
+          {
+            if (bMaintainResidual[storedResidualIndex])
+            {
+              xStoreCrossComponentPredictionResult(resiLuma[storedResidualIndex], resiLumaPU[storedResidualIndex], tuRecurseWithPU, xOffset, yOffset, MAX_CU_SIZE, MAX_CU_SIZE );
+            }
+          }
