@@ -1498,3 +1498,103 @@ TComSPSRExt::TComSPSRExt()
  , m_persistentRiceAdaptationEnabledFlag(false)
  , m_cabacBypassAlignmentEnabledFlag    (false)
 {
+  for (UInt signallingModeIndex = 0; signallingModeIndex < NUMBER_OF_RDPCM_SIGNALLING_MODES; signallingModeIndex++)
+  {
+    m_rdpcmEnabledFlag[signallingModeIndex] = false;
+  }
+}
+
+TComSPS::TComSPS()
+: m_SPSId                     (  0)
+, m_VPSId                     (  0)
+, m_chromaFormatIdc           (CHROMA_420)
+, m_uiMaxTLayers              (  1)
+// Structure
+, m_picWidthInLumaSamples     (352)
+, m_picHeightInLumaSamples    (288)
+, m_log2MinCodingBlockSize    (  0)
+, m_log2DiffMaxMinCodingBlockSize(0)
+, m_uiMaxCUWidth              ( 32)
+, m_uiMaxCUHeight             ( 32)
+, m_uiMaxTotalCUDepth         (  3)
+, m_bLongTermRefsPresent      (false)
+, m_uiQuadtreeTULog2MaxSize   (  0)
+, m_uiQuadtreeTULog2MinSize   (  0)
+, m_uiQuadtreeTUMaxDepthInter (  0)
+, m_uiQuadtreeTUMaxDepthIntra (  0)
+// Tool list
+, m_usePCM                    (false)
+, m_pcmLog2MaxSize            (  5)
+, m_uiPCMLog2MinSize          (  7)
+, m_bPCMFilterDisableFlag     (false)
+, m_uiBitsForPOC              (  8)
+, m_numLongTermRefPicSPS      (  0)
+, m_uiMaxTrSize               ( 32)
+, m_bUseSAO                   (false)
+, m_bTemporalIdNestingFlag    (false)
+, m_scalingListEnabledFlag    (false)
+, m_useStrongIntraSmoothing   (false)
+, m_vuiParametersPresentFlag  (false)
+, m_vuiParameters             ()
+{
+  for(Int ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    m_bitDepths.recon[ch] = 8;
+#if O0043_BEST_EFFORT_DECODING
+    m_bitDepths.stream[ch] = 8;
+#endif
+    m_pcmBitDepths[ch] = 8;
+    m_qpBDOffset   [ch] = 0;
+  }
+
+  for ( Int i = 0; i < MAX_TLAYER; i++ )
+  {
+    m_uiMaxLatencyIncreasePlus1[i] = 0;
+    m_uiMaxDecPicBuffering[i] = 1;
+    m_numReorderPics[i]       = 0;
+  }
+
+  ::memset(m_ltRefPicPocLsbSps, 0, sizeof(m_ltRefPicPocLsbSps));
+  ::memset(m_usedByCurrPicLtSPSFlag, 0, sizeof(m_usedByCurrPicLtSPSFlag));
+}
+
+TComSPS::~TComSPS()
+{
+  m_RPSList.destroy();
+}
+
+Void  TComSPS::createRPSList( Int numRPS )
+{
+  m_RPSList.destroy();
+  m_RPSList.create(numRPS);
+}
+
+
+const Int TComSPS::m_winUnitX[]={1,2,2,1};
+const Int TComSPS::m_winUnitY[]={1,2,1,1};
+
+TComPPSRExt::TComPPSRExt()
+: m_log2MaxTransformSkipBlockSize      (2)
+, m_crossComponentPredictionEnabledFlag(false)
+, m_diffCuChromaQpOffsetDepth          (0)
+, m_chromaQpOffsetListLen              (0)
+// m_ChromaQpAdjTableIncludingNullEntry initialized below
+// m_log2SaoOffsetScale initialized below
+{
+  m_ChromaQpAdjTableIncludingNullEntry[0].u.comp.CbOffset = 0; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0. This is initialised here and never subsequently changed.
+  m_ChromaQpAdjTableIncludingNullEntry[0].u.comp.CrOffset = 0;
+  for(Int ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    m_log2SaoOffsetScale[ch] = 0;
+  }
+}
+
+TComPPS::TComPPS()
+: m_PPSId                            (0)
+, m_SPSId                            (0)
+, m_picInitQPMinus26                 (0)
+, m_useDQP                           (false)
+, m_bConstrainedIntraPred            (false)
+, m_bSliceChromaQpFlag               (false)
+, m_uiMaxCuDQPDepth                  (0)
+, m_chromaCbQpOffset                 (0)
