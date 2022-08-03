@@ -1598,3 +1598,103 @@ TComPPS::TComPPS()
 , m_bSliceChromaQpFlag               (false)
 , m_uiMaxCuDQPDepth                  (0)
 , m_chromaCbQpOffset                 (0)
+, m_chromaCrQpOffset                 (0)
+, m_numRefIdxL0DefaultActive         (1)
+, m_numRefIdxL1DefaultActive         (1)
+, m_TransquantBypassEnabledFlag      (false)
+, m_useTransformSkip                 (false)
+, m_dependentSliceSegmentsEnabledFlag(false)
+, m_tilesEnabledFlag                 (false)
+, m_entropyCodingSyncEnabledFlag     (false)
+, m_loopFilterAcrossTilesEnabledFlag (true)
+, m_uniformSpacingFlag               (false)
+, m_numTileColumnsMinus1             (0)
+, m_numTileRowsMinus1                (0)
+, m_signDataHidingEnabledFlag        (false)
+, m_cabacInitPresentFlag             (false)
+, m_sliceHeaderExtensionPresentFlag  (false)
+, m_loopFilterAcrossSlicesEnabledFlag(false)
+, m_listsModificationPresentFlag     (0)
+, m_numExtraSliceHeaderBits          (0)
+{
+}
+
+TComPPS::~TComPPS()
+{
+}
+
+TComReferencePictureSet::TComReferencePictureSet()
+: m_numberOfPictures (0)
+, m_numberOfNegativePictures (0)
+, m_numberOfPositivePictures (0)
+, m_numberOfLongtermPictures (0)
+, m_interRPSPrediction (0)
+, m_deltaRIdxMinus1 (0)
+, m_deltaRPS (0)
+, m_numRefIdc (0)
+{
+  ::memset( m_deltaPOC, 0, sizeof(m_deltaPOC) );
+  ::memset( m_POC, 0, sizeof(m_POC) );
+  ::memset( m_used, 0, sizeof(m_used) );
+  ::memset( m_refIdc, 0, sizeof(m_refIdc) );
+  ::memset( m_bCheckLTMSB, 0, sizeof(m_bCheckLTMSB) );
+  ::memset( m_pocLSBLT, 0, sizeof(m_pocLSBLT) );
+  ::memset( m_deltaPOCMSBCycleLT, 0, sizeof(m_deltaPOCMSBCycleLT) );
+  ::memset( m_deltaPocMSBPresentFlag, 0, sizeof(m_deltaPocMSBPresentFlag) );
+}
+
+TComReferencePictureSet::~TComReferencePictureSet()
+{
+}
+
+Void TComReferencePictureSet::setUsed(Int bufferNum, Bool used)
+{
+  m_used[bufferNum] = used;
+}
+
+Void TComReferencePictureSet::setDeltaPOC(Int bufferNum, Int deltaPOC)
+{
+  m_deltaPOC[bufferNum] = deltaPOC;
+}
+
+Void TComReferencePictureSet::setNumberOfPictures(Int numberOfPictures)
+{
+  m_numberOfPictures = numberOfPictures;
+}
+
+Int TComReferencePictureSet::getUsed(Int bufferNum) const
+{
+  return m_used[bufferNum];
+}
+
+Int TComReferencePictureSet::getDeltaPOC(Int bufferNum) const
+{
+  return m_deltaPOC[bufferNum];
+}
+
+Int TComReferencePictureSet::getNumberOfPictures() const
+{
+  return m_numberOfPictures;
+}
+
+Int TComReferencePictureSet::getPOC(Int bufferNum) const
+{
+  return m_POC[bufferNum];
+}
+
+Void TComReferencePictureSet::setPOC(Int bufferNum, Int POC)
+{
+  m_POC[bufferNum] = POC;
+}
+
+Bool TComReferencePictureSet::getCheckLTMSBPresent(Int bufferNum) const
+{
+  return m_bCheckLTMSB[bufferNum];
+}
+
+Void TComReferencePictureSet::setCheckLTMSBPresent(Int bufferNum, Bool b)
+{
+  m_bCheckLTMSB[bufferNum] = b;
+}
+
+//! set the reference idc value at uiBufferNum entry to the value of iRefIdc
