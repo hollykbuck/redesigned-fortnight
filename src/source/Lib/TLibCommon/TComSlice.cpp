@@ -1698,3 +1698,103 @@ Void TComReferencePictureSet::setCheckLTMSBPresent(Int bufferNum, Bool b)
 }
 
 //! set the reference idc value at uiBufferNum entry to the value of iRefIdc
+Void TComReferencePictureSet::setRefIdc(Int bufferNum, Int refIdc)
+{
+  m_refIdc[bufferNum] = refIdc;
+}
+
+//! get the reference idc value at uiBufferNum
+Int  TComReferencePictureSet::getRefIdc(Int bufferNum) const
+{
+  return m_refIdc[bufferNum];
+}
+
+/** Sorts the deltaPOC and Used by current values in the RPS based on the deltaPOC values.
+ *  deltaPOC values are sorted with -ve values before the +ve values.  -ve values are in decreasing order.
+ *  +ve values are in increasing order.
+ * \returns Void
+ */
+Void TComReferencePictureSet::sortDeltaPOC()
+{
+  // sort in increasing order (smallest first)
+  for(Int j=1; j < getNumberOfPictures(); j++)
+  {
+    Int deltaPOC = getDeltaPOC(j);
+    Bool used = getUsed(j);
+    for (Int k=j-1; k >= 0; k--)
+    {
+      Int temp = getDeltaPOC(k);
+      if (deltaPOC < temp)
+      {
+        setDeltaPOC(k+1, temp);
+        setUsed(k+1, getUsed(k));
+        setDeltaPOC(k, deltaPOC);
+        setUsed(k, used);
+      }
+    }
+  }
+  // flip the negative values to largest first
+  Int numNegPics = getNumberOfNegativePictures();
+  for(Int j=0, k=numNegPics-1; j < numNegPics>>1; j++, k--)
+  {
+    Int deltaPOC = getDeltaPOC(j);
+    Bool used = getUsed(j);
+    setDeltaPOC(j, getDeltaPOC(k));
+    setUsed(j, getUsed(k));
+    setDeltaPOC(k, deltaPOC);
+    setUsed(k, used);
+  }
+}
+
+/** Prints the deltaPOC and RefIdc (if available) values in the RPS.
+ *  A "*" is added to the deltaPOC value if it is Used bu current.
+ * \returns Void
+ */
+Void TComReferencePictureSet::printDeltaPOC() const
+{
+  printf("DeltaPOC = { ");
+  for(Int j=0; j < getNumberOfPictures(); j++)
+  {
+    printf("%d%s ", getDeltaPOC(j), (getUsed(j)==1)?"*":"");
+  }
+  if (getInterRPSPrediction())
+  {
+    printf("}, RefIdc = { ");
+    for(Int j=0; j < getNumRefIdc(); j++)
+    {
+      printf("%d ", getRefIdc(j));
+    }
+  }
+  printf("}\n");
+}
+
+TComRefPicListModification::TComRefPicListModification()
+: m_refPicListModificationFlagL0 (false)
+, m_refPicListModificationFlagL1 (false)
+{
+  ::memset( m_RefPicSetIdxL0, 0, sizeof(m_RefPicSetIdxL0) );
+  ::memset( m_RefPicSetIdxL1, 0, sizeof(m_RefPicSetIdxL1) );
+}
+
+TComRefPicListModification::~TComRefPicListModification()
+{
+}
+
+TComScalingList::TComScalingList()
+{
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt listId = 0; listId < SCALING_LIST_NUM; listId++)
+    {
+      m_scalingListCoef[sizeId][listId].resize(min<Int>(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]));
+    }
+  }
+}
+
+/** set default quantization matrix to array
+*/
+Void TComScalingList::setDefaultScalingList()
+{
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt listId=0;listId<SCALING_LIST_NUM;listId++)
