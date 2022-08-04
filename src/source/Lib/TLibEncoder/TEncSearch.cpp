@@ -2798,3 +2798,103 @@ Void TEncSearch::IPCMSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* pcPre
 
   for (UInt ch=0; ch < pcCU->getPic()->getNumberValidComponents(); ch++)
   {
+    const ComponentID compID  = ComponentID(ch);
+    const UInt width  = pcCU->getWidth(0)  >> pcCU->getPic()->getComponentScaleX(compID);
+    const UInt height = pcCU->getHeight(0) >> pcCU->getPic()->getComponentScaleY(compID);
+    const UInt stride = pcPredYuv->getStride(compID);
+
+    Pel * pOrig    = pcOrgYuv->getAddr  (compID, 0, width);
+    Pel * pResi    = pcResiYuv->getAddr(compID, 0, width);
+    Pel * pPred    = pcPredYuv->getAddr(compID, 0, width);
+    Pel * pReco    = pcRecoYuv->getAddr(compID, 0, width);
+    Pel * pPCM     = pcCU->getPCMSample (compID);
+
+    xEncPCM ( pcCU, 0, pOrig, pPCM, pPred, pResi, pReco, stride, width, height, compID );
+
+  }
+
+  m_pcEntropyCoder->resetBits();
+  xEncIntraHeader ( pcCU, uiDepth, 0, true, false);
+  uiBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+
+  dCost = m_pcRdCost->calcRdCost( uiBits, uiDistortion );
+
+  m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST]);
+
+  pcCU->getTotalBits()       = uiBits;
+  pcCU->getTotalCost()       = dCost;
+  pcCU->getTotalDistortion() = uiDistortion;
+
+  pcCU->copyToPic(uiDepth);
+}
+
+
+
+
+Void TEncSearch::xGetInterPredictionError( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPartIdx, Distortion& ruiErr, Bool /*bHadamard*/ )
+{
+  motionCompensation( pcCU, &m_tmpYuvPred, REF_PIC_LIST_X, iPartIdx );
+
+  UInt uiAbsPartIdx = 0;
+  Int iWidth = 0;
+  Int iHeight = 0;
+  pcCU->getPartIndexAndSize( iPartIdx, uiAbsPartIdx, iWidth, iHeight );
+
+  DistParam cDistParam;
+
+  cDistParam.bApplyWeight = false;
+
+
+  m_pcRdCost->setDistParam( cDistParam, pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA),
+                            pcYuvOrg->getAddr( COMPONENT_Y, uiAbsPartIdx ), pcYuvOrg->getStride(COMPONENT_Y),
+                            m_tmpYuvPred .getAddr( COMPONENT_Y, uiAbsPartIdx ), m_tmpYuvPred.getStride(COMPONENT_Y),
+                            iWidth, iHeight, m_pcEncCfg->getUseHADME() && (pcCU->getCUTransquantBypass(iPartIdx) == 0) );
+
+  ruiErr = cDistParam.DistFunc( &cDistParam );
+}
+
+//! estimation of best merge coding
+Void TEncSearch::xMergeEstimation( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPUIdx, UInt& uiInterDir, TComMvField* pacMvField, UInt& uiMergeIndex, Distortion& ruiCost, TComMvField* cMvFieldNeighbours, UChar* uhInterDirNeighbours, Int& numValidMergeCand )
+{
+  UInt uiAbsPartIdx = 0;
+  Int iWidth = 0;
+  Int iHeight = 0;
+
+  pcCU->getPartIndexAndSize( iPUIdx, uiAbsPartIdx, iWidth, iHeight );
+  UInt uiDepth = pcCU->getDepth( uiAbsPartIdx );
+
+  PartSize partSize = pcCU->getPartitionSize( 0 );
+  if ( pcCU->getSlice()->getPPS()->getLog2ParallelMergeLevelMinus2() && partSize != SIZE_2Nx2N && pcCU->getWidth( 0 ) <= 8 )
+  {
+    if ( iPUIdx == 0 )
+    {
+      pcCU->setPartSizeSubParts( SIZE_2Nx2N, 0, uiDepth ); // temporarily set
+#if MCTS_ENC_CHECK
+      UInt numSpatialMergeCandidates = 0;
+      pcCU->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates );
+      if (m_pcEncCfg->getTMCTSSEITileConstraint() && pcCU->isLastColumnCTUInTile())
+      {
+        numValidMergeCand = numSpatialMergeCandidates;
+      }
+#else
+      pcCU->getInterMergeCandidates( 0, 0, cMvFieldNeighbours,uhInterDirNeighbours, numValidMergeCand );
+#endif
+      pcCU->setPartSizeSubParts( partSize, 0, uiDepth ); // restore
+    }
+  }
+  else
+  {
+#if MCTS_ENC_CHECK
+    UInt numSpatialMergeCandidates = 0;
+    pcCU->getInterMergeCandidates( uiAbsPartIdx, iPUIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates );
+    if (m_pcEncCfg->getTMCTSSEITileConstraint() && pcCU->isLastColumnCTUInTile())
+    {
+      numValidMergeCand = numSpatialMergeCandidates;
+    }
+#else
+    pcCU->getInterMergeCandidates( uiAbsPartIdx, iPUIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand );
+#endif
+  }
+
+  xRestrictBipredMergeCand( pcCU, iPUIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand );
+
