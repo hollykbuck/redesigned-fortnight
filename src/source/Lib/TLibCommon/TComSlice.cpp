@@ -1798,3 +1798,103 @@ Void TComScalingList::setDefaultScalingList()
   for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
   {
     for(UInt listId=0;listId<SCALING_LIST_NUM;listId++)
+    {
+      processDefaultMatrix(sizeId, listId);
+    }
+  }
+}
+/** check if use default quantization matrix
+ * \returns true if use default quantization matrix in all size
+*/
+Bool TComScalingList::checkDefaultScalingList()
+{
+  UInt defaultCounter=0;
+
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt listId=0;listId<SCALING_LIST_NUM;listId++)
+    {
+      if( !memcmp(getScalingListAddress(sizeId,listId), getScalingListDefaultAddress(sizeId, listId),sizeof(Int)*min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId])) // check value of matrix
+     && ((sizeId < SCALING_LIST_16x16) || (getScalingListDC(sizeId,listId) == 16))) // check DC value
+      {
+        defaultCounter++;
+      }
+    }
+  }
+
+  return (defaultCounter == (SCALING_LIST_NUM * SCALING_LIST_SIZE_NUM )) ? false : true;
+}
+
+/** get scaling matrix from RefMatrixID
+ * \param sizeId    size index
+ * \param listId    index of input matrix
+ * \param refListId index of reference matrix
+ */
+Void TComScalingList::processRefMatrix( UInt sizeId, UInt listId , UInt refListId )
+{
+  ::memcpy(getScalingListAddress(sizeId, listId),((listId == refListId)? getScalingListDefaultAddress(sizeId, refListId): getScalingListAddress(sizeId, refListId)),sizeof(Int)*min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]));
+}
+
+Void TComScalingList::checkPredMode(UInt sizeId, UInt listId)
+{
+  Int predListStep = (sizeId == SCALING_LIST_32x32? (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) : 1); // if 32x32, skip over chroma entries.
+
+  for(Int predListIdx = (Int)listId ; predListIdx >= 0; predListIdx-=predListStep)
+  {
+    if( !memcmp(getScalingListAddress(sizeId,listId),((listId == predListIdx) ?
+      getScalingListDefaultAddress(sizeId, predListIdx): getScalingListAddress(sizeId, predListIdx)),sizeof(Int)*min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId])) // check value of matrix
+     && ((sizeId < SCALING_LIST_16x16) || (getScalingListDC(sizeId,listId) == getScalingListDC(sizeId,predListIdx)))) // check DC value
+    {
+      setRefMatrixId(sizeId, listId, predListIdx);
+      setScalingListPredModeFlag(sizeId, listId, false);
+      return;
+    }
+  }
+  setScalingListPredModeFlag(sizeId, listId, true);
+}
+
+static Void outputScalingListHelp(std::ostream &os)
+{
+  os << "The scaling list file specifies all matrices and their DC values; none can be missing,\n"
+         "but their order is arbitrary.\n\n"
+         "The matrices are specified by:\n"
+         "<matrix name><unchecked data>\n"
+         "  <value>,<value>,<value>,....\n\n"
+         "  Line-feeds can be added arbitrarily between values, and the number of values needs to be\n"
+         "  at least the number of entries for the matrix (superfluous entries are ignored).\n"
+         "  The <unchecked data> is text on the same line as the matrix that is not checked\n"
+         "  except to ensure that the matrix name token is unique. It is recommended that it is ' ='\n"
+         "  The values in the matrices are the absolute values (0-255), not the delta values as\n"
+         "  exchanged between the encoder and decoder\n\n"
+         "The DC values (for matrix sizes larger than 8x8) are specified by:\n"
+         "<matrix name>_DC<unchecked data>\n"
+         "  <value>\n";
+
+  os << "The permitted matrix names are:\n";
+  for(UInt sizeIdc = 0; sizeIdc < SCALING_LIST_SIZE_NUM; sizeIdc++)
+  {
+    for(UInt listIdc = 0; listIdc < SCALING_LIST_NUM; listIdc++)
+    {
+      if ((sizeIdc!=SCALING_LIST_32x32) || (listIdc%(SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) == 0))
+      {
+        os << "  " << MatrixType[sizeIdc][listIdc] << '\n';
+      }
+    }
+  }
+}
+
+Void TComScalingList::outputScalingLists(std::ostream &os) const
+{
+  for(UInt sizeIdc = 0; sizeIdc < SCALING_LIST_SIZE_NUM; sizeIdc++)
+  {
+    const UInt size = min(8,4<<(sizeIdc));
+    for(UInt listIdc = 0; listIdc < SCALING_LIST_NUM; listIdc++)
+    {
+      if ((sizeIdc!=SCALING_LIST_32x32) || (listIdc%(SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) == 0))
+      {
+        const Int *src = getScalingListAddress(sizeIdc, listIdc);
+        os << (MatrixType[sizeIdc][listIdc]) << " =\n  ";
+        for(UInt y=0; y<size; y++)
+        {
+          for(UInt x=0; x<size; x++, src++)
+          {
