@@ -1998,3 +1998,103 @@ Bool TComScalingList::xParseScalingList(const std::string &fileName)
             while ((!feof(fp)) && (!bFound))
             {
               TChar *ret = fgets(line, LINE_SIZE, fp);
+              TChar *findNamePosition= ret==NULL ? NULL : strstr(line, MatrixType_DC[sizeIdc][listIdc]);
+              if (findNamePosition!= NULL)
+              {
+                // This won't be a match against the non-DC string.
+                bFound=true;
+              }
+            }
+            if (!bFound)
+            {
+              fprintf(stderr, "Error: cannot find DC Matrix %s from scaling list file %s\n", MatrixType_DC[sizeIdc][listIdc], fileName.c_str());
+              return true;
+            }
+          }
+          Int data;
+          if (fscanf(fp, "%d,", &data)!=1)
+          {
+            fprintf(stderr, "Error: cannot read DC %s from scaling list file %s at file position %ld\n", MatrixType_DC[sizeIdc][listIdc], fileName.c_str(), ftell(fp));
+            return true;
+          }
+          if (data<0 || data>255)
+          {
+            fprintf(stderr, "Error: DC value %d for Matrix %s from scaling list file %s at file position %ld is out of range (0 to 255)\n", data, MatrixType[sizeIdc][listIdc], fileName.c_str(), ftell(fp));
+            return true;
+          }
+          //overwrite DC value when size of matrix is larger than 16x16
+          setScalingListDC(sizeIdc,listIdc,data);
+        }
+      }
+    }
+  }
+//  std::cout << "\n\nRead scaling lists of:\n\n";
+//  outputScalingLists(std::cout);
+
+  fclose(fp);
+  return false;
+}
+
+
+/** get default address of quantization matrix
+ * \param sizeId size index
+ * \param listId list index
+ * \returns pointer of quantization matrix
+ */
+const Int* TComScalingList::getScalingListDefaultAddress(UInt sizeId, UInt listId)
+{
+  const Int *src = 0;
+  switch(sizeId)
+  {
+    case SCALING_LIST_4x4:
+      src = g_quantTSDefault4x4;
+      break;
+    case SCALING_LIST_8x8:
+    case SCALING_LIST_16x16:
+    case SCALING_LIST_32x32:
+      src = (listId < (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) ) ? g_quantIntraDefault8x8 : g_quantInterDefault8x8;
+      break;
+    default:
+      assert(0);
+      src = NULL;
+      break;
+  }
+  return src;
+}
+
+/** process of default matrix
+ * \param sizeId size index
+ * \param listId index of input matrix
+ */
+Void TComScalingList::processDefaultMatrix(UInt sizeId, UInt listId)
+{
+  ::memcpy(getScalingListAddress(sizeId, listId),getScalingListDefaultAddress(sizeId,listId),sizeof(Int)*min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]));
+  setScalingListDC(sizeId,listId,SCALING_LIST_DC);
+}
+
+/** check DC value of matrix for default matrix signaling
+ */
+Void TComScalingList::checkDcOfMatrix()
+{
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt listId = 0; listId < SCALING_LIST_NUM; listId++)
+    {
+      //check default matrix?
+      if(getScalingListDC(sizeId,listId) == 0)
+      {
+        processDefaultMatrix(sizeId, listId);
+      }
+    }
+  }
+}
+
+ParameterSetManager::ParameterSetManager()
+: m_vpsMap(MAX_NUM_VPS)
+, m_spsMap(MAX_NUM_SPS)
+, m_ppsMap(MAX_NUM_PPS)
+, m_activeVPSId(-1)
+, m_activeSPSId(-1)
+{
+}
+
