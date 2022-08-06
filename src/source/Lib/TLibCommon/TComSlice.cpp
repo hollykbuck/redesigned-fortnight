@@ -1898,3 +1898,103 @@ Void TComScalingList::outputScalingLists(std::ostream &os) const
         {
           for(UInt x=0; x<size; x++, src++)
           {
+            os << std::setw(3) << (*src) << ", ";
+          }
+          os << (y+1<size?"\n  ":"\n");
+        }
+        if(sizeIdc > SCALING_LIST_8x8)
+        {
+          os << MatrixType_DC[sizeIdc][listIdc] << " = \n  " << std::setw(3) << getScalingListDC(sizeIdc, listIdc) << "\n";
+        }
+        os << "\n";
+      }
+    }
+  }
+}
+
+Bool TComScalingList::xParseScalingList(const std::string &fileName)
+{
+  static const Int LINE_SIZE=1024;
+  FILE *fp = NULL;
+  TChar line[LINE_SIZE];
+
+  if (fileName.empty())
+  {
+    fprintf(stderr, "Error: no scaling list file specified. Help on scaling lists being output\n");
+    outputScalingListHelp(std::cout);
+    std::cout << "\n\nExample scaling list file using default values:\n\n";
+    outputScalingLists(std::cout);
+    exit (1);
+    return true;
+  }
+  else if ((fp = fopen(fileName.c_str(),"r")) == (FILE*)NULL)
+  {
+    fprintf(stderr, "Error: cannot open scaling list file %s for reading\n", fileName.c_str());
+    return true;
+  }
+
+  for(UInt sizeIdc = 0; sizeIdc < SCALING_LIST_SIZE_NUM; sizeIdc++)
+  {
+    const UInt size = min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeIdc]);
+
+    for(UInt listIdc = 0; listIdc < SCALING_LIST_NUM; listIdc++)
+    {
+      Int * const src = getScalingListAddress(sizeIdc, listIdc);
+
+      if ((sizeIdc==SCALING_LIST_32x32) && (listIdc%(SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) != 0)) // derive chroma32x32 from chroma16x16
+      {
+        const Int *srcNextSmallerSize = getScalingListAddress(sizeIdc-1, listIdc);
+        for(UInt i=0; i<size; i++)
+        {
+          src[i] = srcNextSmallerSize[i];
+        }
+        setScalingListDC(sizeIdc,listIdc,(sizeIdc > SCALING_LIST_8x8) ? getScalingListDC(sizeIdc-1, listIdc) : src[0]);
+      }
+      else
+      {
+        {
+          fseek(fp, 0, SEEK_SET);
+          Bool bFound=false;
+          while ((!feof(fp)) && (!bFound))
+          {
+            TChar *ret = fgets(line, LINE_SIZE, fp);
+            TChar *findNamePosition= ret==NULL ? NULL : strstr(line, MatrixType[sizeIdc][listIdc]);
+            // This could be a match against the DC string as well, so verify it isn't
+            if (findNamePosition!= NULL && (MatrixType_DC[sizeIdc][listIdc]==NULL || strstr(line, MatrixType_DC[sizeIdc][listIdc])==NULL))
+            {
+              bFound=true;
+            }
+          }
+          if (!bFound)
+          {
+            fprintf(stderr, "Error: cannot find Matrix %s from scaling list file %s\n", MatrixType[sizeIdc][listIdc], fileName.c_str());
+            return true;
+          }
+        }
+        for (UInt i=0; i<size; i++)
+        {
+          Int data;
+          if (fscanf(fp, "%d,", &data)!=1)
+          {
+            fprintf(stderr, "Error: cannot read value #%d for Matrix %s from scaling list file %s at file position %ld\n", i, MatrixType[sizeIdc][listIdc], fileName.c_str(), ftell(fp));
+            return true;
+          }
+          if (data<0 || data>255)
+          {
+            fprintf(stderr, "Error: QMatrix entry #%d of value %d for Matrix %s from scaling list file %s at file position %ld is out of range (0 to 255)\n", i, data, MatrixType[sizeIdc][listIdc], fileName.c_str(), ftell(fp));
+            return true;
+          }
+          src[i] = data;
+        }
+
+        //set DC value for default matrix check
+        setScalingListDC(sizeIdc,listIdc,src[0]);
+
+        if(sizeIdc > SCALING_LIST_8x8)
+        {
+          {
+            fseek(fp, 0, SEEK_SET);
+            Bool bFound=false;
+            while ((!feof(fp)) && (!bFound))
+            {
+              TChar *ret = fgets(line, LINE_SIZE, fp);
