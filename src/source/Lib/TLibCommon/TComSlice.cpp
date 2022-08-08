@@ -2198,3 +2198,49 @@ Void ParameterSetMap<TComSPS>::setID(TComSPS* parameterSet, const Int psId)
 
 ProfileTierLevel::ProfileTierLevel()
   : m_profileSpace    (0)
+  , m_tierFlag        (Level::MAIN)
+  , m_profileIdc      (Profile::NONE)
+  , m_levelIdc        (Level::NONE)
+  , m_progressiveSourceFlag  (false)
+  , m_interlacedSourceFlag   (false)
+  , m_nonPackedConstraintFlag(false)
+  , m_frameOnlyConstraintFlag(false)
+{
+  ::memset(m_profileCompatibilityFlag, 0, sizeof(m_profileCompatibilityFlag));
+}
+
+TComPTL::TComPTL()
+{
+  ::memset(m_subLayerProfilePresentFlag, 0, sizeof(m_subLayerProfilePresentFlag));
+  ::memset(m_subLayerLevelPresentFlag,   0, sizeof(m_subLayerLevelPresentFlag  ));
+}
+
+Void calculateParameterSetChangedFlag(Bool &bChanged, const std::vector<UChar> *pOldData, const std::vector<UChar> *pNewData)
+{
+  if (!bChanged)
+  {
+    if ((pOldData==0 && pNewData!=0) || (pOldData!=0 && pNewData==0))
+    {
+      bChanged=true;
+    }
+    else if (pOldData!=0 && pNewData!=0)
+    {
+      // compare the two
+      if (pOldData->size() != pNewData->size())
+      {
+        bChanged=true;
+      }
+      else
+      {
+        const UChar *pNewDataArray=&(*pNewData)[0];
+        const UChar *pOldDataArray=&(*pOldData)[0];
+        if (memcmp(pOldDataArray, pNewDataArray, pOldData->size()))
+        {
+          bChanged=true;
+        }
+      }
+    }
+  }
+}
+
+//! \}
