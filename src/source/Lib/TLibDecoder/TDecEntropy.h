@@ -98,3 +98,90 @@ public:
   virtual Void parseTransformSubdivFlag( UInt& ruiSubdivFlag, UInt uiLog2TransformBlockSize ) = 0;
   virtual Void parseQtCbf         ( TComTU &rTu, const ComponentID compID, const Bool lowestLevel ) = 0;
   virtual Void parseQtRootCbf     ( UInt uiAbsPartIdx, UInt& uiQtRootCbf ) = 0;
+
+  virtual Void parseDeltaQP       ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth ) = 0;
+  virtual Void parseChromaQpAdjustment( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth ) = 0;
+
+  virtual Void parseIPCMInfo     ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth) = 0;
+
+  virtual Void parseCoeffNxN( class TComTU &rTu, ComponentID compID  ) = 0;
+
+  virtual Void parseTransformSkipFlags ( class TComTU &rTu, ComponentID component ) = 0;
+
+  virtual Void parseExplicitRdpcmMode ( TComTU &rTu, ComponentID compID ) = 0;
+
+  virtual ~TDecEntropyIf() {}
+};
+
+/// entropy decoder class
+class TDecEntropy
+{
+private:
+  TDecEntropyIf*  m_pcEntropyDecoderIf;
+  TComPrediction* m_pcPrediction;
+#if MCTS_ENC_CHECK
+  TDecConformanceCheck* m_pConformanceCheck;
+#endif
+  //UInt    m_uiBakAbsPartIdx;
+  //UInt    m_uiBakChromaOffset;
+  //UInt    m_bakAbsPartIdxCU;
+
+public:
+#if MCTS_ENC_CHECK
+    Void init (TComPrediction* p, TDecConformanceCheck* pConformanceCheck) {m_pcPrediction = p; m_pConformanceCheck=pConformanceCheck;}
+#else
+  Void init (TComPrediction* p) {m_pcPrediction = p;}
+#endif
+  Void decodePUWise       ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, TComDataCU* pcSubCU );
+  Void decodeInterDirPU   ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx );
+  Void decodeRefFrmIdxPU  ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList );
+  Void decodeMvdPU        ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList );
+  Void decodeMVPIdxPU     ( TComDataCU* pcSubCU, UInt uiPartAddr, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList );
+
+  Void    setEntropyDecoder           ( TDecEntropyIf* p );
+  Void    setBitstream                ( TComInputBitstream* p ) { m_pcEntropyDecoderIf->setBitstream(p);                    }
+  Void    resetEntropy                ( TComSlice* p)           { m_pcEntropyDecoderIf->resetEntropy(p);                    }
+
+  Void    decodeVPS                   ( TComVPS* pcVPS ) { m_pcEntropyDecoderIf->parseVPS(pcVPS); }
+  Void    decodeSPS                   ( TComSPS* pcSPS ) { m_pcEntropyDecoderIf->parseSPS(pcSPS); }
+  Void    decodePPS                   ( TComPPS* pcPPS ) { m_pcEntropyDecoderIf->parsePPS(pcPPS); }
+  Void    decodeSliceHeader           ( TComSlice* pcSlice, ParameterSetManager *parameterSetManager, const Int prevTid0POC)  { m_pcEntropyDecoderIf->parseSliceHeader(pcSlice, parameterSetManager, prevTid0POC);         }
+
+  Void    decodeTerminatingBit        ( UInt& ruiIsLast )       { m_pcEntropyDecoderIf->parseTerminatingBit(ruiIsLast);     }
+  Void    decodeRemainingBytes( Bool noTrailingBytesExpected ) { m_pcEntropyDecoderIf->parseRemainingBytes(noTrailingBytesExpected); }
+
+  TDecEntropyIf* getEntropyDecoder() { return m_pcEntropyDecoderIf; }
+
+public:
+  Void decodeSplitFlag         ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void decodeSkipFlag          ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void decodeCUTransquantBypassFlag( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void decodeMergeFlag         ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPUIdx );
+  Void decodeMergeIndex        ( TComDataCU* pcSubCU, UInt uiPartIdx, UInt uiPartAddr, UInt uiDepth );
+  Void decodePredMode          ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void decodePartSize          ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+
+  Void decodeIPCMInfo          ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+
+  Void decodePredInfo          ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, TComDataCU* pcSubCU );
+
+  Void decodeIntraDirModeLuma  ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void decodeIntraDirModeChroma( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+
+  Void decodeQP                ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void decodeChromaQpAdjustment( TComDataCU* pcCU, UInt uiAbsPartIdx );
+
+private:
+
+  Void xDecodeTransform        ( Bool& bCodeDQP, Bool& isChromaQpAdjCoded, TComTU &rTu, const Int quadtreeTULog2MinSizeInCU );
+
+public:
+
+  Void decodeCoeff             ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool& bCodeDQP, Bool& isChromaQpAdjCoded );
+
+};// END CLASS DEFINITION TDecEntropy
+
+//! \}
+
+#endif // __TDECENTROPY__
+
