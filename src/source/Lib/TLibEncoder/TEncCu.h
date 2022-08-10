@@ -98,3 +98,101 @@ private:
   TEncSearch*             m_pcPredSearch;
   TComTrQuant*            m_pcTrQuant;
   TComRdCost*             m_pcRdCost;
+
+  TEncEntropy*            m_pcEntropyCoder;
+  TEncBinCABAC*           m_pcBinCABAC;
+
+  // SBAC RD
+  TEncSbac***             m_pppcRDSbacCoder;
+  TEncSbac*               m_pcRDGoOnSbacCoder;
+  TEncRateCtrl*           m_pcRateCtrl;
+
+public:
+  /// copy parameters from encoder class
+  Void  init                ( TEncTop* pcEncTop );
+
+  Void       setSliceEncoder( TEncSlice* pSliceEncoder ) { m_pcSliceEncoder = pSliceEncoder; }
+  TEncSlice* getSliceEncoder() { return m_pcSliceEncoder; }
+  Void       initLumaDeltaQpLUT();
+  Int        calculateLumaDQP( TComDataCU *pCU, const UInt absPartIdx, const TComYuv * pOrgYuv );
+#if JVET_V0078
+  Int        calculateLumaDQPsmooth(TComDataCU *pCU, const UInt absPartIdx, const TComYuv * pOrgYuv, Int iBaseQP);
+#endif
+
+  /// create internal buffers
+  Void  create              ( UChar uhTotalDepth, UInt iMaxWidth, UInt iMaxHeight, ChromaFormat chromaFormat );
+
+  /// destroy internal buffers
+  Void  destroy             ();
+
+  /// CTU analysis function
+  Void  compressCtu         ( TComDataCU*  pCtu );
+
+  /// CTU encoding function
+  Void  encodeCtu           ( TComDataCU*  pCtu );
+
+  Int   updateCtuDataISlice ( TComDataCU* pCtu, Int width, Int height );
+
+  Void setFastDeltaQp       ( Bool b)                 { m_bFastDeltaQP = b;         }
+
+protected:
+  Void  finishCU            ( TComDataCU*  pcCU, UInt uiAbsPartIdx );
+#if AMP_ENC_SPEEDUP
+  Void  xCompressCU         ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const UInt uiDepth DEBUG_STRING_FN_DECLARE(sDebug), PartSize eParentPartSize = NUMBER_OF_PART_SIZES );
+#else
+  Void  xCompressCU         ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const UInt uiDepth        );
+#endif
+  Void  xEncodeCU           ( TComDataCU*  pcCU, UInt uiAbsPartIdx,           UInt uiDepth        );
+
+  Int   xComputeQP          ( TComDataCU* pcCU, UInt uiDepth );
+  Void  xCheckBestMode      ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, UInt uiDepth DEBUG_STRING_FN_DECLARE(sParent) DEBUG_STRING_FN_DECLARE(sTest) DEBUG_STRING_PASS_INTO(Bool bAddSizeInfo=true));
+
+  Void  xCheckRDCostMerge2Nx2N( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU DEBUG_STRING_FN_DECLARE(sDebug), Bool *earlyDetectionSkipMode );
+
+#if AMP_MRG
+  Void  xCheckRDCostInter   ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, PartSize ePartSize DEBUG_STRING_FN_DECLARE(sDebug), Bool bUseMRG = false  );
+#else
+  Void  xCheckRDCostInter   ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, PartSize ePartSize  );
+#endif
+
+  Void  xCheckRDCostIntra   ( TComDataCU *&rpcBestCU,
+                              TComDataCU *&rpcTempCU,
+                              PartSize     ePartSize
+                              DEBUG_STRING_FN_DECLARE(sDebug)
+                            );
+
+  Void  xCheckDQP           ( TComDataCU*  pcCU );
+
+  Void  xCheckIntraPCM      ( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU                      );
+  Void  xCopyAMVPInfo       ( AMVPInfo* pSrc, AMVPInfo* pDst );
+  Void  xCopyYuv2Pic        (TComPic* rpcPic, UInt uiCUAddr, UInt uiAbsPartIdx, UInt uiDepth, UInt uiSrcDepth );
+  Void  xCopyYuv2Tmp        ( UInt uhPartUnitIdx, UInt uiDepth );
+
+  Bool getdQPFlag           ()                        { return m_bEncodeDQP;        }
+  Void setdQPFlag           ( Bool b )                { m_bEncodeDQP = b;           }
+
+  Bool getFastDeltaQp       () const                  { return m_bFastDeltaQP;      }
+
+  Bool getCodeChromaQpAdjFlag() { return m_stillToCodeChromaQpOffsetFlag; }
+  Void setCodeChromaQpAdjFlag( Bool b ) { m_stillToCodeChromaQpOffsetFlag = b; }
+
+#if ADAPTIVE_QP_SELECTION
+  // Adaptive reconstruction level (ARL) statistics collection functions
+  Void xCtuCollectARLStats(TComDataCU* pCtu);
+  Int  xTuCollectARLStats(TCoeff* rpcCoeff, TCoeff* rpcArlCoeff, Int NumCoeffInCU, Double* cSum, UInt* numSamples );
+#endif
+
+#if AMP_ENC_SPEEDUP
+#if AMP_MRG
+  Void deriveTestModeAMP (TComDataCU *pcBestCU, PartSize eParentPartSize, Bool &bTestAMP_Hor, Bool &bTestAMP_Ver, Bool &bTestMergeAMP_Hor, Bool &bTestMergeAMP_Ver);
+#else
+  Void deriveTestModeAMP (TComDataCU *pcBestCU, PartSize eParentPartSize, Bool &bTestAMP_Hor, Bool &bTestAMP_Ver);
+#endif
+#endif
+
+  Void  xFillPCMBuffer     ( TComDataCU* pCU, TComYuv* pOrgYuv );
+};
+
+//! \}
+
+#endif // __TENCMB__
