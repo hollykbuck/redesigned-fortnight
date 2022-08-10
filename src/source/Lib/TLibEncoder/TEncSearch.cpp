@@ -3398,3 +3398,103 @@ Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* 
         xGetInterPredictionError( pcCU, pcOrgYuv, iPartIdx, uiMEError, m_pcEncCfg->getUseHADME() );
         uiMECost = uiMEError + m_pcRdCost->getCost( uiMEBits );
       }
+#else
+      // calculate ME cost
+      Distortion uiMEError = std::numeric_limits<Distortion>::max();
+      xGetInterPredictionError( pcCU, pcOrgYuv, iPartIdx, uiMEError, m_pcEncCfg->getUseHADME() );
+      Distortion uiMECost = uiMEError + m_pcRdCost->getCost( uiMEBits );
+#endif
+      // save ME result.
+      uiMEInterDir = pcCU->getInterDir( uiPartAddr );
+      TComDataCU::getMvField( pcCU, uiPartAddr, REF_PIC_LIST_0, cMEMvField[0] );
+      TComDataCU::getMvField( pcCU, uiPartAddr, REF_PIC_LIST_1, cMEMvField[1] );
+
+      // find Merge result
+      Distortion uiMRGCost = std::numeric_limits<Distortion>::max();
+
+      xMergeEstimation( pcCU, pcOrgYuv, iPartIdx, uiMRGInterDir, cMRGMvField, uiMRGIndex, uiMRGCost, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand);
+
+      if ( uiMRGCost < uiMECost )
+      {
+        // set Merge result
+        pcCU->setMergeFlagSubParts ( true,          uiPartAddr, iPartIdx, pcCU->getDepth( uiPartAddr ) );
+        pcCU->setMergeIndexSubParts( uiMRGIndex,    uiPartAddr, iPartIdx, pcCU->getDepth( uiPartAddr ) );
+        pcCU->setInterDirSubParts  ( uiMRGInterDir, uiPartAddr, iPartIdx, pcCU->getDepth( uiPartAddr ) );
+        pcCU->getCUMvField( REF_PIC_LIST_0 )->setAllMvField( cMRGMvField[0], ePartSize, uiPartAddr, 0, iPartIdx );
+        pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllMvField( cMRGMvField[1], ePartSize, uiPartAddr, 0, iPartIdx );
+
+        pcCU->getCUMvField(REF_PIC_LIST_0)->setAllMvd    ( cMvZero,            ePartSize, uiPartAddr, 0, iPartIdx );
+        pcCU->getCUMvField(REF_PIC_LIST_1)->setAllMvd    ( cMvZero,            ePartSize, uiPartAddr, 0, iPartIdx );
+
+        pcCU->setMVPIdxSubParts( -1, REF_PIC_LIST_0, uiPartAddr, iPartIdx, pcCU->getDepth(uiPartAddr));
+        pcCU->setMVPNumSubParts( -1, REF_PIC_LIST_0, uiPartAddr, iPartIdx, pcCU->getDepth(uiPartAddr));
+        pcCU->setMVPIdxSubParts( -1, REF_PIC_LIST_1, uiPartAddr, iPartIdx, pcCU->getDepth(uiPartAddr));
+        pcCU->setMVPNumSubParts( -1, REF_PIC_LIST_1, uiPartAddr, iPartIdx, pcCU->getDepth(uiPartAddr));
+      }
+      else
+      {
+        // set ME result
+        pcCU->setMergeFlagSubParts( false,        uiPartAddr, iPartIdx, pcCU->getDepth( uiPartAddr ) );
+        pcCU->setInterDirSubParts ( uiMEInterDir, uiPartAddr, iPartIdx, pcCU->getDepth( uiPartAddr ) );
+        pcCU->getCUMvField( REF_PIC_LIST_0 )->setAllMvField( cMEMvField[0], ePartSize, uiPartAddr, 0, iPartIdx );
+        pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllMvField( cMEMvField[1], ePartSize, uiPartAddr, 0, iPartIdx );
+      }
+    }
+
+#if MCTS_ENC_CHECK
+    if (m_pcEncCfg->getTMCTSSEITileConstraint() && (!checkTMctsMvp(pcCU, iPartIdx)))
+    {
+      pcCU->setTMctsMvpIsValid(false);
+      return;
+    }
+#endif
+
+    //  MC
+    motionCompensation ( pcCU, pcPredYuv, REF_PIC_LIST_X, iPartIdx );
+
+  } //  end of for ( Int iPartIdx = 0; iPartIdx < iNumPart; iPartIdx++ )
+
+  setWpScalingDistParam( pcCU, -1, REF_PIC_LIST_X );
+
+  return;
+}
+
+
+// AMVP
+Void TEncSearch::xEstimateMvPredAMVP( TComDataCU* pcCU, TComYuv* pcOrgYuv, UInt uiPartIdx, RefPicList eRefPicList, Int iRefIdx, TComMv& rcMvPred, Bool bFilled, Distortion* puiDistBiP )
+{
+  AMVPInfo*  pcAMVPInfo = pcCU->getCUMvField(eRefPicList)->getAMVPInfo();
+
+  TComMv     cBestMv;
+  Int        iBestIdx   = 0;
+  TComMv     cZeroMv;
+  TComMv     cMvPred;
+  Distortion uiBestCost = std::numeric_limits<Distortion>::max();
+  UInt       uiPartAddr = 0;
+  Int        iRoiWidth, iRoiHeight;
+  Int        i;
+  Int        minMVPCand;
+  Int        maxMVPCand;
+
+  pcCU->getPartIndexAndSize( uiPartIdx, uiPartAddr, iRoiWidth, iRoiHeight );
+  // Fill the MV Candidates
+  if (!bFilled)
+  {
+    pcCU->fillMvpCand( uiPartIdx, uiPartAddr, eRefPicList, iRefIdx, pcAMVPInfo );
+  }
+  // initialize Mvp index & Mvp
+#if MCTS_ENC_CHECK
+  if (m_pcEncCfg->getTMCTSSEITileConstraint() && pcCU->isLastColumnCTUInTile() && (pcAMVPInfo->numSpatialMVPCandidates < pcAMVPInfo->iN))
+  {
+    iBestIdx    = (pcAMVPInfo->numSpatialMVPCandidates == 0) ? 1 : 0;
+    cBestMv     = pcAMVPInfo->m_acMvCand[(pcAMVPInfo->numSpatialMVPCandidates == 0) ? 1 : 0];
+    minMVPCand  = (pcAMVPInfo->numSpatialMVPCandidates == 0) ? 1 : 0;
+    maxMVPCand  = (pcAMVPInfo->numSpatialMVPCandidates == 0) ? pcAMVPInfo->iN : 1;
+  }
+  else
+  {
+    iBestIdx = 0;
+    cBestMv  = pcAMVPInfo->m_acMvCand[0];
+    minMVPCand  = 0;
+    maxMVPCand  = pcAMVPInfo->iN;
+  }
