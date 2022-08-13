@@ -198,3 +198,103 @@ Void TDecEntropy::decodePUWise( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDept
 #if MCTS_ENC_CHECK
   UInt numSpatialMergeCandidates = 0;
 #endif
+  pcSubCU->copyInterPredInfoFrom( pcCU, uiAbsPartIdx, REF_PIC_LIST_0 );
+  pcSubCU->copyInterPredInfoFrom( pcCU, uiAbsPartIdx, REF_PIC_LIST_1 );
+  for ( UInt uiPartIdx = 0, uiSubPartIdx = uiAbsPartIdx; uiPartIdx < uiNumPU; uiPartIdx++, uiSubPartIdx += uiPUOffset )
+  {
+    decodeMergeFlag( pcCU, uiSubPartIdx, uiDepth, uiPartIdx );
+    if ( pcCU->getMergeFlag( uiSubPartIdx ) )
+    {
+      decodeMergeIndex( pcCU, uiPartIdx, uiSubPartIdx, uiDepth );
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+      if (bDebugPredEnabled)
+      {
+        std::cout << "Coded merge flag, CU absPartIdx: " << uiAbsPartIdx << " PU(" << uiPartIdx << ") absPartIdx: " << uiSubPartIdx;
+        std::cout << " merge index: " << (UInt)pcCU->getMergeIndex(uiSubPartIdx) << std::endl;
+      }
+#endif
+
+      const UInt uiMergeIndex = pcCU->getMergeIndex(uiSubPartIdx);
+      if ( pcCU->getSlice()->getPPS()->getLog2ParallelMergeLevelMinus2() && ePartSize != SIZE_2Nx2N && pcSubCU->getWidth( 0 ) <= 8 )
+      {
+        if ( !hasMergedCandList )
+        {
+          pcSubCU->setPartSizeSubParts( SIZE_2Nx2N, 0, uiDepth ); // temporarily set.
+#if MCTS_ENC_CHECK
+          numSpatialMergeCandidates = 0;
+          pcSubCU->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates );
+#else
+          pcSubCU->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand );
+#endif
+          pcSubCU->setPartSizeSubParts( ePartSize, 0, uiDepth ); // restore.
+          hasMergedCandList = true;
+        }
+      }
+      else
+      {
+#if MCTS_ENC_CHECK
+        numSpatialMergeCandidates = 0;
+        pcSubCU->getInterMergeCandidates( uiSubPartIdx-uiAbsPartIdx, uiPartIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates, uiMergeIndex );
+#else
+        pcSubCU->getInterMergeCandidates( uiSubPartIdx-uiAbsPartIdx, uiPartIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, uiMergeIndex );
+#endif
+      }
+
+#if MCTS_ENC_CHECK
+      if (m_pConformanceCheck->getTMctsCheck() &&  pcSubCU->isLastColumnCTUInTile() && (uiMergeIndex >= numSpatialMergeCandidates) )
+      {
+        m_pConformanceCheck->flagTMctsError("Merge Index using non-spatial merge candidate (Merge)");
+      }
+
+#endif
+      pcCU->setInterDirSubParts( uhInterDirNeighbours[uiMergeIndex], uiSubPartIdx, uiPartIdx, uiDepth );
+
+      TComMv cTmpMv( 0, 0 );
+      for ( UInt uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
+      {
+        if ( pcCU->getSlice()->getNumRefIdx( RefPicList( uiRefListIdx ) ) > 0 )
+        {
+          pcCU->setMVPIdxSubParts( 0, RefPicList( uiRefListIdx ), uiSubPartIdx, uiPartIdx, uiDepth);
+          pcCU->setMVPNumSubParts( 0, RefPicList( uiRefListIdx ), uiSubPartIdx, uiPartIdx, uiDepth);
+          pcCU->getCUMvField( RefPicList( uiRefListIdx ) )->setAllMvd( cTmpMv, ePartSize, uiSubPartIdx, uiDepth, uiPartIdx );
+          pcCU->getCUMvField( RefPicList( uiRefListIdx ) )->setAllMvField( cMvFieldNeighbours[ 2*uiMergeIndex + uiRefListIdx ], ePartSize, uiSubPartIdx, uiDepth, uiPartIdx );
+
+        }
+      }
+    }
+    else
+    {
+      decodeInterDirPU( pcCU, uiSubPartIdx, uiDepth, uiPartIdx );
+      for ( UInt uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
+      {
+        if ( pcCU->getSlice()->getNumRefIdx( RefPicList( uiRefListIdx ) ) > 0 )
+        {
+          decodeRefFrmIdxPU( pcCU,    uiSubPartIdx,              uiDepth, uiPartIdx, RefPicList( uiRefListIdx ) );
+          decodeMvdPU      ( pcCU,    uiSubPartIdx,              uiDepth, uiPartIdx, RefPicList( uiRefListIdx ) );
+          decodeMVPIdxPU   ( pcSubCU, uiSubPartIdx-uiAbsPartIdx, uiDepth, uiPartIdx, RefPicList( uiRefListIdx ) );
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+          if (bDebugPredEnabled)
+          {
+            std::cout << "refListIdx: " << uiRefListIdx << std::endl;
+            std::cout << "MVD horizontal: " << pcCU->getCUMvField(RefPicList(uiRefListIdx))->getMvd( uiAbsPartIdx ).getHor() << std::endl;
+            std::cout << "MVD vertical:   " << pcCU->getCUMvField(RefPicList(uiRefListIdx))->getMvd( uiAbsPartIdx ).getVer() << std::endl;
+            std::cout << "MVPIdxPU: " << pcCU->getMVPIdx(RefPicList( uiRefListIdx ), uiSubPartIdx) << std::endl;
+            std::cout << "InterDir: " << (UInt)pcCU->getInterDir(uiSubPartIdx) << std::endl;
+          }
+#endif
+        }
+      }
+    }
+
+    if ( (pcCU->getInterDir(uiSubPartIdx) == 3) && pcSubCU->isBipredRestriction(uiPartIdx) )
+    {
+      pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllMv( TComMv(0,0), ePartSize, uiSubPartIdx, uiDepth, uiPartIdx);
+      pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllRefIdx( -1, ePartSize, uiSubPartIdx, uiDepth, uiPartIdx);
+      pcCU->setInterDirSubParts( 1, uiSubPartIdx, uiPartIdx, uiDepth);
+    }
+  }
+  return;
+}
+
+/** decode inter direction for a PU block
+ * \param pcCU
