@@ -3798,3 +3798,103 @@ Void TEncSearch::xMotionEstimation( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPa
                         pcYuv->getStride(COMPONENT_Y),
                         pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA) );
 #endif
+
+  Pel*        piRefY      = pcCU->getSlice()->getRefPic( eRefPicList, iRefIdxPred )->getPicYuvRec()->getAddr( COMPONENT_Y, pcCU->getCtuRsAddr(), pcCU->getZorderIdxInCtu() + uiPartAddr );
+  Int         iRefStride  = pcCU->getSlice()->getRefPic( eRefPicList, iRefIdxPred )->getPicYuvRec()->getStride(COMPONENT_Y);
+
+  TComMv      cMvPred = *pcMvPred;
+
+  if ( bBi )
+  {
+#if MCTS_ENC_CHECK
+    xSetSearchRange(pcCU, rcMv, iSrchRng, cMvSrchRngLT, cMvSrchRngRB, &cPattern);
+#else
+    xSetSearchRange(pcCU, rcMv, iSrchRng, cMvSrchRngLT, cMvSrchRngRB);
+#endif
+  }
+  else
+  {
+#if MCTS_ENC_CHECK
+    xSetSearchRange(pcCU, cMvPred, iSrchRng, cMvSrchRngLT, cMvSrchRngRB, &cPattern);
+#else
+    xSetSearchRange(pcCU, cMvPred, iSrchRng, cMvSrchRngLT, cMvSrchRngRB);
+#endif
+  }
+
+  m_pcRdCost->selectMotionLambda( true, 0, pcCU->getCUTransquantBypass(uiPartAddr) );
+
+  m_pcRdCost->setPredictor  ( *pcMvPred );
+  m_pcRdCost->setCostScale  ( 2 );
+
+  setWpScalingDistParam( pcCU, iRefIdxPred, eRefPicList );
+  //  Do integer search
+  if ( (m_motionEstimationSearchMethod==MESEARCH_FULL) || bBi )
+  {
+    xPatternSearch      ( &cPattern, piRefY, iRefStride, &cMvSrchRngLT, &cMvSrchRngRB, rcMv, ruiCost );
+  }
+  else
+  {
+    rcMv = *pcMvPred;
+    const TComMv *pIntegerMv2Nx2NPred=0;
+    if (pcCU->getPartitionSize(0) != SIZE_2Nx2N || pcCU->getDepth(0) != 0)
+    {
+      pIntegerMv2Nx2NPred = &(m_integerMv2Nx2N[eRefPicList][iRefIdxPred]);
+    }
+    xPatternSearchFast  ( pcCU, &cPattern, piRefY, iRefStride, &cMvSrchRngLT, &cMvSrchRngRB, rcMv, ruiCost, pIntegerMv2Nx2NPred );
+    if (pcCU->getPartitionSize(0) == SIZE_2Nx2N)
+    {
+      m_integerMv2Nx2N[eRefPicList][iRefIdxPred] = rcMv;
+    }
+  }
+
+  m_pcRdCost->selectMotionLambda( true, 0, pcCU->getCUTransquantBypass(uiPartAddr) );
+  m_pcRdCost->setCostScale ( 1 );
+
+  const Bool bIsLosslessCoded = pcCU->getCUTransquantBypass(uiPartAddr) != 0;
+  xPatternSearchFracDIF( bIsLosslessCoded, &cPattern, piRefY, iRefStride, &rcMv, cMvHalf, cMvQter, ruiCost );
+
+  m_pcRdCost->setCostScale( 0 );
+  rcMv <<= 2;
+  rcMv += (cMvHalf <<= 1);
+  rcMv +=  cMvQter;
+
+  UInt uiMvBits = m_pcRdCost->getBitsOfVectorWithPredictor( rcMv.getHor(), rcMv.getVer() );
+
+  ruiBits      += uiMvBits;
+  ruiCost       = (Distortion)( floor( fWeight * ( (Double)ruiCost - (Double)m_pcRdCost->getCost( uiMvBits ) ) ) + (Double)m_pcRdCost->getCost( ruiBits ) );
+}
+
+#if MCTS_ENC_CHECK
+Void TEncSearch::xInitTileBorders(const TComDataCU* const pcCU, TComPattern* pcPatternKey)
+{
+  if (m_pcEncCfg->getTMCTSSEITileConstraint())
+  {
+    UInt  tileXPosInCtus = 0;
+    UInt  tileYPosInCtus = 0;
+    UInt  tileWidthtInCtus = 0;
+    UInt  tileHeightInCtus = 0;
+
+    getTilePosition(pcCU, tileXPosInCtus, tileYPosInCtus, tileWidthtInCtus, tileHeightInCtus);
+
+    const Int  ctuLength = pcCU->getPic()->getPicSym()->getSPS().getMaxCUWidth();
+
+    // tile position in full pels
+    const Int tileLeftTopPelPosX = ctuLength * tileXPosInCtus;
+    const Int tileLeftTopPelPosY = ctuLength * tileYPosInCtus;
+    const Int tileRightBottomPelPosX = ((tileWidthtInCtus + tileXPosInCtus) * ctuLength) - 1;
+    const Int tileRightBottomPelPosY = ((tileHeightInCtus + tileYPosInCtus) * ctuLength) - 1;
+
+    pcPatternKey->setTileBorders (tileLeftTopPelPosX,tileLeftTopPelPosY,tileRightBottomPelPosX,tileRightBottomPelPosY);
+  }
+}
+#endif
+
+
+Void TEncSearch::xSetSearchRange ( const TComDataCU* const pcCU, const TComMv& cMvPred, const Int iSrchRng,
+#if MCTS_ENC_CHECK
+                                   TComMv& rcMvSrchRngLT, TComMv& rcMvSrchRngRB, const TComPattern* const pcPatternKey )
+#else
+                                   TComMv& rcMvSrchRngLT, TComMv& rcMvSrchRngRB )
+#endif
+{
+  Int  iMvShift = 2;
