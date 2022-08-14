@@ -3898,3 +3898,103 @@ Void TEncSearch::xSetSearchRange ( const TComDataCU* const pcCU, const TComMv& c
 #endif
 {
   Int  iMvShift = 2;
+  TComMv cTmpMvPred = cMvPred;
+  pcCU->clipMv( cTmpMvPred );
+
+#if MCTS_ENC_CHECK
+  if (m_pcEncCfg->getTMCTSSEITileConstraint())
+  {
+    const Int lRangeXLeft = max(cTmpMvPred.getHor() - (iSrchRng << iMvShift), (pcPatternKey->getTileLeftTopPelPosX() - pcPatternKey->getROIYPosX()) << iMvShift);
+    const Int lRangeYTop = max(cTmpMvPred.getVer() - (iSrchRng << iMvShift), (pcPatternKey->getTileLeftTopPelPosY() - pcPatternKey->getROIYPosY()) << iMvShift);
+    const Int lRangeXRight = min(cTmpMvPred.getHor() + (iSrchRng << iMvShift), (pcPatternKey->getTileRightBottomPelPosX() - (pcPatternKey->getROIYPosX() + pcPatternKey->getROIYWidth())) << iMvShift);
+    const Int lRangeYBottom = min(cTmpMvPred.getVer() + (iSrchRng << iMvShift), (pcPatternKey->getTileRightBottomPelPosY() - (pcPatternKey->getROIYPosY() + pcPatternKey->getROIYHeight())) << iMvShift);
+
+    rcMvSrchRngLT.setHor(lRangeXLeft);
+    rcMvSrchRngLT.setVer(lRangeYTop);
+
+    rcMvSrchRngRB.setHor(lRangeXRight);
+    rcMvSrchRngRB.setVer(lRangeYBottom);
+  }
+  else
+  {
+    rcMvSrchRngLT.setHor(cTmpMvPred.getHor() - (iSrchRng << iMvShift));
+    rcMvSrchRngLT.setVer(cTmpMvPred.getVer() - (iSrchRng << iMvShift));
+
+    rcMvSrchRngRB.setHor( cTmpMvPred.getHor() + (iSrchRng << iMvShift));
+    rcMvSrchRngRB.setVer( cTmpMvPred.getVer() + (iSrchRng << iMvShift) );
+  }
+#else
+  rcMvSrchRngLT.setHor( cTmpMvPred.getHor() - (iSrchRng << iMvShift) );
+  rcMvSrchRngLT.setVer( cTmpMvPred.getVer() - (iSrchRng << iMvShift) );
+
+  rcMvSrchRngRB.setHor( cTmpMvPred.getHor() + (iSrchRng << iMvShift));
+  rcMvSrchRngRB.setVer( cTmpMvPred.getVer() + (iSrchRng << iMvShift) );
+#endif
+
+  pcCU->clipMv        ( rcMvSrchRngLT );
+  pcCU->clipMv        ( rcMvSrchRngRB );
+
+#if ME_ENABLE_ROUNDING_OF_MVS
+  rcMvSrchRngLT.divideByPowerOf2(iMvShift);
+  rcMvSrchRngRB.divideByPowerOf2(iMvShift);
+#else
+  rcMvSrchRngLT >>= iMvShift;
+  rcMvSrchRngRB >>= iMvShift;
+#endif
+}
+
+
+Void TEncSearch::xPatternSearch( const TComPattern* const pcPatternKey,
+                                 const Pel*               piRefY,
+                                 const Int                iRefStride,
+                                 const TComMv* const      pcMvSrchRngLT,
+                                 const TComMv* const      pcMvSrchRngRB,
+                                 TComMv&      rcMv,
+                                 Distortion&  ruiSAD )
+{
+  Int   iSrchRngHorLeft   = pcMvSrchRngLT->getHor();
+  Int   iSrchRngHorRight  = pcMvSrchRngRB->getHor();
+  Int   iSrchRngVerTop    = pcMvSrchRngLT->getVer();
+  Int   iSrchRngVerBottom = pcMvSrchRngRB->getVer();
+
+  Distortion  uiSad;
+  Distortion  uiSadBest = std::numeric_limits<Distortion>::max();
+  Int         iBestX = 0;
+  Int         iBestY = 0;
+
+  //-- jclee for using the SAD function pointer
+  m_pcRdCost->setDistParam( pcPatternKey, piRefY, iRefStride,  m_cDistParam );
+
+  // fast encoder decision: use subsampled SAD for integer ME
+  if ( m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE1 || m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE3 )
+  {
+    if ( m_cDistParam.iRows > 8 )
+    {
+      m_cDistParam.iSubShift = 1;
+    }
+  }
+
+  piRefY += (iSrchRngVerTop * iRefStride);
+  for ( Int y = iSrchRngVerTop; y <= iSrchRngVerBottom; y++ )
+  {
+    for ( Int x = iSrchRngHorLeft; x <= iSrchRngHorRight; x++ )
+    {
+      //  find min. distortion position
+      m_cDistParam.pCur = piRefY + x;
+
+      setDistParamComp(COMPONENT_Y);
+
+      m_cDistParam.bitDepth = pcPatternKey->getBitDepthY();
+      uiSad = m_cDistParam.DistFunc( &m_cDistParam );
+
+      // motion cost
+      uiSad += m_pcRdCost->getCostOfVectorWithPredictor( x, y );
+
+      if ( uiSad < uiSadBest )
+      {
+        uiSadBest = uiSad;
+        iBestX    = x;
+        iBestY    = y;
+        m_cDistParam.m_maximumDistortionForEarlyExit = uiSad;
+      }
+    }
