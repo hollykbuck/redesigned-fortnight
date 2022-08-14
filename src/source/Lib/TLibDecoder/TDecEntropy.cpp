@@ -298,3 +298,103 @@ Void TDecEntropy::decodePUWise( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDept
 
 /** decode inter direction for a PU block
  * \param pcCU
+ * \param uiAbsPartIdx
+ * \param uiDepth
+ * \param uiPartIdx
+ * \returns Void
+ */
+Void TDecEntropy::decodeInterDirPU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx )
+{
+  UInt uiInterDir;
+
+  if ( pcCU->getSlice()->isInterP() )
+  {
+    uiInterDir = 1;
+  }
+  else
+  {
+    m_pcEntropyDecoderIf->parseInterDir( pcCU, uiInterDir, uiAbsPartIdx );
+  }
+
+  pcCU->setInterDirSubParts( uiInterDir, uiAbsPartIdx, uiPartIdx, uiDepth );
+}
+
+Void TDecEntropy::decodeRefFrmIdxPU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList )
+{
+  Int iRefFrmIdx = 0;
+  Int iParseRefFrmIdx = pcCU->getInterDir( uiAbsPartIdx ) & ( 1 << eRefList );
+
+  if ( pcCU->getSlice()->getNumRefIdx( eRefList ) > 1 && iParseRefFrmIdx )
+  {
+    m_pcEntropyDecoderIf->parseRefFrmIdx( pcCU, iRefFrmIdx, eRefList );
+  }
+  else if ( !iParseRefFrmIdx )
+  {
+    iRefFrmIdx = NOT_VALID;
+  }
+  else
+  {
+    iRefFrmIdx = 0;
+  }
+
+  PartSize ePartSize = pcCU->getPartitionSize( uiAbsPartIdx );
+  pcCU->getCUMvField( eRefList )->setAllRefIdx( iRefFrmIdx, ePartSize, uiAbsPartIdx, uiDepth, uiPartIdx );
+}
+
+/** decode motion vector difference for a PU block
+ * \param pcCU
+ * \param uiAbsPartIdx
+ * \param uiDepth
+ * \param uiPartIdx
+ * \param eRefList
+ * \returns Void
+ */
+Void TDecEntropy::decodeMvdPU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList )
+{
+  if ( pcCU->getInterDir( uiAbsPartIdx ) & ( 1 << eRefList ) )
+  {
+    m_pcEntropyDecoderIf->parseMvd( pcCU, uiAbsPartIdx, uiPartIdx, uiDepth, eRefList );
+  }
+}
+
+Void TDecEntropy::decodeMVPIdxPU( TComDataCU* pcSubCU, UInt uiPartAddr, UInt uiDepth, UInt uiPartIdx, RefPicList eRefList )
+{
+  Int iMVPIdx = -1;
+
+  TComMv cZeroMv( 0, 0 );
+  TComMv cMv     = cZeroMv;
+  Int    iRefIdx = -1;
+
+  TComCUMvField* pcSubCUMvField = pcSubCU->getCUMvField( eRefList );
+  AMVPInfo* pAMVPInfo = pcSubCUMvField->getAMVPInfo();
+
+  iRefIdx = pcSubCUMvField->getRefIdx(uiPartAddr);
+  cMv = cZeroMv;
+
+  if ( (pcSubCU->getInterDir(uiPartAddr) & ( 1 << eRefList )) )
+  {
+    m_pcEntropyDecoderIf->parseMVPIdx( iMVPIdx );
+  }
+  pcSubCU->fillMvpCand(uiPartIdx, uiPartAddr, eRefList, iRefIdx, pAMVPInfo);
+#if MCTS_ENC_CHECK
+  if ((iRefIdx >= 0) && m_pConformanceCheck->getTMctsCheck() && pcSubCU->isLastColumnCTUInTile() && (iMVPIdx == pAMVPInfo->numSpatialMVPCandidates))
+  {
+    m_pConformanceCheck->flagTMctsError("Merge Index using non-spatial merge candidate (AMVP)");
+  }
+#endif
+  pcSubCU->setMVPNumSubParts(pAMVPInfo->iN, eRefList, uiPartAddr, uiPartIdx, uiDepth);
+  pcSubCU->setMVPIdxSubParts( iMVPIdx, eRefList, uiPartAddr, uiPartIdx, uiDepth );
+  if ( iRefIdx >= 0 )
+  {
+    m_pcPrediction->getMvPredAMVP( pcSubCU, uiPartIdx, uiPartAddr, eRefList, cMv);
+    cMv += pcSubCUMvField->getMvd( uiPartAddr );
+  }
+
+  PartSize ePartSize = pcSubCU->getPartitionSize( uiPartAddr );
+  pcSubCU->getCUMvField( eRefList )->setAllMv(cMv, ePartSize, uiPartAddr, 0, uiPartIdx);
+}
+
+Void TDecEntropy::xDecodeTransform        ( Bool& bCodeDQP, Bool& isChromaQpAdjCoded, TComTU &rTu, const Int quadtreeTULog2MinSizeInCU )
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
