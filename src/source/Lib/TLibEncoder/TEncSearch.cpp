@@ -4098,3 +4098,103 @@ Void TEncSearch::xTZSearch( const TComDataCU* const pcCU,
   xTZSearchHelp( pcPatternKey, cStruct, rcMv.getHor(), rcMv.getVer(), 0, 0 );
 
   // test whether one of PRED_A, PRED_B, PRED_C MV is better start point than Median predictor
+  if ( bTestOtherPredictedMV )
+  {
+    for ( UInt index = 0; index < NUM_MV_PREDICTORS; index++ )
+    {
+      TComMv cMv = m_acMvPredictors[index];
+      pcCU->clipMv( cMv );
+#if ME_ENABLE_ROUNDING_OF_MVS
+      cMv.divideByPowerOf2(2);
+#else
+      cMv >>= 2;
+#endif
+      if (cMv != rcMv && (cMv.getHor() != cStruct.iBestX && cMv.getVer() != cStruct.iBestY))
+      {
+        // only test cMV if not obviously previously tested.
+        xTZSearchHelp( pcPatternKey, cStruct, cMv.getHor(), cMv.getVer(), 0, 0 );
+      }
+    }
+  }
+
+  // test whether zero Mv is better start point than Median predictor
+  if ( bTestZeroVector )
+  {
+    if ((rcMv.getHor() != 0 || rcMv.getVer() != 0) &&
+        (0 != cStruct.iBestX || 0 != cStruct.iBestY))
+    {
+      // only test 0-vector if not obviously previously tested.
+      xTZSearchHelp( pcPatternKey, cStruct, 0, 0, 0, 0 );
+    }
+  }
+
+  Int   iSrchRngHorLeft   = pcMvSrchRngLT->getHor();
+  Int   iSrchRngHorRight  = pcMvSrchRngRB->getHor();
+  Int   iSrchRngVerTop    = pcMvSrchRngLT->getVer();
+  Int   iSrchRngVerBottom = pcMvSrchRngRB->getVer();
+
+  if (pIntegerMv2Nx2NPred != 0)
+  {
+    TComMv integerMv2Nx2NPred = *pIntegerMv2Nx2NPred;
+    integerMv2Nx2NPred <<= 2;
+    pcCU->clipMv( integerMv2Nx2NPred );
+#if ME_ENABLE_ROUNDING_OF_MVS
+    integerMv2Nx2NPred.divideByPowerOf2(2);
+#else
+    integerMv2Nx2NPred >>= 2;
+#endif
+    if ((rcMv != integerMv2Nx2NPred) &&
+        (integerMv2Nx2NPred.getHor() != cStruct.iBestX || integerMv2Nx2NPred.getVer() != cStruct.iBestY))
+    {
+      // only test integerMv2Nx2NPred if not obviously previously tested.
+      xTZSearchHelp(pcPatternKey, cStruct, integerMv2Nx2NPred.getHor(), integerMv2Nx2NPred.getVer(), 0, 0);
+    }
+
+    // reset search range
+    TComMv cMvSrchRngLT;
+    TComMv cMvSrchRngRB;
+    Int iSrchRng = m_iSearchRange;
+    TComMv currBestMv(cStruct.iBestX, cStruct.iBestY );
+    currBestMv <<= 2;
+#if MCTS_ENC_CHECK
+    xSetSearchRange(pcCU, currBestMv, iSrchRng, cMvSrchRngLT, cMvSrchRngRB, pcPatternKey);
+#else
+    xSetSearchRange(pcCU, currBestMv, iSrchRng, cMvSrchRngLT, cMvSrchRngRB);
+#endif
+    iSrchRngHorLeft   = cMvSrchRngLT.getHor();
+    iSrchRngHorRight  = cMvSrchRngRB.getHor();
+    iSrchRngVerTop    = cMvSrchRngLT.getVer();
+    iSrchRngVerBottom = cMvSrchRngRB.getVer();
+  }
+
+  // start search
+  Int  iDist = 0;
+  Int  iStartX = cStruct.iBestX;
+  Int  iStartY = cStruct.iBestY;
+
+  const Bool bBestCandidateZero = (cStruct.iBestX == 0) && (cStruct.iBestY == 0);
+
+  // first search around best position up to now.
+  // The following works as a "subsampled/log" window search around the best candidate
+  for ( iDist = 1; iDist <= (Int)uiSearchRange; iDist*=2 )
+  {
+    if ( bFirstSearchDiamond == 1 )
+    {
+      xTZ8PointDiamondSearch ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist, bFirstCornersForDiamondDist1 );
+    }
+    else
+    {
+      xTZ8PointSquareSearch  ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist );
+    }
+
+    if ( bFirstSearchStop && ( cStruct.uiBestRound >= uiFirstSearchRounds ) ) // stop criterion
+    {
+      break;
+    }
+  }
+
+  if (!bNewZeroNeighbourhoodTest)
+  {
+    // test whether zero Mv is a better start point than Median predictor
+    if ( bTestZeroVectorStart && ((cStruct.iBestX != 0) || (cStruct.iBestY != 0)) )
+    {
