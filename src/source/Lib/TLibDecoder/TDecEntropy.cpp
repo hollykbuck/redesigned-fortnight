@@ -598,3 +598,77 @@ Void TDecEntropy::xDecodeTransform        ( Bool& bCodeDQP, Bool& isChromaQpAdjC
               }
             } while (subTUIterator.nextSection(rTu));
           }
+          else
+          {
+            if(isChroma(compID) && (cbf[COMPONENT_Y] != 0))
+            {
+              m_pcEntropyDecoderIf->parseCrossComponentPrediction( rTu, compID );
+            }
+
+            if(cbf[compID] != 0)
+            {
+              m_pcEntropyDecoderIf->parseCoeffNxN( rTu, compID );
+            }
+          }
+        }
+      }
+    }
+    // transform_unit end
+  }
+}
+
+Void TDecEntropy::decodeQP          ( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  if ( pcCU->getSlice()->getPPS()->getUseDQP() )
+  {
+    m_pcEntropyDecoderIf->parseDeltaQP( pcCU, uiAbsPartIdx, pcCU->getDepth( uiAbsPartIdx ) );
+  }
+}
+
+Void TDecEntropy::decodeChromaQpAdjustment( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  if ( pcCU->getSlice()->getUseChromaQpAdj() )
+  {
+    m_pcEntropyDecoderIf->parseChromaQpAdjustment( pcCU, uiAbsPartIdx, pcCU->getDepth( uiAbsPartIdx ) );
+  }
+}
+
+
+//! decode coefficients
+Void TDecEntropy::decodeCoeff( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool& bCodeDQP, Bool& isChromaQpAdjCoded )
+{
+  if( pcCU->isIntra(uiAbsPartIdx) )
+  {
+  }
+  else
+  {
+    UInt uiQtRootCbf = 1;
+    if( !( pcCU->getPartitionSize( uiAbsPartIdx) == SIZE_2Nx2N && pcCU->getMergeFlag( uiAbsPartIdx ) ) )
+    {
+      m_pcEntropyDecoderIf->parseQtRootCbf( uiAbsPartIdx, uiQtRootCbf );
+    }
+    if ( !uiQtRootCbf )
+    {
+      static const UInt cbfZero[MAX_NUM_COMPONENT]={0,0,0};
+      pcCU->setCbfSubParts( cbfZero, uiAbsPartIdx, uiDepth );
+      pcCU->setTrIdxSubParts( 0 , uiAbsPartIdx, uiDepth );
+      return;
+    }
+
+  }
+
+  TComTURecurse tuRecurse(pcCU, uiAbsPartIdx, uiDepth);
+
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+  if (bDebugRQT)
+  {
+    printf("..codeCoeff: uiAbsPartIdx=%d, PU format=%d, 2Nx2N=%d, NxN=%d\n", uiAbsPartIdx, pcCU->getPartitionSize(uiAbsPartIdx), SIZE_2Nx2N, SIZE_NxN);
+  }
+#endif
+
+  Int quadtreeTULog2MinSizeInCU = pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx);
+  
+  xDecodeTransform( bCodeDQP, isChromaQpAdjCoded, tuRecurse, quadtreeTULog2MinSizeInCU );
+}
+
+//! \}
