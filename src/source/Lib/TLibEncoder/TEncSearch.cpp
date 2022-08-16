@@ -4298,3 +4298,103 @@ Void TEncSearch::xTZSearch( const TComDataCU* const pcCU,
         else
         {
           xTZ8PointSquareSearch  ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist );
+        }
+      }
+
+      // calculate only 2 missing points instead 8 points if cStruct.uiBestDistance == 1
+      if ( cStruct.uiBestDistance == 1 )
+      {
+        cStruct.uiBestDistance = 0;
+        if ( cStruct.ucPointNr != 0 )
+        {
+          xTZ2PointSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB );
+        }
+      }
+    }
+  }
+
+  // star refinement
+  if ( bStarRefinementEnable && cStruct.uiBestDistance > 0 )
+  {
+    while ( cStruct.uiBestDistance > 0 )
+    {
+      iStartX = cStruct.iBestX;
+      iStartY = cStruct.iBestY;
+      cStruct.uiBestDistance = 0;
+      cStruct.ucPointNr = 0;
+      for ( iDist = 1; iDist < (Int)uiSearchRange + 1; iDist*=2 )
+      {
+        if ( bStarRefinementDiamond == 1 )
+        {
+          xTZ8PointDiamondSearch ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist, bStarRefinementCornersForDiamondDist1 );
+        }
+        else
+        {
+          xTZ8PointSquareSearch  ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist );
+        }
+        if ( bStarRefinementStop && (cStruct.uiBestRound >= uiStarRefinementRounds) ) // stop criterion
+        {
+          break;
+        }
+      }
+
+      // calculate only 2 missing points instead 8 points if cStrukt.uiBestDistance == 1
+      if ( cStruct.uiBestDistance == 1 )
+      {
+        cStruct.uiBestDistance = 0;
+        if ( cStruct.ucPointNr != 0 )
+        {
+          xTZ2PointSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB );
+        }
+      }
+    }
+  }
+
+  // write out best match
+  rcMv.set( cStruct.iBestX, cStruct.iBestY );
+  ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY );
+}
+
+
+Void TEncSearch::xTZSearchSelective( const TComDataCU* const   pcCU,
+                                     const TComPattern* const  pcPatternKey,
+                                     const Pel* const          piRefY,
+                                     const Int                 iRefStride,
+                                     const TComMv* const       pcMvSrchRngLT,
+                                     const TComMv* const       pcMvSrchRngRB,
+                                     TComMv                   &rcMv,
+                                     Distortion               &ruiSAD,
+                                     const TComMv* const       pIntegerMv2Nx2NPred )
+{
+  const Bool bTestOtherPredictedMV    = true;
+  const Bool bTestZeroVector          = true;
+  const Bool bEnableRasterSearch      = true;
+  const Bool bAlwaysRasterSearch      = false;  // 1: BETTER but factor 15x slower
+  const Bool bStarRefinementEnable    = true;   // enable either star refinement or raster refinement
+  const Bool bStarRefinementDiamond   = true;   // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
+  const Bool bStarRefinementStop      = false;
+  const UInt uiStarRefinementRounds   = 2;  // star refinement stop X rounds after best match (must be >=1)
+  const UInt uiSearchRange            = m_iSearchRange;
+  const Int  uiSearchRangeInitial     = m_iSearchRange >> 2;
+  const Int  uiSearchStep             = 4;
+  const Int  iMVDistThresh            = 8;
+
+  Int   iSrchRngHorLeft         = pcMvSrchRngLT->getHor();
+  Int   iSrchRngHorRight        = pcMvSrchRngRB->getHor();
+  Int   iSrchRngVerTop          = pcMvSrchRngLT->getVer();
+  Int   iSrchRngVerBottom       = pcMvSrchRngRB->getVer();
+  Int   iFirstSrchRngHorLeft    = 0;
+  Int   iFirstSrchRngHorRight   = 0;
+  Int   iFirstSrchRngVerTop     = 0;
+  Int   iFirstSrchRngVerBottom  = 0;
+  Int   iStartX                 = 0;
+  Int   iStartY                 = 0;
+  Int   iBestX                  = 0;
+  Int   iBestY                  = 0;
+  Int   iDist                   = 0;
+
+  pcCU->clipMv( rcMv );
+#if ME_ENABLE_ROUNDING_OF_MVS
+  rcMv.divideByPowerOf2(2);
+#else
+  rcMv >>= 2;
