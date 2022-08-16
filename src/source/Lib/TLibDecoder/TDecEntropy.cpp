@@ -498,3 +498,103 @@ Void TDecEntropy::xDecodeTransform        ( Bool& bCodeDQP, Bool& isChromaQpAdjC
       DTRACE_CABAC_VL( g_nSymbolCounter++ );
       DTRACE_CABAC_T( "\tTrIdx: abspart=" );
       DTRACE_CABAC_V( uiAbsPartIdx );
+      DTRACE_CABAC_T( "\tdepth=" );
+      DTRACE_CABAC_V( uiDepth );
+      DTRACE_CABAC_T( "\ttrdepth=" );
+      DTRACE_CABAC_V( uiTrDepth );
+      DTRACE_CABAC_T( "\n" );
+    }
+
+    pcCU->setCbfSubParts ( 0, COMPONENT_Y, uiAbsPartIdx, uiDepth );
+
+    if( (!pcCU->isIntra(uiAbsPartIdx)) && uiDepth == pcCU->getDepth( uiAbsPartIdx ) && ((!bChroma) || (!pcCU->getCbf( uiAbsPartIdx, COMPONENT_Cb, 0 ) && !pcCU->getCbf( uiAbsPartIdx, COMPONENT_Cr, 0 )) ))
+    {
+      pcCU->setCbfSubParts( 1 << uiTrDepth, COMPONENT_Y, uiAbsPartIdx, uiDepth );
+    }
+    else
+    {
+      m_pcEntropyDecoderIf->parseQtCbf( rTu, COMPONENT_Y, true );
+    }
+
+
+    // transform_unit begin
+    UInt cbf[MAX_NUM_COMPONENT]={0,0,0};
+    Bool validCbf       = false;
+    Bool validChromaCbf = false;
+    const UInt uiTrIdx = rTu.GetTransformDepthRel();
+
+    for(UInt ch=0; ch<pcCU->getPic()->getNumberValidComponents(); ch++)
+    {
+      const ComponentID compID = ComponentID(ch);
+
+      cbf[compID] = pcCU->getCbf( uiAbsPartIdx, compID, uiTrIdx );
+
+      if (cbf[compID] != 0)
+      {
+        validCbf = true;
+        if (isChroma(compID))
+        {
+          validChromaCbf = true;
+        }
+      }
+    }
+
+    if ( validCbf )
+    {
+
+      // dQP: only for CTU
+      if ( pcCU->getSlice()->getPPS()->getUseDQP() )
+      {
+        if ( bCodeDQP )
+        {
+          const UInt uiAbsPartIdxCU=rTu.GetAbsPartIdxCU();
+          decodeQP( pcCU, uiAbsPartIdxCU);
+          bCodeDQP = false;
+        }
+      }
+
+      if ( pcCU->getSlice()->getUseChromaQpAdj() )
+      {
+        if ( validChromaCbf && isChromaQpAdjCoded && !pcCU->getCUTransquantBypass(rTu.GetAbsPartIdxCU()) )
+        {
+          decodeChromaQpAdjustment( pcCU, rTu.GetAbsPartIdxCU() );
+          isChromaQpAdjCoded = false;
+        }
+      }
+
+      const UInt numValidComp=pcCU->getPic()->getNumberValidComponents();
+
+      for(UInt ch=COMPONENT_Y; ch<numValidComp; ch++)
+      {
+        const ComponentID compID=ComponentID(ch);
+
+        if( rTu.ProcessComponentSection(compID) )
+        {
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+          if (bDebugRQT)
+          {
+            printf("Call NxN for chan %d width=%d height=%d cbf=%d\n", compID, rTu.getRect(compID).width, rTu.getRect(compID).height, 1);
+          }
+#endif
+
+          if (rTu.getRect(compID).width != rTu.getRect(compID).height)
+          {
+            //code two sub-TUs
+            TComTURecurse subTUIterator(rTu, false, TComTU::VERTICAL_SPLIT, true, compID);
+
+            do
+            {
+              const UInt subTUCBF = pcCU->getCbf(subTUIterator.GetAbsPartIdxTU(), compID, (uiTrIdx + 1));
+
+              if (subTUCBF != 0)
+              {
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+                if (bDebugRQT)
+                {
+                  printf("Call NxN for chan %d width=%d height=%d cbf=%d\n", compID, subTUIterator.getRect(compID).width, subTUIterator.getRect(compID).height, 1);
+                }
+#endif
+                m_pcEntropyDecoderIf->parseCoeffNxN( subTUIterator, compID );
+              }
+            } while (subTUIterator.nextSection(rTu));
+          }
