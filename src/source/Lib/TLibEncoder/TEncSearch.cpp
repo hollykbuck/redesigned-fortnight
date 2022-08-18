@@ -4598,3 +4598,103 @@ Void TEncSearch::encodeResAndCalcRdInterCU( TComDataCU* pcCU, TComYuv* pcYuvOrg,
   const Int  numValidComponents = pcCU->getPic()->getNumberValidComponents();
   const TComSPS &sps=*(pcCU->getSlice()->getSPS());
 
+  // The pcCU is not marked as skip-mode at this point, and its m_pcTrCoeff, m_pcArlCoeff, m_puhCbf, m_puhTrIdx will all be 0.
+  // due to prior calls to TComDataCU::initEstData(  );
+
+  if ( bSkipResidual ) //  No residual coding : SKIP mode
+  {
+    pcCU->setSkipFlagSubParts( true, 0, pcCU->getDepth(0) );
+
+    pcYuvResi->clear();
+
+    pcYuvPred->copyToPartYuv( pcYuvRec, 0 );
+    Distortion distortion = 0;
+
+    for (Int comp=0; comp < numValidComponents; comp++)
+    {
+      const ComponentID compID=ComponentID(comp);
+      const UInt csx=pcYuvOrg->getComponentScaleX(compID);
+      const UInt csy=pcYuvOrg->getComponentScaleY(compID);
+      distortion += m_pcRdCost->getDistPart( sps.getBitDepth(toChannelType(compID)), pcYuvRec->getAddr(compID), pcYuvRec->getStride(compID), pcYuvOrg->getAddr(compID),
+                                               pcYuvOrg->getStride(compID), cuWidthPixels >> csx, cuHeightPixels >> csy, compID);
+    }
+
+    m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[pcCU->getDepth(0)][CI_CURR_BEST]);
+    m_pcEntropyCoder->resetBits();
+
+    if (pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+    {
+      m_pcEntropyCoder->encodeCUTransquantBypassFlag(pcCU, 0, true);
+    }
+
+    m_pcEntropyCoder->encodeSkipFlag(pcCU, 0, true);
+    m_pcEntropyCoder->encodeMergeIndex( pcCU, 0, true );
+
+    UInt uiBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+    pcCU->getTotalBits()       = uiBits;
+    pcCU->getTotalDistortion() = distortion;
+    pcCU->getTotalCost()       = m_pcRdCost->calcRdCost( uiBits, distortion );
+
+    m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[pcCU->getDepth(0)][CI_TEMP_BEST]);
+
+#if DEBUG_STRING
+    pcYuvResiBest->clear(); // Clear the residual image, if we didn't code it.
+    for(UInt i=0; i<MAX_NUM_COMPONENT+1; i++)
+    {
+      sDebug+=debug_reorder_data_inter_token[i];
+    }
+#endif
+
+    return;
+  }
+
+  //  Residual coding.
+
+   pcYuvResi->subtract( pcYuvOrg, pcYuvPred, 0, cuWidthPixels );
+
+  TComTURecurse tuLevel0(pcCU, 0);
+
+  Double     nonZeroCost       = 0;
+  UInt       nonZeroBits       = 0;
+  Distortion nonZeroDistortion = 0;
+  Distortion zeroDistortion    = 0;
+
+  m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ pcCU->getDepth( 0 ) ][ CI_CURR_BEST ] );
+
+  xEstimateInterResidualQT( pcYuvResi,  nonZeroCost, nonZeroBits, nonZeroDistortion, &zeroDistortion, tuLevel0 DEBUG_STRING_PASS_INTO(sDebug) );
+
+  // -------------------------------------------------------
+  // set the coefficients in the pcCU, and also calculates the residual data.
+  // If a block full of 0's is efficient, then just use 0's.
+  // The costs at this point do not include header bits.
+
+  m_pcEntropyCoder->resetBits();
+  m_pcEntropyCoder->encodeQtRootCbfZero( );
+  const UInt   zeroResiBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+  const Double zeroCost     = (pcCU->isLosslessCoded( 0 )) ? (nonZeroCost+1) : (m_pcRdCost->calcRdCost( zeroResiBits, zeroDistortion ));
+
+  if ( zeroCost < nonZeroCost || !pcCU->getQtRootCbf(0) )
+  {
+    const UInt uiQPartNum = tuLevel0.GetAbsPartIdxNumParts();
+    ::memset( pcCU->getTransformIdx()     , 0, uiQPartNum * sizeof(UChar) );
+    for (Int comp=0; comp < numValidComponents; comp++)
+    {
+      const ComponentID component = ComponentID(comp);
+      ::memset( pcCU->getCbf( component ) , 0, uiQPartNum * sizeof(UChar) );
+      ::memset( pcCU->getCrossComponentPredictionAlpha(component), 0, ( uiQPartNum * sizeof(SChar) ) );
+    }
+    static const UInt useTS[MAX_NUM_COMPONENT]={0,0,0};
+    pcCU->setTransformSkipSubParts ( useTS, 0, pcCU->getDepth(0) );
+#if DEBUG_STRING
+    sDebug.clear();
+    for(UInt i=0; i<MAX_NUM_COMPONENT+1; i++)
+    {
+      sDebug+=debug_reorder_data_inter_token[i];
+    }
+#endif
+  }
+  else
+  {
+    xSetInterResidualQTData( NULL, false, tuLevel0); // Call first time to set coefficients.
+  }
+
