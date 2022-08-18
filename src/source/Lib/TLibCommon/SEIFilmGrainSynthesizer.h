@@ -98,3 +98,103 @@ static const int FG_MAX_HEIGHT                   = 4320;
 #define FGS_PARAM_ERROR                 0x0020
 
 /* Error codes for various errors in SMPTE-RDD5 standalone grain synthesizer */
+typedef enum
+{
+  /* No error */
+  FGS_SUCCESS = 0,
+  /* Invalid input width */
+  FGS_INVALID_WIDTH = FGS_FILE_IO_ERROR + 0x01,
+  /* Invalid input height */
+  FGS_INVALID_HEIGHT = FGS_FILE_IO_ERROR + 0x02,
+  /* Invalid Chroma format idc */
+  FGS_INVALID_CHROMA_FORMAT = FGS_FILE_IO_ERROR + 0x03,
+  /* Invalid bit depth */
+  FGS_INVALID_BIT_DEPTH = FGS_FILE_IO_ERROR + 0x04,
+  /* Invalid Film grain characteristic cancel flag */
+  FGS_INVALID_FGC_CANCEL_FLAG = FGS_PARAM_ERROR + 0x01,
+  /* Invalid film grain model id */
+  FGS_INVALID_GRAIN_MODEL_ID = FGS_PARAM_ERROR + 0x02,
+  /* Invalid separate color description present flag */
+  FGS_INVALID_SEP_COL_DES_FLAG = FGS_PARAM_ERROR + 0x03,
+  /* Invalid blending mode */
+  FGS_INVALID_BLEND_MODE = FGS_PARAM_ERROR + 0x04,
+  /* Invalid log_2_scale_factor value */
+  FGS_INVALID_LOG2_SCALE_FACTOR = FGS_PARAM_ERROR + 0x05,
+  /* Invalid component model present flag */
+  FGS_INVALID_COMP_MODEL_PRESENT_FLAG = FGS_PARAM_ERROR + 0x06,
+  /* Invalid number of model values */
+  FGS_INVALID_NUM_MODEL_VALUES = FGS_PARAM_ERROR + 0x07,
+  /* Invalid bound values, overlapping boundaries */
+  FGS_INVALID_INTENSITY_BOUNDARY_VALUES = FGS_PARAM_ERROR + 0x08,
+  /* Invalid standard deviation */
+  FGS_INVALID_STANDARD_DEVIATION = FGS_PARAM_ERROR + 0x09,
+  /* Invalid cut off frequencies */
+  FGS_INVALID_CUT_OFF_FREQUENCIES = FGS_PARAM_ERROR + 0x0A,
+  /* Invalid number of cut off frequency pairs */
+  FGS_INVALID_NUM_CUT_OFF_FREQ_PAIRS = FGS_PARAM_ERROR + 0x0B,
+  /* Invalid film grain characteristics repetition period */
+  FGS_INVALID_FGC_REPETETION_PERIOD = FGS_PARAM_ERROR + 0x0C,
+
+  /* Failure error code */
+  FGS_FAIL = 0xFF
+}FGS_ERROR_T;
+/* FGC Error Codes END */
+
+typedef struct GrainSynthesisStruct_t
+{
+  int8_t  dataBase[NUM_CUT_OFF_FREQ][NUM_CUT_OFF_FREQ][FG_DATA_BASE_SIZE][FG_DATA_BASE_SIZE];
+  int16_t intensityInterval[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES];
+}GrainSynthesisStruct;
+
+typedef struct fgsProcessArgs
+{
+  uint8_t                      numComp;
+  uint32_t *                   fgsOffsets[MAX_NUM_COMPONENT];
+  Pel *                        decComp[MAX_NUM_COMPONENT];
+  uint32_t                     widthComp[MAX_NUM_COMPONENT];
+  uint32_t                     heightComp[MAX_NUM_COMPONENT];
+  uint32_t                     strideComp[MAX_NUM_COMPONENT];
+  SEIFilmGrainCharacteristics *pFgcParameters;
+  GrainSynthesisStruct *       pGrainSynt;
+  uint8_t                      bitDepth;
+  uint8_t                      blkSize;
+} fgsProcessArgs;
+
+class SEIFilmGrainSynthesizer
+{
+
+private:
+  uint32_t                     m_width;
+  uint32_t                     m_height;
+  ChromaFormat                 m_chromaFormat;
+  uint8_t                      m_bitDepth;
+  uint32_t                     m_idrPicId;
+  
+  fgsProcessArgs               m_fgsArgs;
+  GrainSynthesisStruct        *m_grainSynt;
+  uint8_t                      m_fgsBlkSize;
+
+public:
+  uint32_t                     m_poc;
+  int32_t                      m_errorCode;
+  SEIFilmGrainCharacteristics *m_fgcParameters;
+
+public:
+  SEIFilmGrainSynthesizer();
+  virtual ~SEIFilmGrainSynthesizer();
+
+  void      create(uint32_t width, uint32_t height, ChromaFormat fmt, uint8_t bitDepth, uint32_t idrPicId);
+  void      destroy   ();
+
+  void      fgsInit   ();
+  void      grainSynthesizeAndBlend(TComPicYuv* pGrainBuf, Bool isIdrPic);
+  uint8_t   grainValidateParams();
+
+private:
+  void            deriveFGSBlkSize    ();
+  void            dataBaseGen         ();
+  static uint32_t prng                (uint32_t x_r);
+  static uint32_t fgsProcess          (fgsProcessArgs &inArgs);
+
+  static void     deblockGrainStripe  (Pel *grainStripe, uint32_t widthComp, uint32_t heightComp, uint32_t strideComp,
+                                      uint32_t blkSize);
