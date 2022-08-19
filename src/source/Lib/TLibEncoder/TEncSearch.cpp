@@ -4698,3 +4698,103 @@ Void TEncSearch::encodeResAndCalcRdInterCU( TComDataCU* pcCU, TComYuv* pcYuvOrg,
     xSetInterResidualQTData( NULL, false, tuLevel0); // Call first time to set coefficients.
   }
 
+  // all decisions now made. Fully encode the CU, including the headers:
+  m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[pcCU->getDepth(0)][CI_CURR_BEST] );
+
+  UInt finalBits = 0;
+  xAddSymbolBitsInter( pcCU, finalBits );
+  // we've now encoded the pcCU, and so have a valid bit cost
+
+  if ( !pcCU->getQtRootCbf( 0 ) )
+  {
+    pcYuvResiBest->clear(); // Clear the residual image, if we didn't code it.
+  }
+  else
+  {
+    xSetInterResidualQTData( pcYuvResiBest, true, tuLevel0 ); // else set the residual image data pcYUVResiBest from the various temp images.
+  }
+  m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ pcCU->getDepth( 0 ) ][ CI_TEMP_BEST ] );
+
+  pcYuvRec->addClip ( pcYuvPred, pcYuvResiBest, 0, cuWidthPixels, sps.getBitDepths() );
+
+  // update with clipped distortion and cost (previously unclipped reconstruction values were used)
+
+  Distortion finalDistortion = 0;
+  for(Int comp=0; comp<numValidComponents; comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    finalDistortion += m_pcRdCost->getDistPart( sps.getBitDepth(toChannelType(compID)), pcYuvRec->getAddr(compID ), pcYuvRec->getStride(compID ), pcYuvOrg->getAddr(compID ), pcYuvOrg->getStride(compID), cuWidthPixels >> pcYuvOrg->getComponentScaleX(compID), cuHeightPixels >> pcYuvOrg->getComponentScaleY(compID), compID);
+  }
+
+  pcCU->getTotalBits()       = finalBits;
+  pcCU->getTotalDistortion() = finalDistortion;
+  pcCU->getTotalCost()       = m_pcRdCost->calcRdCost( finalBits, finalDistortion );
+}
+
+
+
+Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
+                                           Double     &rdCost,
+                                           UInt       &ruiBits,
+                                           Distortion &ruiDist,
+                                           Distortion *puiZeroDist,
+                                           TComTU     &rTu
+                                           DEBUG_STRING_FN_DECLARE(sDebug) )
+{
+  TComDataCU *pcCU        = rTu.getCU();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const UInt uiDepth      = rTu.GetTransformDepthTotal();
+  const UInt uiTrMode     = rTu.GetTransformDepthRel();
+  const UInt subTUDepth   = uiTrMode + 1;
+  const UInt numValidComp = pcCU->getPic()->getNumberValidComponents();
+  DEBUG_STRING_NEW(sSingleStringComp[MAX_NUM_COMPONENT])
+
+  assert( pcCU->getDepth( 0 ) == pcCU->getDepth( uiAbsPartIdx ) );
+  const UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+
+  UInt SplitFlag = ((pcCU->getSlice()->getSPS()->getQuadtreeTUMaxDepthInter() == 1) && pcCU->isInter(uiAbsPartIdx) && ( pcCU->getPartitionSize(uiAbsPartIdx) != SIZE_2Nx2N ));
+#if DEBUG_STRING
+  const Int debugPredModeMask = DebugStringGetPredModeMask(pcCU->getPredictionMode(uiAbsPartIdx));
+#endif
+
+  Bool bCheckFull;
+
+  if ( SplitFlag && uiDepth == pcCU->getDepth(uiAbsPartIdx) && ( uiLog2TrSize >  pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) ) )
+  {
+    bCheckFull = false;
+  }
+  else
+  {
+    bCheckFull =  ( uiLog2TrSize <= pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() );
+  }
+
+  const Bool bCheckSplit  = ( uiLog2TrSize >  pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) );
+
+  assert( bCheckFull || bCheckSplit );
+
+  // code full block
+  Double     dSingleCost = MAX_DOUBLE;
+  UInt       uiSingleBits                                                                                                        = 0;
+  Distortion uiSingleDistComp            [MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/] = {{0,0},{0,0},{0,0}};
+  Distortion uiSingleDist                                                                                                        = 0;
+  TCoeff     uiAbsSum                    [MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/] = {{0,0},{0,0},{0,0}};
+  UInt       uiBestTransformMode         [MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/] = {{0,0},{0,0},{0,0}};
+  //  Stores the best explicit RDPCM mode for a TU encoded without split
+  UInt       bestExplicitRdpcmModeUnSplit[MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/] = {{3,3}, {3,3}, {3,3}};
+  SChar      bestCrossCPredictionAlpha   [MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/] = {{0,0},{0,0},{0,0}};
+
+  m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+
+  if( bCheckFull )
+  {
+    Double minCost[MAX_NUM_COMPONENT][2/*0 = top (or whole TU for non-4:2:2) sub-TU, 1 = bottom sub-TU*/];
+    Bool checkTransformSkip[MAX_NUM_COMPONENT];
+    pcCU->setTrIdxSubParts( uiTrMode, uiAbsPartIdx, uiDepth );
+
+    m_pcEntropyCoder->resetBits();
+
+    memset( m_pTempPel, 0, sizeof( Pel ) * rTu.getRect(COMPONENT_Y).width * rTu.getRect(COMPONENT_Y).height ); // not necessary needed for inside of recursion (only at the beginning)
+
+    const UInt uiQTTempAccessLayer = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+    TCoeff *pcCoeffCurr[MAX_NUM_COMPONENT];
+#if ADAPTIVE_QP_SELECTION
