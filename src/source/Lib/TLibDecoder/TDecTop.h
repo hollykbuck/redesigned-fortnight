@@ -98,3 +98,103 @@ private:
   TComPic*                m_pcPic;
   UInt                    m_uiSliceIdx;
   Int                     m_prevPOC;
+  Int                     m_prevTid0POC;
+  Bool                    m_bFirstSliceInPicture;
+#if JVET_X0048_X0103_FILM_GRAIN
+  Bool                    m_bFirstPictureInSequence;
+  SEIFilmGrainSynthesizer m_grainCharacteristic;
+  TComPicYuv              m_grainBuf;
+#endif
+  Bool                    m_bFirstSliceInSequence;
+  Bool                    m_prevSliceSkipped;
+  Int                     m_skippedPOC;
+  Bool                    m_bFirstSliceInBitstream;
+  Int                     m_lastPOCNoOutputPriorPics;
+  Bool                    m_isNoOutputPriorPics;
+  Bool                    m_craNoRaslOutputFlag;    //value of variable NoRaslOutputFlag of the last CRA pic
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  Bool                    m_ShutterFilterEnable;    // Shutter Interval SEI Processing
+#endif
+#if O0043_BEST_EFFORT_DECODING
+  UInt                    m_forceDecodeBitDepth;
+#endif
+  std::ostream           *m_pDecodedSEIOutputStream;
+
+  Bool                    m_warningMessageSkipPicture;
+
+#if MCTS_ENC_CHECK
+  Bool                    m_tmctsCheckEnabled;
+
+#endif
+  std::list<InputNALUnit*> m_prefixSEINALUs; /// Buffered up prefix SEI NAL Units.
+public:
+  TDecTop();
+  virtual ~TDecTop();
+
+  Void  create  ();
+  Void  destroy ();
+
+  Void setDecodedPictureHashSEIEnabled(Int enabled) { m_cGopDecoder.setDecodedPictureHashSEIEnabled(enabled); }
+#if MCTS_ENC_CHECK
+  Void setTMctsCheckEnabled(Bool enabled) { m_tmctsCheckEnabled = enabled; }
+
+#endif  
+  Void  init();
+#if MCTS_EXTRACTION
+  SEIMessages& getSEIs() { return m_SEIs; }
+  TComSlice* getApcSlicePilot() { return m_apcSlicePilot; }
+  TComPic* getPcPic() const { return m_pcPic; }
+  Bool  decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay, Bool bSkipCabacAndReconstruction=false);
+#else
+  Bool  decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay);
+#endif
+  Void  deletePicBuffer();
+
+  
+  Void  executeLoopFilters(Int& poc, TComList<TComPic*>*& rpcListPic);
+  Void  checkNoOutputPriorPics (TComList<TComPic*>* rpcListPic);
+
+  Bool  getNoOutputPriorPicsFlag () { return m_isNoOutputPriorPics; }
+  Void  setNoOutputPriorPicsFlag (Bool val) { m_isNoOutputPriorPics = val; }
+  Void  setFirstSliceInPicture (bool val)  { m_bFirstSliceInPicture = val; }
+  Bool  getFirstSliceInSequence ()         { return m_bFirstSliceInSequence; }
+  Void  setFirstSliceInSequence (bool val) { m_bFirstSliceInSequence = val; }
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  Bool  getShutterFilterFlag () const     { return m_ShutterFilterEnable; }
+  Void  setShutterFilterFlag (Bool value) { m_ShutterFilterEnable = value; }
+#endif
+#if O0043_BEST_EFFORT_DECODING
+  Void  setForceDecodeBitDepth(UInt bitDepth) { m_forceDecodeBitDepth = bitDepth; }
+#endif
+  Void  setDecodedSEIMessageOutputStream(std::ostream *pOpStream) { m_pDecodedSEIOutputStream = pOpStream; }
+  UInt  getNumberOfChecksumErrorsDetected() const { return m_cGopDecoder.getNumberOfChecksumErrorsDetected(); }
+
+protected:
+  Void  xGetNewPicBuffer  (const TComSPS &sps, const TComPPS &pps, TComPic*& rpcPic, const UInt temporalLayer);
+  Void  xCreateLostPicture (Int iLostPOC);
+
+#if MCTS_EXTRACTION
+  Bool      xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisplay, Bool bSkipCabacAndReconstruction);
+  Void      xActivateParameterSets(Bool bSkipCabacAndReconstruction);
+#else
+  Bool      xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisplay);
+  Void      xActivateParameterSets();
+#endif
+  Void      xDecodeVPS(const std::vector<UChar> &naluData);
+  Void      xDecodeSPS(const std::vector<UChar> &naluData);
+  Void      xDecodePPS(const std::vector<UChar> &naluData);
+  Void      xUpdatePreviousTid0POC( TComSlice *pSlice ) { if ((pSlice->getTLayer()==0) && (pSlice->isReferenceNalu() && (pSlice->getNalUnitType()!=NAL_UNIT_CODED_SLICE_RASL_R)&& (pSlice->getNalUnitType()!=NAL_UNIT_CODED_SLICE_RADL_R))) { m_prevTid0POC=pSlice->getPOC(); } }
+#if MCTS_EXTRACTION
+public:
+#endif
+  TComList<TComPic*>*  getRpcListPic()  { return &m_cListPic; };
+  Void      xParsePrefixSEImessages();
+#if MCTS_EXTRACTION
+private:
+#endif
+#if MCTS_ENC_CHECK
+  Void      xAnalysePrefixSEImessages();
+#endif
+  Void      xParsePrefixSEIsForUnknownVCLNal();
+
+};// END CLASS DEFINITION TDecTop
