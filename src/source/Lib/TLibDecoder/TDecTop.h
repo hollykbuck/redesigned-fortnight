@@ -198,3 +198,9 @@ private:
   Void      xParsePrefixSEIsForUnknownVCLNal();
 
 };// END CLASS DEFINITION TDecTop
+
+
+//! \}
+
+#endif // __TDECTOP__
+
