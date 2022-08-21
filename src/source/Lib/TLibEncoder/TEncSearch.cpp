@@ -4798,3 +4798,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
     const UInt uiQTTempAccessLayer = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
     TCoeff *pcCoeffCurr[MAX_NUM_COMPONENT];
 #if ADAPTIVE_QP_SELECTION
+    TCoeff *pcArlCoeffCurr[MAX_NUM_COMPONENT];
+#endif
+
+    for(UInt i=0; i<numValidComp; i++)
+    {
+      minCost[i][0] = MAX_DOUBLE;
+      minCost[i][1] = MAX_DOUBLE;
+    }
+
+    Pel crossCPredictedResidualBuffer[ MAX_TU_SIZE * MAX_TU_SIZE ];
+
+    for(UInt i=0; i<numValidComp; i++)
+    {
+      checkTransformSkip[i]=false;
+      const ComponentID compID=ComponentID(i);
+      const Int channelBitDepth=pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+      pcCoeffCurr[compID]    = m_ppcQTTempCoeff[compID][uiQTTempAccessLayer] + rTu.getCoefficientOffset(compID);
+#if ADAPTIVE_QP_SELECTION
+      pcArlCoeffCurr[compID] = m_ppcQTTempArlCoeff[compID ][uiQTTempAccessLayer] +  rTu.getCoefficientOffset(compID);
+#endif
+
+      if(rTu.ProcessComponentSection(compID))
+      {
+        const QpParam cQP(*pcCU, compID);
+
+        checkTransformSkip[compID] = pcCU->getSlice()->getPPS()->getUseTransformSkip() &&
+                                     TUCompRectHasAssociatedTransformSkipFlag(rTu.getRect(compID), pcCU->getSlice()->getPPS()->getPpsRangeExtension().getLog2MaxTransformSkipBlockSize()) &&
+                                     (!pcCU->isLosslessCoded(0));
+
+        const Bool splitIntoSubTUs = rTu.getRect(compID).width != rTu.getRect(compID).height;
+
+        TComTURecurse TUIterator(rTu, false, (splitIntoSubTUs ? TComTU::VERTICAL_SPLIT : TComTU::DONT_SPLIT), true, compID);
+
+        const UInt partIdxesPerSubTU = TUIterator.GetAbsPartIdxNumParts(compID);
+
+        do
+        {
+          const UInt           subTUIndex             = TUIterator.GetSectionNumber();
+          const UInt           subTUAbsPartIdx        = TUIterator.GetAbsPartIdxTU(compID);
+          const TComRectangle &tuCompRect             = TUIterator.getRect(compID);
+          const UInt           subTUBufferOffset      = tuCompRect.width * tuCompRect.height * subTUIndex;
+
+                TCoeff        *currentCoefficients    = pcCoeffCurr[compID] + subTUBufferOffset;
+#if ADAPTIVE_QP_SELECTION
+                TCoeff        *currentARLCoefficients = pcArlCoeffCurr[compID] + subTUBufferOffset;
+#endif
+          const Bool isCrossCPredictionAvailable      =    isChroma(compID)
+                                                         && pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag()
+                                                         && (pcCU->getCbf(subTUAbsPartIdx, COMPONENT_Y, uiTrMode) != 0);
+
+          SChar preCalcAlpha = 0;
+          const Pel *pLumaResi = m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix( COMPONENT_Y, rTu.getRect( COMPONENT_Y ).x0, rTu.getRect( COMPONENT_Y ).y0 );
+
+          if (isCrossCPredictionAvailable)
+          {
+            const Bool bUseReconstructedResidualForEstimate = m_pcEncCfg->getUseReconBasedCrossCPredictionEstimate();
+            const Pel  *const lumaResidualForEstimate       = bUseReconstructedResidualForEstimate ? pLumaResi                                                     : pcResi->getAddrPix(COMPONENT_Y, tuCompRect.x0, tuCompRect.y0);
+            const UInt        lumaResidualStrideForEstimate = bUseReconstructedResidualForEstimate ? m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(COMPONENT_Y) : pcResi->getStride(COMPONENT_Y);
+
+            preCalcAlpha = xCalcCrossComponentPredictionAlpha(TUIterator,
+                                                              compID,
+                                                              lumaResidualForEstimate,
+                                                              pcResi->getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                              tuCompRect.width,
+                                                              tuCompRect.height,
+                                                              lumaResidualStrideForEstimate,
+                                                              pcResi->getStride(compID));
+          }
+
+          const Int transformSkipModesToTest    = checkTransformSkip[compID] ? 2 : 1;
+          const Int crossCPredictionModesToTest = (preCalcAlpha != 0)        ? 2 : 1; // preCalcAlpha cannot be anything other than 0 if isCrossCPredictionAvailable is false
+
+          const Bool isOneMode                  = (crossCPredictionModesToTest == 1) && (transformSkipModesToTest == 1);
+
+          for (Int transformSkipModeId = 0; transformSkipModeId < transformSkipModesToTest; transformSkipModeId++)
+          {
+            pcCU->setTransformSkipPartRange(transformSkipModeId, compID, subTUAbsPartIdx, partIdxesPerSubTU);
+
+            for (Int crossCPredictionModeId = 0; crossCPredictionModeId < crossCPredictionModesToTest; crossCPredictionModeId++)
+            {
+              const Bool isFirstMode          = (transformSkipModeId == 0) && (crossCPredictionModeId == 0);
+              const Bool bUseCrossCPrediction = crossCPredictionModeId != 0;
+
+              m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+              m_pcEntropyCoder->resetBits();
+
+              pcCU->setTransformSkipPartRange(transformSkipModeId, compID, subTUAbsPartIdx, partIdxesPerSubTU);
+              pcCU->setCrossComponentPredictionAlphaPartRange((bUseCrossCPrediction ? preCalcAlpha : 0), compID, subTUAbsPartIdx, partIdxesPerSubTU );
+
+              if ((compID != COMPONENT_Cr) && ((transformSkipModeId == 1) ? m_pcEncCfg->getUseRDOQTS() : m_pcEncCfg->getUseRDOQ()))
+              {
+                COEFF_SCAN_TYPE scanType = COEFF_SCAN_TYPE(pcCU->getCoefScanIdx(uiAbsPartIdx, tuCompRect.width, tuCompRect.height, compID));
+                m_pcEntropyCoder->estimateBit(m_pcTrQuant->m_pcEstBitsSbac, tuCompRect.width, tuCompRect.height, toChannelType(compID), scanType);
+              }
+
+#if RDOQ_CHROMA_LAMBDA
+              m_pcTrQuant->selectLambda(compID);
+#endif
+
+              Pel *pcResiCurrComp = m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0);
