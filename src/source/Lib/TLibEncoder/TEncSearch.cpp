@@ -4898,3 +4898,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
 #endif
 
               Pel *pcResiCurrComp = m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0);
+              UInt resiStride     = m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID);
+
+              TCoeff bestCoeffComp   [MAX_TU_SIZE*MAX_TU_SIZE];
+              Pel    bestResiComp    [MAX_TU_SIZE*MAX_TU_SIZE];
+
+#if ADAPTIVE_QP_SELECTION
+              TCoeff bestArlCoeffComp[MAX_TU_SIZE*MAX_TU_SIZE];
+#endif
+              TCoeff     currAbsSum   = 0;
+              UInt       currCompBits = 0;
+              Distortion currCompDist = 0;
+              Double     currCompCost = 0;
+              UInt       nonCoeffBits = 0;
+              Distortion nonCoeffDist = 0;
+              Double     nonCoeffCost = 0;
+
+              if(!isOneMode && !isFirstMode)
+              {
+                memcpy(bestCoeffComp,    currentCoefficients,    (sizeof(TCoeff) * tuCompRect.width * tuCompRect.height));
+#if ADAPTIVE_QP_SELECTION
+                memcpy(bestArlCoeffComp, currentARLCoefficients, (sizeof(TCoeff) * tuCompRect.width * tuCompRect.height));
+#endif
+                for(Int y = 0; y < tuCompRect.height; y++)
+                {
+                  memcpy(&bestResiComp[y * tuCompRect.width], (pcResiCurrComp + (y * resiStride)), (sizeof(Pel) * tuCompRect.width));
+                }
+              }
+
+              if (bUseCrossCPrediction)
+              {
+                TComTrQuant::crossComponentPrediction(TUIterator,
+                                                      compID,
+                                                      pLumaResi,
+                                                      pcResi->getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                      crossCPredictedResidualBuffer,
+                                                      tuCompRect.width,
+                                                      tuCompRect.height,
+                                                      m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(COMPONENT_Y),
+                                                      pcResi->getStride(compID),
+                                                      tuCompRect.width,
+                                                      false);
+
+                m_pcTrQuant->transformNxN(TUIterator, compID, crossCPredictedResidualBuffer, tuCompRect.width, currentCoefficients,
+#if ADAPTIVE_QP_SELECTION
+                                          currentARLCoefficients,
+#endif
+                                          currAbsSum, cQP);
+              }
+              else
+              {
+                m_pcTrQuant->transformNxN(TUIterator, compID, pcResi->getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ), pcResi->getStride(compID), currentCoefficients,
+#if ADAPTIVE_QP_SELECTION
+                                          currentARLCoefficients,
+#endif
+                                          currAbsSum, cQP);
+              }
+
+              if(isFirstMode || (currAbsSum == 0))
+              {
+                if (bUseCrossCPrediction)
+                {
+                  TComTrQuant::crossComponentPrediction(TUIterator,
+                                                        compID,
+                                                        pLumaResi,
+                                                        m_pTempPel,
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                        tuCompRect.width,
+                                                        tuCompRect.height,
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(COMPONENT_Y),
+                                                        tuCompRect.width,
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID),
+                                                        true);
+
+                  nonCoeffDist = m_pcRdCost->getDistPart( channelBitDepth, m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ),
+                                                          m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride( compID ), pcResi->getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ),
+                                                          pcResi->getStride(compID), tuCompRect.width, tuCompRect.height, compID); // initialized with zero residual distortion
+                }
+                else
+                {
+                  nonCoeffDist = m_pcRdCost->getDistPart( channelBitDepth, m_pTempPel, tuCompRect.width, pcResi->getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ),
+                                                          pcResi->getStride(compID), tuCompRect.width, tuCompRect.height, compID); // initialized with zero residual distortion
+                }
+
+                m_pcEntropyCoder->encodeQtCbfZero( TUIterator, toChannelType(compID) );
+
+                if ( isCrossCPredictionAvailable )
+                {
+                  m_pcEntropyCoder->encodeCrossComponentPrediction( TUIterator, compID );
+                }
+
+                nonCoeffBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+                nonCoeffCost = m_pcRdCost->calcRdCost( nonCoeffBits, nonCoeffDist );
+              }
+
+              if((puiZeroDist != NULL) && isFirstMode)
+              {
+                *puiZeroDist += nonCoeffDist; // initialized with zero residual distortion
+              }
+
+              DEBUG_STRING_NEW(sSingleStringTest)
