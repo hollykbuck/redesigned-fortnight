@@ -198,3 +198,7 @@ private:
 #endif
   Void applyMotion(const Array2D<MotionVector> &mvs, const TComPicYuv &input, TComPicYuv &output) const;
 }; // END CLASS DEFINITION TEncTemporalFilter
+
+//! \}
+
+#endif // __TEMPORAL_FILTER__
