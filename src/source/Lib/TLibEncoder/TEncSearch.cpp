@@ -5098,3 +5098,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
                 if (uiAbsSum[compID][subTUIndex] == 0)
                 {
                   if (bUseCrossCPrediction)
+                  {
+                    TComTrQuant::crossComponentPrediction(TUIterator,
+                                                          compID,
+                                                          pLumaResi,
+                                                          m_pTempPel,
+                                                          m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                          tuCompRect.width,
+                                                          tuCompRect.height,
+                                                          m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(COMPONENT_Y),
+                                                          tuCompRect.width,
+                                                          m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID),
+                                                          true);
+                  }
+                  else
+                  {
+                    pcResiCurrComp = m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0);
+                    const UInt uiStride = m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID);
+                    for(UInt uiY = 0; uiY < tuCompRect.height; uiY++)
+                    {
+                      memset(pcResiCurrComp, 0, (sizeof(Pel) * tuCompRect.width));
+                      pcResiCurrComp += uiStride;
+                    }
+                  }
+                }
+              }
+              else
+              {
+                // reset
+                memcpy(currentCoefficients,    bestCoeffComp,    (sizeof(TCoeff) * tuCompRect.width * tuCompRect.height));
+#if ADAPTIVE_QP_SELECTION
+                memcpy(currentARLCoefficients, bestArlCoeffComp, (sizeof(TCoeff) * tuCompRect.width * tuCompRect.height));
+#endif
+                for (Int y = 0; y < tuCompRect.height; y++)
+                {
+                  memcpy((pcResiCurrComp + (y * resiStride)), &bestResiComp[y * tuCompRect.width], (sizeof(Pel) * tuCompRect.width));
+                }
+              }
+            }
+          }
+
+          pcCU->setExplicitRdpcmModePartRange            (   bestExplicitRdpcmModeUnSplit[compID][subTUIndex],                            compID, subTUAbsPartIdx, partIdxesPerSubTU);
+          pcCU->setTransformSkipPartRange                (   uiBestTransformMode         [compID][subTUIndex],                            compID, subTUAbsPartIdx, partIdxesPerSubTU );
+          pcCU->setCbfPartRange                          ((((uiAbsSum                    [compID][subTUIndex] > 0) ? 1 : 0) << uiTrMode), compID, subTUAbsPartIdx, partIdxesPerSubTU );
+          pcCU->setCrossComponentPredictionAlphaPartRange(   bestCrossCPredictionAlpha   [compID][subTUIndex],                            compID, subTUAbsPartIdx, partIdxesPerSubTU );
+        } while (TUIterator.nextSection(rTu)); //end of sub-TU loop
+      } // processing section
+    } // component loop
+
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      const ComponentID compID = ComponentID(ch);
+      if (rTu.ProcessComponentSection(compID) && (rTu.getRect(compID).width != rTu.getRect(compID).height))
+      {
+        offsetSubTUCBFs(rTu, compID); //the CBFs up to now have been defined for two sub-TUs - shift them down a level and replace with the parent level CBF
+      }
+    }
+
+    m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+    m_pcEntropyCoder->resetBits();
+
+    if( uiLog2TrSize > pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) )
+    {
+      m_pcEntropyCoder->encodeTransformSubdivFlag( 0, 5 - uiLog2TrSize );
+    }
+
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      const UInt chOrderChange = ((ch + 1) == numValidComp) ? 0 : (ch + 1);
+      const ComponentID compID=ComponentID(chOrderChange);
+      if( rTu.ProcessComponentSection(compID) )
+      {
+        m_pcEntropyCoder->encodeQtCbf( rTu, compID, true );
+      }
+    }
+
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      const ComponentID compID=ComponentID(ch);
+      if (rTu.ProcessComponentSection(compID))
+      {
+        if(isChroma(compID) && (uiAbsSum[COMPONENT_Y][0] != 0))
+        {
+          m_pcEntropyCoder->encodeCrossComponentPrediction( rTu, compID );
+        }
+
+        m_pcEntropyCoder->encodeCoeffNxN( rTu, pcCoeffCurr[compID], compID );
+        for (UInt subTUIndex = 0; subTUIndex < 2; subTUIndex++)
+        {
+          uiSingleDist += uiSingleDistComp[compID][subTUIndex];
+        }
+      }
+    }
+
+    uiSingleBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+
+    dSingleCost = m_pcRdCost->calcRdCost( uiSingleBits, uiSingleDist );
+  } // check full
+
+  // code sub-blocks
+  if( bCheckSplit )
