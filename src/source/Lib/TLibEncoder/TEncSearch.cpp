@@ -5198,3 +5198,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
 
   // code sub-blocks
   if( bCheckSplit )
+  {
+    if( bCheckFull )
+    {
+      m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_TEST ] );
+      m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+    }
+    Distortion uiSubdivDist = 0;
+    UInt       uiSubdivBits = 0;
+    Double     dSubdivCost = 0.0;
+
+    //save the non-split CBFs in case we need to restore them later
+
+    UInt bestCBF     [MAX_NUM_COMPONENT];
+    UInt bestsubTUCBF[MAX_NUM_COMPONENT][2];
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      const ComponentID compID=ComponentID(ch);
+
+      if (rTu.ProcessComponentSection(compID))
+      {
+        bestCBF[compID] = pcCU->getCbf(uiAbsPartIdx, compID, uiTrMode);
+
+        const TComRectangle &tuCompRect = rTu.getRect(compID);
+        if (tuCompRect.width != tuCompRect.height)
+        {
+          const UInt partIdxesPerSubTU = rTu.GetAbsPartIdxNumParts(compID) >> 1;
+
+          for (UInt subTU = 0; subTU < 2; subTU++)
+          {
+            bestsubTUCBF[compID][subTU] = pcCU->getCbf ((uiAbsPartIdx + (subTU * partIdxesPerSubTU)), compID, subTUDepth);
+          }
+        }
+      }
+    }
+
+
+    TComTURecurse tuRecurseChild(rTu, false);
+    const UInt uiQPartNumSubdiv = tuRecurseChild.GetAbsPartIdxNumParts();
+
+    DEBUG_STRING_NEW(sSplitString[MAX_NUM_COMPONENT])
+
+    do
+    {
+      DEBUG_STRING_NEW(childString)
+      xEstimateInterResidualQT( pcResi, dSubdivCost, uiSubdivBits, uiSubdivDist, bCheckFull ? NULL : puiZeroDist,  tuRecurseChild DEBUG_STRING_PASS_INTO(childString));
+#if DEBUG_STRING
+      // split the string by component and append to the relevant output (because decoder decodes in channel order, whereas this search searches by TU-order)
+      std::size_t lastPos=0;
+      const std::size_t endStrng=childString.find(debug_reorder_data_inter_token[MAX_NUM_COMPONENT], lastPos);
+      for(UInt ch = 0; ch < numValidComp; ch++)
+      {
+        if (lastPos!=std::string::npos && childString.find(debug_reorder_data_inter_token[ch], lastPos)==lastPos)
+        {
+          lastPos+=strlen(debug_reorder_data_inter_token[ch]); // skip leading string
+        }
+        std::size_t pos=childString.find(debug_reorder_data_inter_token[ch+1], lastPos);
+        if (pos!=std::string::npos && pos>endStrng)
+        {
+          lastPos=endStrng;
+        }
+        sSplitString[ch]+=childString.substr(lastPos, (pos==std::string::npos)? std::string::npos : (pos-lastPos) );
+        lastPos=pos;
+      }
+#endif
+    } while ( tuRecurseChild.nextSection(rTu) ) ;
+
+    UInt uiCbfAny=0;
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      UInt uiYUVCbf = 0;
+      for( UInt ui = 0; ui < 4; ++ui )
+      {
+        uiYUVCbf |= pcCU->getCbf( uiAbsPartIdx + ui * uiQPartNumSubdiv, ComponentID(ch),  uiTrMode + 1 );
+      }
+      UChar *pBase=pcCU->getCbf( ComponentID(ch) );
+      const UInt flags=uiYUVCbf << uiTrMode;
+      for( UInt ui = 0; ui < 4 * uiQPartNumSubdiv; ++ui )
+      {
+        pBase[uiAbsPartIdx + ui] |= flags;
+      }
+      uiCbfAny|=uiYUVCbf;
+    }
+
+    m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+    m_pcEntropyCoder->resetBits();
+
+    // when compID isn't a channel, code Cbfs:
+    xEncodeInterResidualQT( MAX_NUM_COMPONENT, rTu );
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      xEncodeInterResidualQT( ComponentID(ch), rTu );
+    }
+
+    uiSubdivBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+    dSubdivCost  = m_pcRdCost->calcRdCost( uiSubdivBits, uiSubdivDist );
+
+    if (!bCheckFull || (uiCbfAny && (dSubdivCost < dSingleCost)))
+    {
+      rdCost += dSubdivCost;
+      ruiBits += uiSubdivBits;
