@@ -5498,3 +5498,103 @@ Void TEncSearch::xSetInterResidualQTData( TComYuv* pcResi, Bool bSpatial, TComTU
       for (UInt ch=0; ch < getNumberValidComponents(sps->getChromaFormatIdc()); ch++)
       {
         const ComponentID compID   = ComponentID(ch);
+        if (rTu.ProcessComponentSection(compID))
+        {
+          const TComRectangle &rectCompTU(rTu.getRect(compID));
+          const UInt numCoeffInBlock    = rectCompTU.width * rectCompTU.height;
+          const UInt offset             = rTu.getCoefficientOffset(compID);
+          TCoeff* dest                  = pcCU->getCoeff(compID)                        + offset;
+          const TCoeff* src             = m_ppcQTTempCoeff[compID][uiQTTempAccessLayer] + offset;
+          ::memcpy( dest, src, sizeof(TCoeff)*numCoeffInBlock );
+
+#if ADAPTIVE_QP_SELECTION
+          TCoeff* pcArlCoeffSrc            = m_ppcQTTempArlCoeff[compID][uiQTTempAccessLayer] + offset;
+          TCoeff* pcArlCoeffDst            = pcCU->getArlCoeff(compID)                        + offset;
+          ::memcpy( pcArlCoeffDst, pcArlCoeffSrc, sizeof( TCoeff ) * numCoeffInBlock );
+#endif
+        }
+      }
+    }
+  }
+  else
+  {
+
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      xSetInterResidualQTData( pcResi, bSpatial, tuRecurseChild );
+    } while (tuRecurseChild.nextSection(rTu));
+  }
+}
+
+
+
+
+UInt TEncSearch::xModeBitsIntra( TComDataCU* pcCU, UInt uiMode, UInt uiPartOffset, UInt uiDepth, const ChannelType chType )
+{
+  // Reload only contexts required for coding intra mode information
+  m_pcRDGoOnSbacCoder->loadIntraDirMode( m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST], chType );
+
+  // Temporarily set the intra dir being tested, and only
+  // for absPartIdx, since encodeIntraDirModeLuma/Chroma only use
+  // the entry at absPartIdx.
+
+  UChar &rIntraDirVal=pcCU->getIntraDir( chType )[uiPartOffset];
+  UChar origVal=rIntraDirVal;
+  rIntraDirVal = uiMode;
+  //pcCU->setIntraDirSubParts ( chType, uiMode, uiPartOffset, uiDepth + uiInitTrDepth );
+
+  m_pcEntropyCoder->resetBits();
+  if (isLuma(chType))
+  {
+    m_pcEntropyCoder->encodeIntraDirModeLuma ( pcCU, uiPartOffset);
+  }
+  else
+  {
+    m_pcEntropyCoder->encodeIntraDirModeChroma ( pcCU, uiPartOffset);
+  }
+
+  rIntraDirVal = origVal; // restore
+
+  return m_pcEntropyCoder->getNumberOfWrittenBits();
+}
+
+
+
+
+UInt TEncSearch::xUpdateCandList( UInt uiMode, Double uiCost, UInt uiFastCandNum, UInt * CandModeList, Double * CandCostList )
+{
+  UInt i;
+  UInt shift=0;
+
+  while ( shift<uiFastCandNum && uiCost<CandCostList[ uiFastCandNum-1-shift ] )
+  {
+    shift++;
+  }
+
+  if( shift!=0 )
+  {
+    for(i=1; i<shift; i++)
+    {
+      CandModeList[ uiFastCandNum-i ] = CandModeList[ uiFastCandNum-1-i ];
+      CandCostList[ uiFastCandNum-i ] = CandCostList[ uiFastCandNum-1-i ];
+    }
+    CandModeList[ uiFastCandNum-shift ] = uiMode;
+    CandCostList[ uiFastCandNum-shift ] = uiCost;
+    return 1;
+  }
+
+  return 0;
+}
+
+
+
+
+
+/** add inter-prediction syntax elements for a CU block
+ * \param pcCU
+ * \param uiQp
+ * \param uiTrMode
+ * \param ruiBits
+ * \returns Void
+ */
