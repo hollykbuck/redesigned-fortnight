@@ -98,3 +98,46 @@ public:
   TEncSampleAdaptiveOffset();
   virtual ~TEncSampleAdaptiveOffset();
 
+  //interface
+  Void createEncData(Bool isPreDBFSamplesUsed);
+  Void destroyEncData();
+  Void initRDOCabacCoder(TEncSbac* pcRDGoOnSbacCoder, TComSlice* pcSlice) ;
+  Void resetEncoderDecisions();
+  Void SAOProcess(TComPic* pPic, Bool* sliceEnabled, const Double *lambdas, const Bool bTestSAODisableAtPictureLevel, const Double saoEncodingRate, const Double saoEncodingRateChroma, const Bool isPreDBFSamplesUsed);
+public: //methods
+  Void getPreDBFStatistics(TComPic* pPic);
+private: //methods
+  Void getStatistics(SAOStatData*** blkStats, TComPicYuv* orgYuv, TComPicYuv* srcYuv,TComPic* pPic, Bool isCalculatePreDeblockSamples = false);
+  Void decidePicParams(Bool* sliceEnabled, const TComPic* pic, const Double saoEncodingRate, const Double saoEncodingRateChroma);
+  Void decideBlkParams(TComPic* pic, Bool* sliceEnabled, SAOStatData*** blkStats, TComPicYuv* srcYuv, TComPicYuv* resYuv, SAOBlkParam* reconParams, SAOBlkParam* codedParams, const Bool bTestSAODisableAtPictureLevel, const Double saoEncodingRate, const Double saoEncodingRateChroma);
+  Void getBlkStats(const ComponentID compIdx, const Int channelBitDepth, SAOStatData* statsDataTypes, Pel* srcBlk, Pel* orgBlk, Int srcStride, Int orgStride, Int width, Int height, Bool isLeftAvail,  Bool isRightAvail, Bool isAboveAvail, Bool isBelowAvail, Bool isAboveLeftAvail, Bool isAboveRightAvail, Bool isCalculatePreDeblockSamples);
+  Void deriveModeNewRDO(const BitDepths &bitDepths, Int ctuRsAddr, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES], Bool* sliceEnabled, SAOStatData*** blkStats, SAOBlkParam& modeParam, Double& modeNormCost, TEncSbac** cabacCoderRDO, Int inCabacLabel);
+  Void deriveModeMergeRDO(const BitDepths &bitDepths, Int ctuRsAddr, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES], Bool* sliceEnabled, SAOStatData*** blkStats, SAOBlkParam& modeParam, Double& modeNormCost, TEncSbac** cabacCoderRDO, Int inCabacLabel);
+  Int64 getDistortion(const Int channelBitDepth, Int typeIdc, Int typeAuxInfo, Int* offsetVal, SAOStatData& statData);
+  Void deriveOffsets(ComponentID compIdx, const Int channelBitDepth, Int typeIdc, SAOStatData& statData, Int* quantOffsets, Int& typeAuxInfo);
+  inline Int64 estSaoDist(Int64 count, Int64 offset, Int64 diffSum, Int shift);
+  inline Int estIterOffset(Int typeIdx, Double lambda, Int offsetInput, Int64 count, Int64 diffSum, Int shift, Int bitIncrease, Int64& bestDist, Double& bestCost, Int offsetTh );
+  Void addPreDBFStatistics(SAOStatData*** blkStats);
+private: //members
+  //for RDO
+  TEncSbac**             m_pppcRDSbacCoder;
+  TEncSbac*              m_pcRDGoOnSbacCoder;
+#if FAST_BIT_EST
+  TEncBinCABACCounter**  m_pppcBinCoderCABAC;
+#else
+  TEncBinCABAC**         m_pppcBinCoderCABAC;
+#endif
+  Double                 m_lambda[MAX_NUM_COMPONENT];
+
+  //statistics
+  SAOStatData***         m_statData; //[ctu][comp][classes]
+  SAOStatData***         m_preDBFstatData;
+  Double                 m_saoDisabledRate[MAX_NUM_COMPONENT][MAX_TLAYER];
+  Int                    m_skipLinesR[MAX_NUM_COMPONENT][NUM_SAO_NEW_TYPES];
+  Int                    m_skipLinesB[MAX_NUM_COMPONENT][NUM_SAO_NEW_TYPES];
+};
+
+
+//! \}
+
+#endif
