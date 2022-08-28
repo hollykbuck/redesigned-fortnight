@@ -5598,3 +5598,103 @@ UInt TEncSearch::xUpdateCandList( UInt uiMode, Double uiCost, UInt uiFastCandNum
  * \param ruiBits
  * \returns Void
  */
+Void  TEncSearch::xAddSymbolBitsInter( TComDataCU* pcCU, UInt& ruiBits )
+{
+  if(pcCU->getMergeFlag( 0 ) && pcCU->getPartitionSize( 0 ) == SIZE_2Nx2N && !pcCU->getQtRootCbf( 0 ))
+  {
+    pcCU->setSkipFlagSubParts( true, 0, pcCU->getDepth(0) );
+
+    m_pcEntropyCoder->resetBits();
+    if(pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+    {
+      m_pcEntropyCoder->encodeCUTransquantBypassFlag(pcCU, 0, true);
+    }
+    m_pcEntropyCoder->encodeSkipFlag(pcCU, 0, true);
+    m_pcEntropyCoder->encodeMergeIndex(pcCU, 0, true);
+
+    ruiBits += m_pcEntropyCoder->getNumberOfWrittenBits();
+  }
+  else
+  {
+    m_pcEntropyCoder->resetBits();
+
+    if(pcCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+    {
+      m_pcEntropyCoder->encodeCUTransquantBypassFlag(pcCU, 0, true);
+    }
+
+    m_pcEntropyCoder->encodeSkipFlag ( pcCU, 0, true );
+    m_pcEntropyCoder->encodePredMode( pcCU, 0, true );
+    m_pcEntropyCoder->encodePartSize( pcCU, 0, pcCU->getDepth(0), true );
+    m_pcEntropyCoder->encodePredInfo( pcCU, 0 );
+
+    Bool codeDeltaQp = false;
+    Bool codeChromaQpAdj = false;
+    m_pcEntropyCoder->encodeCoeff   ( pcCU, 0, pcCU->getDepth(0), codeDeltaQp, codeChromaQpAdj );
+
+    ruiBits += m_pcEntropyCoder->getNumberOfWrittenBits();
+  }
+}
+
+
+
+
+
+/**
+ * \brief Generate half-sample interpolated block
+ *
+ * \param pattern Reference picture ROI
+ * \param biPred    Flag indicating whether block is for biprediction
+ */
+Void TEncSearch::xExtDIFUpSamplingH( TComPattern* pattern )
+{
+  Int width      = pattern->getROIYWidth();
+  Int height     = pattern->getROIYHeight();
+  Int srcStride  = pattern->getPatternLStride();
+
+  Int intStride = m_filteredBlockTmp[0].getStride(COMPONENT_Y);
+  Int dstStride = m_filteredBlock[0][0].getStride(COMPONENT_Y);
+  Pel *intPtr;
+  Pel *dstPtr;
+  Int filterSize = NTAPS_LUMA;
+  Int halfFilterSize = (filterSize>>1);
+  Pel *srcPtr = pattern->getROIY() - halfFilterSize*srcStride - 1;
+
+  const ChromaFormat chFmt = m_filteredBlock[0][0].getChromaFormat();
+
+  m_if.filterHor(COMPONENT_Y, srcPtr, srcStride, m_filteredBlockTmp[0].getAddr(COMPONENT_Y), intStride, width+1, height+filterSize, 0, false, chFmt, pattern->getBitDepthY());
+  m_if.filterHor(COMPONENT_Y, srcPtr, srcStride, m_filteredBlockTmp[2].getAddr(COMPONENT_Y), intStride, width+1, height+filterSize, 2, false, chFmt, pattern->getBitDepthY());
+
+  intPtr = m_filteredBlockTmp[0].getAddr(COMPONENT_Y) + halfFilterSize * intStride + 1;
+  dstPtr = m_filteredBlock[0][0].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width+0, height+0, 0, false, true, chFmt, pattern->getBitDepthY());
+
+  intPtr = m_filteredBlockTmp[0].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride + 1;
+  dstPtr = m_filteredBlock[2][0].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width+0, height+1, 2, false, true, chFmt, pattern->getBitDepthY());
+
+  intPtr = m_filteredBlockTmp[2].getAddr(COMPONENT_Y) + halfFilterSize * intStride;
+  dstPtr = m_filteredBlock[0][2].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width+1, height+0, 0, false, true, chFmt, pattern->getBitDepthY());
+
+  intPtr = m_filteredBlockTmp[2].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+  dstPtr = m_filteredBlock[2][2].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width+1, height+1, 2, false, true, chFmt, pattern->getBitDepthY());
+}
+
+
+
+
+
+/**
+ * \brief Generate quarter-sample interpolated blocks
+ *
+ * \param pattern    Reference picture ROI
+ * \param halfPelRef Half-pel mv
+ * \param biPred     Flag indicating whether block is for biprediction
+ */
+Void TEncSearch::xExtDIFUpSamplingQ( TComPattern* pattern, TComMv halfPelRef )
+{
+  Int width      = pattern->getROIYWidth();
+  Int height     = pattern->getROIYHeight();
+  Int srcStride  = pattern->getPatternLStride();
