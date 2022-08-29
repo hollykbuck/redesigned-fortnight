@@ -98,3 +98,103 @@ inline __m128i simdInterpolateLuma4( Short const *src , Int srcStride , __m128i 
 
 inline __m128i simdInterpolateChroma4( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
 {
+  __m128i sumHi = _mm_setzero_si128();
+  __m128i sumLo = _mm_setzero_si128();
+  for( Int n = 0 ; n < 4 ; n++ )
+  {
+    __m128i mmPix = _mm_loadl_epi64( ( __m128i* )src );
+    __m128i hi = _mm_mulhi_epi16( mmPix , mmCoeff[n] );
+    __m128i lo = _mm_mullo_epi16( mmPix , mmCoeff[n] );
+    sumHi = _mm_add_epi32( sumHi , _mm_unpackhi_epi16( lo , hi ) );
+    sumLo = _mm_add_epi32( sumLo , _mm_unpacklo_epi16( lo , hi ) );
+    src += srcStride;
+  }
+  sumHi = _mm_srai_epi32( _mm_add_epi32( sumHi , mmOffset ) , shift );
+  sumLo = _mm_srai_epi32( _mm_add_epi32( sumLo , mmOffset ) , shift );
+  return( _mm_packs_epi32( sumLo , sumHi ) );
+}
+
+inline __m128i simdInterpolateLuma8( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
+{
+  __m128i sumHi = _mm_setzero_si128();
+  __m128i sumLo = _mm_setzero_si128();
+  for( Int n = 0 ; n < 8 ; n++ )
+  {
+    __m128i mmPix = _mm_loadu_si128( ( __m128i* )src );
+    __m128i hi = _mm_mulhi_epi16( mmPix , mmCoeff[n] );
+    __m128i lo = _mm_mullo_epi16( mmPix , mmCoeff[n] );
+    sumHi = _mm_add_epi32( sumHi , _mm_unpackhi_epi16( lo , hi ) );
+    sumLo = _mm_add_epi32( sumLo , _mm_unpacklo_epi16( lo , hi ) );
+    src += srcStride;
+  }
+  sumHi = _mm_srai_epi32( _mm_add_epi32( sumHi , mmOffset ) , shift );
+  sumLo = _mm_srai_epi32( _mm_add_epi32( sumLo , mmOffset ) , shift );
+  return( _mm_packs_epi32( sumLo , sumHi ) );
+}
+
+inline __m128i simdInterpolateLuma2P8( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
+{
+  __m128i sumHi = _mm_setzero_si128();
+  __m128i sumLo = _mm_setzero_si128();
+  for( Int n = 0 ; n < 2 ; n++ )
+  {
+    __m128i mmPix = _mm_loadu_si128( ( __m128i* )src );
+    __m128i hi = _mm_mulhi_epi16( mmPix , mmCoeff[n] );
+    __m128i lo = _mm_mullo_epi16( mmPix , mmCoeff[n] );
+    sumHi = _mm_add_epi32( sumHi , _mm_unpackhi_epi16( lo , hi ) );
+    sumLo = _mm_add_epi32( sumLo , _mm_unpacklo_epi16( lo , hi ) );
+    src += srcStride;
+  }
+  sumHi = _mm_srai_epi32( _mm_add_epi32( sumHi , mmOffset ) , shift );
+  sumLo = _mm_srai_epi32( _mm_add_epi32( sumLo , mmOffset ) , shift );
+  return( _mm_packs_epi32( sumLo , sumHi ) );
+}
+
+inline __m128i simdInterpolateLuma2P4( Short const *src , Int srcStride , __m128i *mmCoeff , const __m128i & mmOffset , Int shift )
+{
+  __m128i sumHi = _mm_setzero_si128();
+  __m128i sumLo = _mm_setzero_si128();
+  for( Int n = 0 ; n < 2 ; n++ )
+  {
+    __m128i mmPix = _mm_loadl_epi64( ( __m128i* )src );
+    __m128i hi = _mm_mulhi_epi16( mmPix , mmCoeff[n] );
+    __m128i lo = _mm_mullo_epi16( mmPix , mmCoeff[n] );
+    sumHi = _mm_add_epi32( sumHi , _mm_unpackhi_epi16( lo , hi ) );
+    sumLo = _mm_add_epi32( sumLo , _mm_unpacklo_epi16( lo , hi ) );
+    src += srcStride;
+  }
+  sumHi = _mm_srai_epi32( _mm_add_epi32( sumHi , mmOffset ) , shift );
+  sumLo = _mm_srai_epi32( _mm_add_epi32( sumLo , mmOffset ) , shift );
+  return( _mm_packs_epi32( sumLo , sumHi ) );
+}
+
+inline __m128i simdClip3( __m128i mmMin , __m128i mmMax , __m128i mmPix )
+{
+  __m128i mmMask = _mm_cmpgt_epi16( mmPix , mmMin );
+  mmPix = _mm_or_si128( _mm_and_si128( mmMask , mmPix ) , _mm_andnot_si128( mmMask , mmMin ) );
+  mmMask = _mm_cmplt_epi16( mmPix , mmMax );
+  mmPix = _mm_or_si128( _mm_and_si128( mmMask , mmPix ) , _mm_andnot_si128( mmMask , mmMax ) );
+  return( mmPix );
+}
+#endif
+
+// ====================================================================================================================
+// Private member functions
+// ====================================================================================================================
+
+/**
+ * \brief Apply unit FIR filter to a block of samples
+ *
+ * \param bitDepth   bitDepth of samples
+ * \param src        Pointer to source samples
+ * \param srcStride  Stride of source samples
+ * \param dst        Pointer to destination samples
+ * \param dstStride  Stride of destination samples
+ * \param width      Width of block
+ * \param height     Height of block
+ * \param isFirst    Flag indicating whether it is the first filtering operation
+ * \param isLast     Flag indicating whether it is the last filtering operation
+ */
+Void TComInterpolationFilter::filterCopy(Int bitDepth, const Pel *src, Int srcStride, Pel *dst, Int dstStride, Int width, Int height, Bool isFirst, Bool isLast)
+{
+  Int row, col;
