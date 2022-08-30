@@ -5698,3 +5698,103 @@ Void TEncSearch::xExtDIFUpSamplingQ( TComPattern* pattern, TComMv halfPelRef )
   Int width      = pattern->getROIYWidth();
   Int height     = pattern->getROIYHeight();
   Int srcStride  = pattern->getPatternLStride();
+
+  Pel *srcPtr;
+  Int intStride = m_filteredBlockTmp[0].getStride(COMPONENT_Y);
+  Int dstStride = m_filteredBlock[0][0].getStride(COMPONENT_Y);
+  Pel *intPtr;
+  Pel *dstPtr;
+  Int filterSize = NTAPS_LUMA;
+
+  Int halfFilterSize = (filterSize>>1);
+
+  Int extHeight = (halfPelRef.getVer() == 0) ? height + filterSize : height + filterSize-1;
+
+  const ChromaFormat chFmt = m_filteredBlock[0][0].getChromaFormat();
+
+  // Horizontal filter 1/4
+  srcPtr = pattern->getROIY() - halfFilterSize * srcStride - 1;
+  intPtr = m_filteredBlockTmp[1].getAddr(COMPONENT_Y);
+  if (halfPelRef.getVer() > 0)
+  {
+    srcPtr += srcStride;
+  }
+  if (halfPelRef.getHor() >= 0)
+  {
+    srcPtr += 1;
+  }
+  m_if.filterHor(COMPONENT_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 1, false, chFmt, pattern->getBitDepthY());
+
+  // Horizontal filter 3/4
+  srcPtr = pattern->getROIY() - halfFilterSize*srcStride - 1;
+  intPtr = m_filteredBlockTmp[3].getAddr(COMPONENT_Y);
+  if (halfPelRef.getVer() > 0)
+  {
+    srcPtr += srcStride;
+  }
+  if (halfPelRef.getHor() > 0)
+  {
+    srcPtr += 1;
+  }
+  m_if.filterHor(COMPONENT_Y, srcPtr, srcStride, intPtr, intStride, width, extHeight, 3, false, chFmt, pattern->getBitDepthY());
+
+  // Generate @ 1,1
+  intPtr = m_filteredBlockTmp[1].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+  dstPtr = m_filteredBlock[1][1].getAddr(COMPONENT_Y);
+  if (halfPelRef.getVer() == 0)
+  {
+    intPtr += intStride;
+  }
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1, false, true, chFmt, pattern->getBitDepthY());
+
+  // Generate @ 3,1
+  intPtr = m_filteredBlockTmp[1].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+  dstPtr = m_filteredBlock[3][1].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3, false, true, chFmt, pattern->getBitDepthY());
+
+  if (halfPelRef.getVer() != 0)
+  {
+    // Generate @ 2,1
+    intPtr = m_filteredBlockTmp[1].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+    dstPtr = m_filteredBlock[2][1].getAddr(COMPONENT_Y);
+    if (halfPelRef.getVer() == 0)
+    {
+      intPtr += intStride;
+    }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2, false, true, chFmt, pattern->getBitDepthY());
+
+    // Generate @ 2,3
+    intPtr = m_filteredBlockTmp[3].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+    dstPtr = m_filteredBlock[2][3].getAddr(COMPONENT_Y);
+    if (halfPelRef.getVer() == 0)
+    {
+      intPtr += intStride;
+    }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 2, false, true, chFmt, pattern->getBitDepthY());
+  }
+  else
+  {
+    // Generate @ 0,1
+    intPtr = m_filteredBlockTmp[1].getAddr(COMPONENT_Y) + halfFilterSize * intStride;
+    dstPtr = m_filteredBlock[0][1].getAddr(COMPONENT_Y);
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0, false, true, chFmt, pattern->getBitDepthY());
+
+    // Generate @ 0,3
+    intPtr = m_filteredBlockTmp[3].getAddr(COMPONENT_Y) + halfFilterSize * intStride;
+    dstPtr = m_filteredBlock[0][3].getAddr(COMPONENT_Y);
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 0, false, true, chFmt, pattern->getBitDepthY());
+  }
+
+  if (halfPelRef.getHor() != 0)
+  {
+    // Generate @ 1,2
+    intPtr = m_filteredBlockTmp[2].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+    dstPtr = m_filteredBlock[1][2].getAddr(COMPONENT_Y);
+    if (halfPelRef.getHor() > 0)
+    {
+      intPtr += 1;
+    }
+    if (halfPelRef.getVer() >= 0)
+    {
+      intPtr += intStride;
+    }
