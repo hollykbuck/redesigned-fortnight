@@ -5798,3 +5798,103 @@ Void TEncSearch::xExtDIFUpSamplingQ( TComPattern* pattern, TComMv halfPelRef )
     {
       intPtr += intStride;
     }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1, false, true, chFmt, pattern->getBitDepthY());
+
+    // Generate @ 3,2
+    intPtr = m_filteredBlockTmp[2].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+    dstPtr = m_filteredBlock[3][2].getAddr(COMPONENT_Y);
+    if (halfPelRef.getHor() > 0)
+    {
+      intPtr += 1;
+    }
+    if (halfPelRef.getVer() > 0)
+    {
+      intPtr += intStride;
+    }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3, false, true, chFmt, pattern->getBitDepthY());
+  }
+  else
+  {
+    // Generate @ 1,0
+    intPtr = m_filteredBlockTmp[0].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride + 1;
+    dstPtr = m_filteredBlock[1][0].getAddr(COMPONENT_Y);
+    if (halfPelRef.getVer() >= 0)
+    {
+      intPtr += intStride;
+    }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1, false, true, chFmt, pattern->getBitDepthY());
+
+    // Generate @ 3,0
+    intPtr = m_filteredBlockTmp[0].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride + 1;
+    dstPtr = m_filteredBlock[3][0].getAddr(COMPONENT_Y);
+    if (halfPelRef.getVer() > 0)
+    {
+      intPtr += intStride;
+    }
+    m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3, false, true, chFmt, pattern->getBitDepthY());
+  }
+
+  // Generate @ 1,3
+  intPtr = m_filteredBlockTmp[3].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+  dstPtr = m_filteredBlock[1][3].getAddr(COMPONENT_Y);
+  if (halfPelRef.getVer() == 0)
+  {
+    intPtr += intStride;
+  }
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 1, false, true, chFmt, pattern->getBitDepthY());
+
+  // Generate @ 3,3
+  intPtr = m_filteredBlockTmp[3].getAddr(COMPONENT_Y) + (halfFilterSize-1) * intStride;
+  dstPtr = m_filteredBlock[3][3].getAddr(COMPONENT_Y);
+  m_if.filterVer(COMPONENT_Y, intPtr, intStride, dstPtr, dstStride, width, height, 3, false, true, chFmt, pattern->getBitDepthY());
+}
+
+
+
+
+
+//! set wp tables
+Void  TEncSearch::setWpScalingDistParam( TComDataCU* pcCU, Int iRefIdx, RefPicList eRefPicListCur )
+{
+  if ( iRefIdx<0 )
+  {
+    m_cDistParam.bApplyWeight = false;
+    return;
+  }
+
+  TComSlice       *pcSlice  = pcCU->getSlice();
+  WPScalingParam  *wp0 , *wp1;
+
+  m_cDistParam.bApplyWeight = ( pcSlice->getSliceType()==P_SLICE && pcSlice->testWeightPred() ) || ( pcSlice->getSliceType()==B_SLICE && pcSlice->testWeightBiPred() ) ;
+
+  if ( !m_cDistParam.bApplyWeight )
+  {
+    return;
+  }
+
+  Int iRefIdx0 = ( eRefPicListCur == REF_PIC_LIST_0 ) ? iRefIdx : (-1);
+  Int iRefIdx1 = ( eRefPicListCur == REF_PIC_LIST_1 ) ? iRefIdx : (-1);
+
+  getWpScaling( pcCU, iRefIdx0, iRefIdx1, wp0 , wp1 );
+
+  if ( iRefIdx0 < 0 )
+  {
+    wp0 = NULL;
+  }
+  if ( iRefIdx1 < 0 )
+  {
+    wp1 = NULL;
+  }
+
+  m_cDistParam.wpCur  = NULL;
+
+  if ( eRefPicListCur == REF_PIC_LIST_0 )
+  {
+    m_cDistParam.wpCur = wp0;
+  }
+  else
+  {
+    m_cDistParam.wpCur = wp1;
+  }
+}
+
