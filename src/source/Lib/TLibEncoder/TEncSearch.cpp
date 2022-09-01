@@ -5898,3 +5898,4 @@ Void  TEncSearch::setWpScalingDistParam( TComDataCU* pcCU, Int iRefIdx, RefPicLi
   }
 }
 
+//! \}
