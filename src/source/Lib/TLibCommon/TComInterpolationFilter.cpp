@@ -398,3 +398,103 @@ Void TComInterpolationFilter::filter(Int bitDepth, Pel const *src, Int srcStride
         src += srcStride;
         dst += dstStride;
       }
+      return;
+    }
+    else if( N == 2 && !( width & 0x07 ) )
+    {
+      Short minVal = 0;
+      __m128i mmOffset = _mm_set1_epi32( offset );
+      __m128i mmCoeff[2];
+      __m128i mmMin = _mm_set1_epi16( minVal );
+      __m128i mmMax = _mm_set1_epi16( maxVal );
+      for( Int n = 0 ; n < 2 ; n++ )
+        mmCoeff[n] = _mm_set1_epi16( c[n] );
+      for( row = 0 ; row < height ; row++ )
+      {
+        for( col = 0 ; col < width ; col += 8 )
+        {
+          __m128i mmFiltered = simdInterpolateLuma2P8( src + col , cStride , mmCoeff , mmOffset , shift );
+          if( isLast )
+          {
+            mmFiltered = simdClip3( mmMin , mmMax , mmFiltered );
+          }
+          _mm_storeu_si128( ( __m128i * )( dst + col ) , mmFiltered );
+        }
+        src += srcStride;
+        dst += dstStride;
+      }
+      return;
+    }
+    else if( N == 2 && !( width & 0x03 ) )
+    {
+      Short minVal = 0;
+      __m128i mmOffset = _mm_set1_epi32( offset );
+      __m128i mmCoeff[8];
+      __m128i mmMin = _mm_set1_epi16( minVal );
+      __m128i mmMax = _mm_set1_epi16( maxVal );
+      for( Int n = 0 ; n < 2 ; n++ )
+        mmCoeff[n] = _mm_set1_epi16( c[n] );
+      for( row = 0 ; row < height ; row++ )
+      {
+        for( col = 0 ; col < width ; col += 4 )
+        {
+          __m128i mmFiltered = simdInterpolateLuma2P4( src + col , cStride , mmCoeff , mmOffset , shift );
+          if( isLast )
+          {
+            mmFiltered = simdClip3( mmMin , mmMax , mmFiltered );
+          }
+          _mm_storel_epi64( ( __m128i * )( dst + col ) , mmFiltered );
+        }
+        src += srcStride;
+        dst += dstStride;
+      }
+      return;
+    }
+  }
+#endif
+
+  for (row = 0; row < height; row++)
+  {
+    for (col = 0; col < width; col++)
+    {
+      Int sum;
+
+      sum  = src[ col + 0 * cStride] * c[0];
+      sum += src[ col + 1 * cStride] * c[1];
+      if ( N >= 4 )
+      {
+        sum += src[ col + 2 * cStride] * c[2];
+        sum += src[ col + 3 * cStride] * c[3];
+      }
+      if ( N >= 6 )
+      {
+        sum += src[ col + 4 * cStride] * c[4];
+        sum += src[ col + 5 * cStride] * c[5];
+      }
+      if ( N == 8 )
+      {
+        sum += src[ col + 6 * cStride] * c[6];
+        sum += src[ col + 7 * cStride] * c[7];
+      }
+
+      Pel val = ( sum + offset ) >> shift;
+      if ( isLast )
+      {
+        val = ( val < 0 ) ? 0 : val;
+        val = ( val > maxVal ) ? maxVal : val;
+      }
+      dst[col] = val;
+    }
+
+    src += srcStride;
+    dst += dstStride;
+  }
+}
+
+/**
+ * \brief Filter a block of samples (horizontal)
+ *
+ * \tparam N          Number of taps
+ * \param  bitDepth   Bit depth of samples
+ * \param  src        Pointer to source samples
+ * \param  srcStride  Stride of source samples
