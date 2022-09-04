@@ -398,3 +398,103 @@ class TimingInfo
 public:
   TimingInfo()
   : m_timingInfoPresentFlag      (false)
+  , m_numUnitsInTick             (1001)
+  , m_timeScale                  (60000)
+  , m_pocProportionalToTimingFlag(false)
+  , m_numTicksPocDiffOneMinus1   (0)
+  {}
+
+  Void setTimingInfoPresentFlag( Bool flag )   { m_timingInfoPresentFlag = flag;       }
+  Bool getTimingInfoPresentFlag( ) const       { return m_timingInfoPresentFlag;       }
+
+  Void setNumUnitsInTick( UInt value )         { m_numUnitsInTick = value;             }
+  UInt getNumUnitsInTick( ) const              { return m_numUnitsInTick;              }
+
+  Void setTimeScale( UInt value )              { m_timeScale = value;                  }
+  UInt getTimeScale( ) const                   { return m_timeScale;                   }
+
+  Void setPocProportionalToTimingFlag(Bool x)  { m_pocProportionalToTimingFlag = x;    }
+  Bool getPocProportionalToTimingFlag( ) const { return m_pocProportionalToTimingFlag; }
+
+  Void setNumTicksPocDiffOneMinus1(Int x)      { m_numTicksPocDiffOneMinus1 = x;       }
+  Int  getNumTicksPocDiffOneMinus1( ) const    { return m_numTicksPocDiffOneMinus1;    }
+};
+
+struct ChromaQpAdj
+{
+  union
+  {
+    struct {
+      Int CbOffset;
+      Int CrOffset;
+    } comp;
+    Int offset[2]; /* two chroma components */
+  } u;
+};
+
+class TComVPS
+{
+private:
+  Int                   m_VPSId;
+  UInt                  m_uiMaxTLayers;
+  UInt                  m_uiMaxLayers;
+  Bool                  m_bTemporalIdNestingFlag;
+
+  UInt                  m_numReorderPics[MAX_TLAYER];
+  UInt                  m_uiMaxDecPicBuffering[MAX_TLAYER];
+  UInt                  m_uiMaxLatencyIncrease[MAX_TLAYER]; // Really max latency increase plus 1 (value 0 expresses no limit)
+
+  UInt                  m_numHrdParameters;
+  UInt                  m_maxNuhReservedZeroLayerId;
+  std::vector<TComHRD>  m_hrdParameters;
+  std::vector<UInt>     m_hrdOpSetIdx;
+  std::vector<Bool>     m_cprmsPresentFlag;
+  UInt                  m_numOpSets;
+  Bool                  m_layerIdIncludedFlag[MAX_VPS_OP_SETS_PLUS1][MAX_VPS_NUH_RESERVED_ZERO_LAYER_ID_PLUS1];
+
+  TComPTL               m_pcPTL;
+  TimingInfo            m_timingInfo;
+
+public:
+                    TComVPS();
+
+  virtual           ~TComVPS();
+
+  Void              createHrdParamBuffer()
+  {
+    m_hrdParameters.resize(getNumHrdParameters());
+    m_hrdOpSetIdx.resize(getNumHrdParameters());
+    m_cprmsPresentFlag.resize(getNumHrdParameters());
+  }
+
+  TComHRD*          getHrdParameters( UInt i )                           { return &m_hrdParameters[ i ];                                    }
+  const TComHRD*    getHrdParameters( UInt i ) const                     { return &m_hrdParameters[ i ];                                    }
+  UInt              getHrdOpSetIdx( UInt i ) const                       { return m_hrdOpSetIdx[ i ];                                       }
+  Void              setHrdOpSetIdx( UInt val, UInt i )                   { m_hrdOpSetIdx[ i ] = val;                                        }
+  Bool              getCprmsPresentFlag( UInt i ) const                  { return m_cprmsPresentFlag[ i ];                                  }
+  Void              setCprmsPresentFlag( Bool val, UInt i )              { m_cprmsPresentFlag[ i ] = val;                                   }
+
+  Int               getVPSId() const                                     { return m_VPSId;                                                  }
+  Void              setVPSId(Int i)                                      { m_VPSId = i;                                                     }
+
+  UInt              getMaxTLayers() const                                { return m_uiMaxTLayers;                                           }
+  Void              setMaxTLayers(UInt t)                                { m_uiMaxTLayers = t;                                              }
+
+  UInt              getMaxLayers() const                                 { return m_uiMaxLayers;                                            }
+  Void              setMaxLayers(UInt l)                                 { m_uiMaxLayers = l;                                               }
+
+  Bool              getTemporalNestingFlag() const                       { return m_bTemporalIdNestingFlag;                                 }
+  Void              setTemporalNestingFlag(Bool t)                       { m_bTemporalIdNestingFlag = t;                                    }
+
+  Void              setNumReorderPics(UInt v, UInt tLayer)               { m_numReorderPics[tLayer] = v;                                    }
+  UInt              getNumReorderPics(UInt tLayer) const                 { return m_numReorderPics[tLayer];                                 }
+
+  Void              setMaxDecPicBuffering(UInt v, UInt tLayer)           { assert(tLayer < MAX_TLAYER); m_uiMaxDecPicBuffering[tLayer] = v; }
+  UInt              getMaxDecPicBuffering(UInt tLayer) const             { return m_uiMaxDecPicBuffering[tLayer];                           }
+
+  Void              setMaxLatencyIncrease(UInt v, UInt tLayer)           { m_uiMaxLatencyIncrease[tLayer] = v;                              }
+  UInt              getMaxLatencyIncrease(UInt tLayer) const             { return m_uiMaxLatencyIncrease[tLayer];                           }
+
+  UInt              getNumHrdParameters() const                          { return m_numHrdParameters;                                       }
+  Void              setNumHrdParameters(UInt v)                          { m_numHrdParameters = v;                                          }
+
