@@ -1198,3 +1198,103 @@ public:
   TComPPSRExt&           getPpsRangeExtension()                                           { return m_ppsRangeExtension;                   }
 };
 
+struct WPScalingParam
+{
+  // Explicit weighted prediction parameters parsed in slice header,
+  // or Implicit weighted prediction parameters (8 bits depth values).
+  Bool bPresentFlag;
+  UInt uiLog2WeightDenom;
+  Int  iWeight;
+  Int  iOffset;
+
+  // Weighted prediction scaling values built from above parameters (bitdepth scaled):
+  Int  w;
+  Int  o;
+  Int  offset;
+  Int  shift;
+  Int  round;
+};
+
+struct WPACDCParam
+{
+  Int64 iAC;
+  Int64 iDC;
+};
+
+/// slice header class
+class TComSlice
+{
+
+private:
+  //  Bitstream writing
+  Bool                       m_saoEnabledFlag[MAX_NUM_CHANNEL_TYPE];
+  Int                        m_iPPSId;               ///< picture parameter set ID
+  Bool                       m_PicOutputFlag;        ///< pic_output_flag
+  Int                        m_iPOC;
+  Int                        m_iLastIDR;
+  Int                        m_iAssociatedIRAP;
+  NalUnitType                m_iAssociatedIRAPType;
+  const TComReferencePictureSet* m_pRPS;             //< pointer to RPS, either in the SPS or the local RPS in the same slice header
+  TComReferencePictureSet    m_localRPS;             //< RPS when present in slice header
+  Int                        m_rpsIdx;               //< index of used RPS in the SPS or -1 for local RPS in the slice header
+  TComRefPicListModification m_RefPicListModification;
+  NalUnitType                m_eNalUnitType;         ///< Nal unit type for the slice
+  SliceType                  m_eSliceType;
+  Int                        m_iSliceQp;
+  Bool                       m_dependentSliceSegmentFlag;
+#if ADAPTIVE_QP_SELECTION
+  Int                        m_iSliceQpBase;
+#endif
+  Bool                       m_ChromaQpAdjEnabled;
+  Bool                       m_deblockingFilterDisable;
+  Bool                       m_deblockingFilterOverrideFlag;      //< offsets for deblocking filter inherit from PPS
+  Int                        m_deblockingFilterBetaOffsetDiv2;    //< beta offset for deblocking filter
+  Int                        m_deblockingFilterTcOffsetDiv2;      //< tc offset for deblocking filter
+  Int                        m_list1IdxToList0Idx[MAX_NUM_REF];
+  Int                        m_aiNumRefIdx   [NUM_REF_PIC_LIST_01];    //  for multiple reference of current slice
+
+  Bool                       m_bCheckLDC;
+
+  //  Data
+  Int                        m_iSliceQpDelta;
+  Int                        m_iSliceChromaQpDelta[MAX_NUM_COMPONENT];
+  TComPic*                   m_apcRefPicList [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
+  Int                        m_aiRefPOCList  [NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
+  Bool                       m_bIsUsedAsLongTerm[NUM_REF_PIC_LIST_01][MAX_NUM_REF+1];
+  Int                        m_iDepth;
+
+  // referenced slice?
+  Bool                       m_bRefenced;
+
+  // access channel
+  const TComVPS*             m_pcVPS;
+  const TComSPS*             m_pcSPS;
+  const TComPPS*             m_pcPPS;
+  TComPic*                   m_pcPic;
+  Bool                       m_colFromL0Flag;  // collocated picture from List0 flag
+
+  Bool                       m_noOutputPriorPicsFlag;
+  Bool                       m_noRaslOutputFlag;
+  Bool                       m_handleCraAsBlaFlag;
+
+  UInt                       m_colRefIdx;
+  UInt                       m_maxNumMergeCand;
+
+  Double                     m_lambdas[MAX_NUM_COMPONENT];
+
+  Bool                       m_abEqualRef  [NUM_REF_PIC_LIST_01][MAX_NUM_REF][MAX_NUM_REF];
+  UInt                       m_uiTLayer;
+  Bool                       m_bTLayerSwitchingFlag;
+
+  SliceConstraint            m_sliceMode;
+  UInt                       m_sliceArgument;
+  UInt                       m_sliceCurStartCtuTsAddr;
+  UInt                       m_sliceCurEndCtuTsAddr;
+  UInt                       m_sliceIdx;
+  SliceConstraint            m_sliceSegmentMode;
+  UInt                       m_sliceSegmentArgument;
+  UInt                       m_sliceSegmentCurStartCtuTsAddr;
+  UInt                       m_sliceSegmentCurEndCtuTsAddr;
+  Bool                       m_nextSlice;
+  Bool                       m_nextSliceSegment;
+  UInt                       m_sliceBits;
