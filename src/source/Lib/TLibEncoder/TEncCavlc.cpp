@@ -598,3 +598,103 @@ Void TEncCavlc::codeSPS( const TComSPS* pcSPS )
     for (UInt k = 0; k < pcSPS->getNumLongTermRefPicSPS(); k++)
     {
       WRITE_CODE( pcSPS->getLtRefPicPocLsbSps(k), pcSPS->getBitsForPOC(), "lt_ref_pic_poc_lsb_sps");
+      WRITE_FLAG( pcSPS->getUsedByCurrPicLtSPSFlag(k), "used_by_curr_pic_lt_sps_flag[i]");
+    }
+  }
+  WRITE_FLAG( pcSPS->getSPSTemporalMVPEnabledFlag()  ? 1 : 0,  "sps_temporal_mvp_enabled_flag" );
+
+  WRITE_FLAG( pcSPS->getUseStrongIntraSmoothing(),             "strong_intra_smoothing_enable_flag" );
+
+  WRITE_FLAG( pcSPS->getVuiParametersPresentFlag(),            "vui_parameters_present_flag" );
+  if (pcSPS->getVuiParametersPresentFlag())
+  {
+      codeVUI(pcSPS->getVuiParameters(), pcSPS);
+  }
+
+  Bool sps_extension_present_flag=false;
+  Bool sps_extension_flags[NUM_SPS_EXTENSION_FLAGS]={false};
+
+  sps_extension_flags[SPS_EXT__REXT] = pcSPS->getSpsRangeExtension().settingsDifferFromDefaults();
+
+  // Other SPS extension flags checked here.
+
+  for(Int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++)
+  {
+    sps_extension_present_flag|=sps_extension_flags[i];
+  }
+
+  WRITE_FLAG( (sps_extension_present_flag?1:0), "sps_extension_present_flag" );
+
+  if (sps_extension_present_flag)
+  {
+#if ENC_DEC_TRACE || RExt__DECODER_DEBUG_BIT_STATISTICS
+    static const TChar *syntaxStrings[]={ "sps_range_extension_flag",
+                                          "sps_multilayer_extension_flag",
+                                          "sps_extension_6bits[0]",
+                                          "sps_extension_6bits[1]",
+                                          "sps_extension_6bits[2]",
+                                          "sps_extension_6bits[3]",
+                                          "sps_extension_6bits[4]",
+                                          "sps_extension_6bits[5]" };
+#endif
+
+    for(Int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++)
+    {
+      WRITE_FLAG( sps_extension_flags[i]?1:0, syntaxStrings[i] );
+    }
+
+    for(Int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++) // loop used so that the order is determined by the enum.
+    {
+      if (sps_extension_flags[i])
+      {
+        switch (SPSExtensionFlagIndex(i))
+        {
+          case SPS_EXT__REXT:
+          {
+            const TComSPSRExt &spsRangeExtension=pcSPS->getSpsRangeExtension();
+
+            WRITE_FLAG( (spsRangeExtension.getTransformSkipRotationEnabledFlag() ? 1 : 0),      "transform_skip_rotation_enabled_flag");
+            WRITE_FLAG( (spsRangeExtension.getTransformSkipContextEnabledFlag() ? 1 : 0),       "transform_skip_context_enabled_flag");
+            WRITE_FLAG( (spsRangeExtension.getRdpcmEnabledFlag(RDPCM_SIGNAL_IMPLICIT) ? 1 : 0), "implicit_rdpcm_enabled_flag" );
+            WRITE_FLAG( (spsRangeExtension.getRdpcmEnabledFlag(RDPCM_SIGNAL_EXPLICIT) ? 1 : 0), "explicit_rdpcm_enabled_flag" );
+            WRITE_FLAG( (spsRangeExtension.getExtendedPrecisionProcessingFlag() ? 1 : 0),       "extended_precision_processing_flag" );
+            WRITE_FLAG( (spsRangeExtension.getIntraSmoothingDisabledFlag() ? 1 : 0),            "intra_smoothing_disabled_flag" );
+            WRITE_FLAG( (spsRangeExtension.getHighPrecisionOffsetsEnabledFlag() ? 1 : 0),       "high_precision_offsets_enabled_flag" );
+            WRITE_FLAG( (spsRangeExtension.getPersistentRiceAdaptationEnabledFlag() ? 1 : 0),   "persistent_rice_adaptation_enabled_flag" );
+            WRITE_FLAG( (spsRangeExtension.getCabacBypassAlignmentEnabledFlag() ? 1 : 0),       "cabac_bypass_alignment_enabled_flag" );
+            break;
+          }
+          default:
+            assert(sps_extension_flags[i]==false); // Should never get here with an active SPS extension flag.
+            break;
+        }
+      }
+    }
+  }
+  xWriteRbspTrailingBits();
+}
+
+Void TEncCavlc::codeVPS( const TComVPS* pcVPS )
+{
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTraceVPSHeaderEnc();
+#else
+  xTraceVPSHeader();
+#endif
+#endif
+  WRITE_CODE( pcVPS->getVPSId(),                    4,        "vps_video_parameter_set_id" );
+  WRITE_FLAG(                                       1,        "vps_base_layer_internal_flag" );
+  WRITE_FLAG(                                       1,        "vps_base_layer_available_flag" );
+  WRITE_CODE( 0,                                    6,        "vps_max_layers_minus1" );
+  WRITE_CODE( pcVPS->getMaxTLayers() - 1,           3,        "vps_max_sub_layers_minus1" );
+  WRITE_FLAG( pcVPS->getTemporalNestingFlag(),                "vps_temporal_id_nesting_flag" );
+  assert (pcVPS->getMaxTLayers()>1||pcVPS->getTemporalNestingFlag());
+  WRITE_CODE( 0xffff,                              16,        "vps_reserved_0xffff_16bits" );
+  codePTL( pcVPS->getPTL(), true, pcVPS->getMaxTLayers() - 1 );
+  const Bool subLayerOrderingInfoPresentFlag = 1;
+  WRITE_FLAG(subLayerOrderingInfoPresentFlag,              "vps_sub_layer_ordering_info_present_flag");
+  for(UInt i=0; i <= pcVPS->getMaxTLayers()-1; i++)
+  {
+    WRITE_UVLC( pcVPS->getMaxDecPicBuffering(i) - 1,       "vps_max_dec_pic_buffering_minus1[i]" );
+    WRITE_UVLC( pcVPS->getNumReorderPics(i),               "vps_max_num_reorder_pics[i]" );
