@@ -1298,3 +1298,103 @@ private:
   Bool                       m_nextSlice;
   Bool                       m_nextSliceSegment;
   UInt                       m_sliceBits;
+  UInt                       m_sliceSegmentBits;
+  Bool                       m_bFinalized;
+
+  Bool                       m_bTestWeightPred;
+  Bool                       m_bTestWeightBiPred;
+  WPScalingParam             m_weightPredTable[NUM_REF_PIC_LIST_01][MAX_NUM_REF][MAX_NUM_COMPONENT]; // [REF_PIC_LIST_0 or REF_PIC_LIST_1][refIdx][0:Y, 1:U, 2:V]
+  WPACDCParam                m_weightACDCParam[MAX_NUM_COMPONENT];
+
+  std::vector<UInt>          m_substreamSizes;
+
+  Bool                       m_cabacInitFlag;
+
+  Bool                       m_bLMvdL1Zero;
+  Bool                       m_temporalLayerNonReferenceFlag;
+  Bool                       m_LFCrossSliceBoundaryFlag;
+
+  Bool                       m_enableTMVPFlag;
+
+  SliceType                  m_encCABACTableIdx;           // Used to transmit table selection across slices.
+
+public:
+                              TComSlice();
+  virtual                     ~TComSlice();
+  Void                        initSlice();
+
+  Void                        setVPS( TComVPS* pcVPS )                               { m_pcVPS = pcVPS;                                              }
+  const TComVPS*              getVPS() const                                         { return m_pcVPS;                                               }
+  Void                        setSPS( const TComSPS* pcSPS )                         { m_pcSPS = pcSPS;                                              }
+  const TComSPS*              getSPS() const                                         { return m_pcSPS;                                               }
+
+  Void                        setPPS( const TComPPS* pcPPS )                         { m_pcPPS = pcPPS; m_iPPSId = (pcPPS) ? pcPPS->getPPSId() : -1; }
+  const TComPPS*              getPPS() const                                         { return m_pcPPS;                                               }
+
+  Void                        setPPSId( Int PPSId )                                  { m_iPPSId = PPSId;                                             }
+  Int                         getPPSId() const                                       { return m_iPPSId;                                              }
+  Void                        setPicOutputFlag( Bool b   )                           { m_PicOutputFlag = b;                                          }
+  Bool                        getPicOutputFlag() const                               { return m_PicOutputFlag;                                       }
+  Void                        setSaoEnabledFlag(ChannelType chType, Bool s)          {m_saoEnabledFlag[chType] =s;                                   }
+  Bool                        getSaoEnabledFlag(ChannelType chType) const            { return m_saoEnabledFlag[chType];                              }
+  Void                        setRPS( const TComReferencePictureSet *pcRPS )         { m_pRPS = pcRPS;                                               }
+  const TComReferencePictureSet* getRPS()                                            { return m_pRPS;                                                }
+  TComReferencePictureSet*    getLocalRPS()                                          { return &m_localRPS;                                           }
+
+  Void                        setRPSidx( Int rpsIdx )                                { m_rpsIdx = rpsIdx;                                            }
+  Int                         getRPSidx() const                                      { return m_rpsIdx;                                              }
+  TComRefPicListModification* getRefPicListModification()                            { return &m_RefPicListModification;                             }
+  Void                        setLastIDR(Int iIDRPOC)                                { m_iLastIDR = iIDRPOC;                                         }
+  Int                         getLastIDR() const                                     { return m_iLastIDR;                                            }
+  Void                        setAssociatedIRAPPOC(Int iAssociatedIRAPPOC)           { m_iAssociatedIRAP = iAssociatedIRAPPOC;                       }
+  Int                         getAssociatedIRAPPOC() const                           { return m_iAssociatedIRAP;                                     }
+  Void                        setAssociatedIRAPType(NalUnitType associatedIRAPType)  { m_iAssociatedIRAPType = associatedIRAPType;                   }
+  NalUnitType                 getAssociatedIRAPType() const                          { return m_iAssociatedIRAPType;                                 }
+  SliceType                   getSliceType() const                                   { return m_eSliceType;                                          }
+  Int                         getPOC() const                                         { return m_iPOC;                                                }
+  Int                         getSliceQp() const                                     { return m_iSliceQp;                                            }
+  Bool                        getUseWeightedPrediction() const                       { return( (m_eSliceType==P_SLICE && testWeightPred()) || (m_eSliceType==B_SLICE && testWeightBiPred()) ); }
+  Bool                        getDependentSliceSegmentFlag() const                   { return m_dependentSliceSegmentFlag;                           }
+  Void                        setDependentSliceSegmentFlag(Bool val)                 { m_dependentSliceSegmentFlag = val;                            }
+#if ADAPTIVE_QP_SELECTION
+  Int                         getSliceQpBase() const                                 { return m_iSliceQpBase;                                        }
+#endif
+  Int                         getSliceQpDelta() const                                { return m_iSliceQpDelta;                                       }
+  Int                         getSliceChromaQpDelta(ComponentID compID) const        { return isLuma(compID) ? 0 : m_iSliceChromaQpDelta[compID];    }
+  Bool                        getUseChromaQpAdj() const                              { return m_ChromaQpAdjEnabled;                                  }
+  Bool                        getDeblockingFilterDisable() const                     { return m_deblockingFilterDisable;                             }
+  Bool                        getDeblockingFilterOverrideFlag() const                { return m_deblockingFilterOverrideFlag;                        }
+  Int                         getDeblockingFilterBetaOffsetDiv2()const               { return m_deblockingFilterBetaOffsetDiv2;                      }
+  Int                         getDeblockingFilterTcOffsetDiv2() const                { return m_deblockingFilterTcOffsetDiv2;                        }
+
+  Int                         getNumRefIdx( RefPicList e ) const                     { return m_aiNumRefIdx[e];                                      }
+  TComPic*                    getPic()                                               { return m_pcPic;                                               }
+  const TComPic*              getPic() const                                         { return m_pcPic;                                               }
+  TComPic*                    getRefPic( RefPicList e, Int iRefIdx)                  { return m_apcRefPicList[e][iRefIdx];                           }
+  const TComPic*              getRefPic( RefPicList e, Int iRefIdx) const            { return m_apcRefPicList[e][iRefIdx];                           }
+  Int                         getRefPOC( RefPicList e, Int iRefIdx) const            { return m_aiRefPOCList[e][iRefIdx];                            }
+  Int                         getDepth() const                                       { return m_iDepth;                                              }
+  Bool                        getColFromL0Flag() const                               { return m_colFromL0Flag;                                       }
+  UInt                        getColRefIdx() const                                   { return m_colRefIdx;                                           }
+  Void                        checkColRefIdx(UInt curSliceIdx, TComPic* pic);
+  Bool                        getIsUsedAsLongTerm(Int i, Int j) const                { return m_bIsUsedAsLongTerm[i][j];                             }
+  Void                        setIsUsedAsLongTerm(Int i, Int j, Bool value)          { m_bIsUsedAsLongTerm[i][j] = value;                            }
+  Bool                        getCheckLDC() const                                    { return m_bCheckLDC;                                           }
+  Bool                        getMvdL1ZeroFlag() const                               { return m_bLMvdL1Zero;                                         }
+  Int                         getNumRpsCurrTempList() const;
+  Int                         getList1IdxToList0Idx( Int list1Idx ) const            { return m_list1IdxToList0Idx[list1Idx];                        }
+  Void                        setReferenced(Bool b)                                  { m_bRefenced = b;                                              }
+  Bool                        isReferenced() const                                   { return m_bRefenced;                                           }
+  Bool                        isReferenceNalu() const                                { return ((getNalUnitType() <= NAL_UNIT_RESERVED_VCL_R15) && (getNalUnitType()%2 != 0)) || ((getNalUnitType() >= NAL_UNIT_CODED_SLICE_BLA_W_LP) && (getNalUnitType() <= NAL_UNIT_RESERVED_IRAP_VCL23) ); }
+  Void                        setPOC( Int i )                                        { m_iPOC              = i; }
+  Void                        setNalUnitType( NalUnitType e )                        { m_eNalUnitType      = e;                                      }
+  NalUnitType                 getNalUnitType() const                                 { return m_eNalUnitType;                                        }
+  Bool                        getRapPicFlag() const;
+  Bool                        getIdrPicFlag() const                                  { return getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL || getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP; }
+  Bool                        isIRAP() const                                         { return (getNalUnitType() >= 16) && (getNalUnitType() <= 23);  }
+  Void                        checkCRA(const TComReferencePictureSet *pReferencePictureSet, Int& pocCRA, NalUnitType& associatedIRAPType, TComList<TComPic *>& rcListPic);
+  Void                        decodingRefreshMarking(Int& pocCRA, Bool& bRefreshPending, TComList<TComPic*>& rcListPic, const bool bEfficientFieldIRAPEnabled);
+  Void                        setSliceType( SliceType e )                            { m_eSliceType        = e;                                      }
+  Void                        setSliceQp( Int i )                                    { m_iSliceQp          = i;                                      }
+#if ADAPTIVE_QP_SELECTION
+  Void                        setSliceQpBase( Int i )                                { m_iSliceQpBase      = i;                                      }
