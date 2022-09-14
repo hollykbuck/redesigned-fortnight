@@ -998,3 +998,103 @@ Void TEncCavlc::codeSliceHeader         ( TComSlice* pcSlice )
           if ( numRpsCurrTempList1 > 1 )
           {
             Int length = 1;
+            numRpsCurrTempList1 --;
+            while ( numRpsCurrTempList1 >>= 1)
+            {
+              length ++;
+            }
+            for(Int i = 0; i < pcSlice->getNumRefIdx( REF_PIC_LIST_1 ); i++)
+            {
+              WRITE_CODE( refPicListModification->getRefPicSetIdxL1(i), length, "list_entry_l1");
+            }
+          }
+        }
+      }
+    }
+
+    if (pcSlice->isInterB())
+    {
+      WRITE_FLAG( pcSlice->getMvdL1ZeroFlag() ? 1 : 0,   "mvd_l1_zero_flag");
+    }
+
+    if(!pcSlice->isIntra())
+    {
+      if (!pcSlice->isIntra() && pcSlice->getPPS()->getCabacInitPresentFlag())
+      {
+#if MCTS_EXTRACTION
+        Bool encCabacInitFlag = pcSlice->getCabacInitFlag();
+#else
+        SliceType sliceType   = pcSlice->getSliceType();
+        SliceType  encCABACTableIdx = pcSlice->getEncCABACTableIdx();
+        Bool encCabacInitFlag = (sliceType!=encCABACTableIdx && encCABACTableIdx!=I_SLICE) ? true : false;
+        pcSlice->setCabacInitFlag( encCabacInitFlag );
+#endif
+
+        WRITE_FLAG( encCabacInitFlag?1:0, "cabac_init_flag" );
+      }
+    }
+
+    if ( pcSlice->getEnableTMVPFlag() )
+    {
+      if ( pcSlice->getSliceType() == B_SLICE )
+      {
+        WRITE_FLAG( pcSlice->getColFromL0Flag(), "collocated_from_l0_flag" );
+      }
+
+      if ( pcSlice->getSliceType() != I_SLICE &&
+        ((pcSlice->getColFromL0Flag()==1 && pcSlice->getNumRefIdx(REF_PIC_LIST_0)>1)||
+        (pcSlice->getColFromL0Flag()==0  && pcSlice->getNumRefIdx(REF_PIC_LIST_1)>1)))
+      {
+        WRITE_UVLC( pcSlice->getColRefIdx(), "collocated_ref_idx" );
+      }
+    }
+    if ( (pcSlice->getPPS()->getUseWP() && pcSlice->getSliceType()==P_SLICE) || (pcSlice->getPPS()->getWPBiPred() && pcSlice->getSliceType()==B_SLICE) )
+    {
+      xCodePredWeightTable( pcSlice );
+    }
+    assert(pcSlice->getMaxNumMergeCand()<=MRG_MAX_NUM_CANDS);
+    if (!pcSlice->isIntra())
+    {
+      WRITE_UVLC(MRG_MAX_NUM_CANDS - pcSlice->getMaxNumMergeCand(), "five_minus_max_num_merge_cand");
+    }
+    Int iCode = pcSlice->getSliceQp() - ( pcSlice->getPPS()->getPicInitQPMinus26() + 26 );
+    WRITE_SVLC( iCode, "slice_qp_delta" );
+    if (pcSlice->getPPS()->getSliceChromaQpFlag())
+    {
+      if (numberValidComponents > COMPONENT_Cb)
+      {
+        WRITE_SVLC( pcSlice->getSliceChromaQpDelta(COMPONENT_Cb), "slice_cb_qp_offset" );
+      }
+      if (numberValidComponents > COMPONENT_Cr)
+      {
+        WRITE_SVLC( pcSlice->getSliceChromaQpDelta(COMPONENT_Cr), "slice_cr_qp_offset" );
+      }
+      assert(numberValidComponents <= COMPONENT_Cr+1);
+    }
+
+    if (pcSlice->getPPS()->getPpsRangeExtension().getChromaQpOffsetListEnabledFlag())
+    {
+      WRITE_FLAG(pcSlice->getUseChromaQpAdj(), "cu_chroma_qp_offset_enabled_flag");
+    }
+
+    if (pcSlice->getPPS()->getDeblockingFilterControlPresentFlag())
+    {
+      if (pcSlice->getPPS()->getDeblockingFilterOverrideEnabledFlag() )
+      {
+        WRITE_FLAG(pcSlice->getDeblockingFilterOverrideFlag(), "deblocking_filter_override_flag");
+      }
+      if (pcSlice->getDeblockingFilterOverrideFlag())
+      {
+        WRITE_FLAG(pcSlice->getDeblockingFilterDisable(), "slice_deblocking_filter_disabled_flag");
+        if(!pcSlice->getDeblockingFilterDisable())
+        {
+          WRITE_SVLC (pcSlice->getDeblockingFilterBetaOffsetDiv2(), "slice_beta_offset_div2");
+          WRITE_SVLC (pcSlice->getDeblockingFilterTcOffsetDiv2(),   "slice_tc_offset_div2");
+        }
+      }
+    }
+
+    Bool isSAOEnabled = pcSlice->getSPS()->getUseSAO() && (pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_LUMA) || (chromaEnabled && pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_CHROMA)));
+    Bool isDBFEnabled = (!pcSlice->getDeblockingFilterDisable());
+
+    if(pcSlice->getPPS()->getLoopFilterAcrossSlicesEnabledFlag() && ( isSAOEnabled || isDBFEnabled ))
