@@ -1198,3 +1198,103 @@ Void TEncCavlc::codeProfileTier( const ProfileTierLevel* ptl, const Bool /*bIsSu
   WRITE_FLAG(false,   PTL_TRACE_TEXT("inbld_flag" ));
 #undef PTL_TRACE_TEXT
 }
+
+/**
+ * Write tiles and wavefront substreams sizes for the slice header (entry points).
+ *
+ * \param pSlice TComSlice structure that contains the substream size information.
+ */
+Void  TEncCavlc::codeTilesWPPEntryPoint( TComSlice* pSlice )
+{
+  if (!pSlice->getPPS()->getTilesEnabledFlag() && !pSlice->getPPS()->getEntropyCodingSyncEnabledFlag())
+  {
+    return;
+  }
+  UInt maxOffset = 0;
+  for(Int idx=0; idx<pSlice->getNumberOfSubstreamSizes(); idx++)
+  {
+    UInt offset=pSlice->getSubstreamSize(idx);
+    if ( offset > maxOffset )
+    {
+      maxOffset = offset;
+    }
+  }
+
+  // Determine number of bits "offsetLenMinus1+1" required for entry point information
+  UInt offsetLenMinus1 = 0;
+  while (maxOffset >= (1u << (offsetLenMinus1 + 1)))
+  {
+    offsetLenMinus1++;
+    assert(offsetLenMinus1 + 1 < 32);
+  }
+
+  WRITE_UVLC(pSlice->getNumberOfSubstreamSizes(), "num_entry_point_offsets");
+  if (pSlice->getNumberOfSubstreamSizes()>0)
+  {
+    WRITE_UVLC(offsetLenMinus1, "offset_len_minus1");
+
+    for (UInt idx=0; idx<pSlice->getNumberOfSubstreamSizes(); idx++)
+    {
+      WRITE_CODE(pSlice->getSubstreamSize(idx)-1, offsetLenMinus1+1, "entry_point_offset_minus1");
+    }
+  }
+}
+
+Void TEncCavlc::codeTerminatingBit      ( UInt /*uilsLast*/ )
+{
+}
+
+Void TEncCavlc::codeSliceFinish ()
+{
+}
+
+Void TEncCavlc::codeMVPIdx ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, RefPicList /*eRefList*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codePartSize( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codePredMode( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeMergeFlag    ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeMergeIndex    ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeInterModeFlag( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/, UInt /*uiEncMode*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeCUTransquantBypassFlag( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeSkipFlag( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeSplitFlag   ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TEncCavlc::codeTransformSubdivFlag( UInt /*uiSymbol*/, UInt /*uiCtx*/ )
+{
+  assert(0);
+}
+
