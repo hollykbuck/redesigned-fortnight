@@ -1398,3 +1398,103 @@ Void TEncCavlc::estBit( estBitsSbacStruct* /*pcEstBitsCabac*/, Int /*width*/, In
 Void TEncCavlc::xCodePredWeightTable( TComSlice* pcSlice )
 {
   WPScalingParam  *wp;
+  const ChromaFormat    format                = pcSlice->getPic()->getChromaFormat();
+  const UInt            numberValidComponents = getNumberValidComponents(format);
+  const Bool            bChroma               = isChromaEnabled(format);
+  const Int             iNbRef                = (pcSlice->getSliceType() == B_SLICE ) ? (2) : (1);
+        Bool            bDenomCoded           = false;
+        UInt            uiTotalSignalledWeightFlags = 0;
+
+  if ( (pcSlice->getSliceType()==P_SLICE && pcSlice->getPPS()->getUseWP()) || (pcSlice->getSliceType()==B_SLICE && pcSlice->getPPS()->getWPBiPred()) )
+  {
+    for ( Int iNumRef=0 ; iNumRef<iNbRef ; iNumRef++ ) // loop over l0 and l1 syntax elements
+    {
+      RefPicList  eRefPicList = ( iNumRef ? REF_PIC_LIST_1 : REF_PIC_LIST_0 );
+
+      // NOTE: wp[].uiLog2WeightDenom and wp[].bPresentFlag are actually per-channel-type settings.
+
+      for ( Int iRefIdx=0 ; iRefIdx<pcSlice->getNumRefIdx(eRefPicList) ; iRefIdx++ )
+      {
+        pcSlice->getWpScaling(eRefPicList, iRefIdx, wp);
+        if ( !bDenomCoded )
+        {
+          Int iDeltaDenom;
+          WRITE_UVLC( wp[COMPONENT_Y].uiLog2WeightDenom, "luma_log2_weight_denom" );
+
+          if( bChroma )
+          {
+            assert(wp[COMPONENT_Cb].uiLog2WeightDenom == wp[COMPONENT_Cr].uiLog2WeightDenom); // check the channel-type settings are consistent across components.
+            iDeltaDenom = (wp[COMPONENT_Cb].uiLog2WeightDenom - wp[COMPONENT_Y].uiLog2WeightDenom);
+            WRITE_SVLC( iDeltaDenom, "delta_chroma_log2_weight_denom" );
+          }
+          bDenomCoded = true;
+        }
+        WRITE_FLAG( wp[COMPONENT_Y].bPresentFlag, iNumRef==0?"luma_weight_l0_flag[i]":"luma_weight_l1_flag[i]" );
+        uiTotalSignalledWeightFlags += wp[COMPONENT_Y].bPresentFlag;
+      }
+      if (bChroma)
+      {
+        for ( Int iRefIdx=0 ; iRefIdx<pcSlice->getNumRefIdx(eRefPicList) ; iRefIdx++ )
+        {
+          pcSlice->getWpScaling(eRefPicList, iRefIdx, wp);
+          assert(wp[COMPONENT_Cb].bPresentFlag == wp[COMPONENT_Cr].bPresentFlag); // check the channel-type settings are consistent across components.
+          WRITE_FLAG( wp[COMPONENT_Cb].bPresentFlag, iNumRef==0?"chroma_weight_l0_flag[i]":"chroma_weight_l1_flag[i]" );
+          uiTotalSignalledWeightFlags += 2*wp[COMPONENT_Cb].bPresentFlag;
+        }
+      }
+
+      for ( Int iRefIdx=0 ; iRefIdx<pcSlice->getNumRefIdx(eRefPicList) ; iRefIdx++ )
+      {
+        pcSlice->getWpScaling(eRefPicList, iRefIdx, wp);
+        if ( wp[COMPONENT_Y].bPresentFlag )
+        {
+          Int iDeltaWeight = (wp[COMPONENT_Y].iWeight - (1<<wp[COMPONENT_Y].uiLog2WeightDenom));
+          WRITE_SVLC( iDeltaWeight, iNumRef==0?"delta_luma_weight_l0[i]":"delta_luma_weight_l1[i]" );
+          WRITE_SVLC( wp[COMPONENT_Y].iOffset, iNumRef==0?"luma_offset_l0[i]":"luma_offset_l1[i]" );
+        }
+
+        if ( bChroma )
+        {
+          if ( wp[COMPONENT_Cb].bPresentFlag )
+          {
+            for ( Int j = COMPONENT_Cb ; j < numberValidComponents ; j++ )
+            {
+              assert(wp[COMPONENT_Cb].uiLog2WeightDenom == wp[COMPONENT_Cr].uiLog2WeightDenom);
+              Int iDeltaWeight = (wp[j].iWeight - (1<<wp[COMPONENT_Cb].uiLog2WeightDenom));
+              WRITE_SVLC( iDeltaWeight, iNumRef==0?"delta_chroma_weight_l0[i]":"delta_chroma_weight_l1[i]" );
+
+              Int range=pcSlice->getSPS()->getSpsRangeExtension().getHighPrecisionOffsetsEnabledFlag() ? (1<<pcSlice->getSPS()->getBitDepth(CHANNEL_TYPE_CHROMA))/2 : 128;
+              Int pred = ( range - ( ( range*wp[j].iWeight)>>(wp[j].uiLog2WeightDenom) ) );
+              Int iDeltaChroma = (wp[j].iOffset - pred);
+              WRITE_SVLC( iDeltaChroma, iNumRef==0?"delta_chroma_offset_l0[i]":"delta_chroma_offset_l1[i]" );
+            }
+          }
+        }
+      }
+    }
+    assert(uiTotalSignalledWeightFlags<=24);
+  }
+}
+
+/** code quantization matrix
+ *  \param scalingList quantization matrix information
+ */
+Void TEncCavlc::codeScalingList( const TComScalingList &scalingList )
+{
+  //for each size
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    const Int predListStep = (sizeId == SCALING_LIST_32x32? (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) : 1); // if 32x32, skip over chroma entries.
+
+    for(UInt listId = 0; listId < SCALING_LIST_NUM; listId+=predListStep)
+    {
+      Bool scalingListPredModeFlag = scalingList.getScalingListPredModeFlag(sizeId, listId);
+      WRITE_FLAG( scalingListPredModeFlag, "scaling_list_pred_mode_flag" );
+      if(!scalingListPredModeFlag)// Copy Mode
+      {
+        if (sizeId == SCALING_LIST_32x32)
+        {
+          // adjust the code, to cope with the missing chroma entries
+          WRITE_UVLC( ((Int)listId - (Int)scalingList.getRefMatrixId (sizeId,listId)) / (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES), "scaling_list_pred_matrix_id_delta");
+        }
+        else
