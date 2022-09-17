@@ -98,3 +98,54 @@ protected:
   : m_pcBitstream (NULL)
   {};
   virtual ~SyntaxElementParser() {};
+
+#if DECODER_PARTIAL_CONFORMANCE_CHECK!=0
+  Void  xReadSCodeChk ( UInt   length, Int& val, const TChar *pSymbolName, const Int minValIncl, const Int maxValIncl );
+  Void  xReadCodeChk  ( UInt   length, UInt& val, const TChar *pSymbolName, const UInt minValIncl, const UInt maxValIncl );
+  Void  xReadUvlcChk  ( UInt&  val, const TChar *pSymbolName, const UInt minValIncl, const UInt maxValIncl );
+  Void  xReadSvlcChk  ( Int&   val, const TChar *pSymbolName, const Int  minValIncl, const Int  maxValIncl );
+  Void  xReadFlagChk  ( UInt&  val, const TChar *pSymbolName, const UInt minValIncl, const UInt maxValIncl );
+#endif
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+  Void  xReadSCode   ( UInt   length, Int& val, const TChar *pSymbolName );
+  Void  xReadCode    ( UInt   length, UInt& val, const TChar *pSymbolName );
+  Void  xReadUvlc    ( UInt&  val, const TChar *pSymbolName );
+  Void  xReadSvlc    ( Int&   val, const TChar *pSymbolName );
+  Void  xReadFlag    ( UInt&  val, const TChar *pSymbolName );
+#else
+  Void  xReadSCode   ( UInt   length, Int& val );
+  Void  xReadCode    ( UInt   length, UInt& val );
+  Void  xReadUvlc    ( UInt&  val );
+  Void  xReadSvlc    ( Int&   val );
+  Void  xReadFlag    ( UInt&  val );
+#endif
+public:
+  Void  setBitstream ( TComInputBitstream* p )   { m_pcBitstream = p; }
+  TComInputBitstream* getBitstream() { return m_pcBitstream; }
+
+protected:
+  Void xReadRbspTrailingBits();
+};
+
+class AUDReader: public SyntaxElementParser
+{
+public:
+  AUDReader() {};
+  virtual ~AUDReader() {};
+  Void parseAccessUnitDelimiter(TComInputBitstream* bs, UInt &picType);
+};
+
+class FDReader: public SyntaxElementParser
+{
+public:
+  FDReader() {};
+  virtual ~FDReader() {};
+  Void parseFillerData(TComInputBitstream* bs, UInt &fdSize);
+};
+
+
+//! \}
+
+#endif // !defined(__SYNTAXELEMENTPARSER__)
+
