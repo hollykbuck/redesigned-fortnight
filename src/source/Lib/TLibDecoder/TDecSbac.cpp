@@ -198,3 +198,103 @@ Void TDecSbac::parseRemainingBytes( Bool noTrailingBytesExpected )
       if (trailingNullByte!=0)
       {
         printf("Trailing byte should be 0, but has value %02x\n", trailingNullByte);
+        assert(trailingNullByte==0);
+      }
+    }
+  }
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecSbac::xReadUnaryMaxSymbol( UInt& ruiSymbol, ContextModel* pcSCModel, Int iOffset, UInt uiMaxSymbol, const class TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecSbac::xReadUnaryMaxSymbol( UInt& ruiSymbol, ContextModel* pcSCModel, Int iOffset, UInt uiMaxSymbol )
+#endif
+{
+  if (uiMaxSymbol == 0)
+  {
+    ruiSymbol = 0;
+    return;
+  }
+
+  m_pcTDecBinIf->decodeBin( ruiSymbol, pcSCModel[0] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+
+  if( ruiSymbol == 0 || uiMaxSymbol == 1 )
+  {
+    return;
+  }
+
+  UInt uiSymbol = 0;
+  UInt uiCont;
+
+  do
+  {
+    m_pcTDecBinIf->decodeBin( uiCont, pcSCModel[ iOffset ] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+    uiSymbol++;
+  } while( uiCont && ( uiSymbol < uiMaxSymbol - 1 ) );
+
+  if( uiCont && ( uiSymbol == uiMaxSymbol - 1 ) )
+  {
+    uiSymbol++;
+  }
+
+  ruiSymbol = uiSymbol;
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecSbac::xReadEpExGolomb( UInt& ruiSymbol, UInt uiCount, const class TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecSbac::xReadEpExGolomb( UInt& ruiSymbol, UInt uiCount )
+#endif
+{
+  UInt uiSymbol = 0;
+  UInt uiBit = 1;
+
+  while( uiBit )
+  {
+    m_pcTDecBinIf->decodeBinEP( uiBit RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+    uiSymbol += uiBit << uiCount++;
+  }
+
+  if ( --uiCount )
+  {
+    UInt bins;
+    m_pcTDecBinIf->decodeBinsEP( bins, uiCount RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+    uiSymbol += bins;
+  }
+
+  ruiSymbol = uiSymbol;
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecSbac::xReadUnarySymbol( UInt& ruiSymbol, ContextModel* pcSCModel, Int iOffset, const class TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecSbac::xReadUnarySymbol( UInt& ruiSymbol, ContextModel* pcSCModel, Int iOffset )
+#endif
+{
+  m_pcTDecBinIf->decodeBin( ruiSymbol, pcSCModel[0] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat));
+
+  if( !ruiSymbol )
+  {
+    return;
+  }
+
+  UInt uiSymbol = 0;
+  UInt uiCont;
+
+  do
+  {
+    m_pcTDecBinIf->decodeBin( uiCont, pcSCModel[ iOffset ] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat));
+    uiSymbol++;
+  } while( uiCont );
+
+  ruiSymbol = uiSymbol;
+}
+
+
+/** Parsing of coeff_abs_level_remaing
+ * \param rSymbol                 reference to coeff_abs_level_remaing
+ * \param rParam                  reference to parameter
+ * \param useLimitedPrefixLength
+ * \param maxLog2TrDynamicRange
+ */
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
