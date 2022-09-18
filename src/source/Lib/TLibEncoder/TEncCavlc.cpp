@@ -1498,3 +1498,70 @@ Void TEncCavlc::codeScalingList( const TComScalingList &scalingList )
           WRITE_UVLC( ((Int)listId - (Int)scalingList.getRefMatrixId (sizeId,listId)) / (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES), "scaling_list_pred_matrix_id_delta");
         }
         else
+        {
+          WRITE_UVLC( (Int)listId - (Int)scalingList.getRefMatrixId (sizeId,listId), "scaling_list_pred_matrix_id_delta");
+        }
+      }
+      else// DPCM Mode
+      {
+        xCodeScalingList(&scalingList, sizeId, listId);
+      }
+    }
+  }
+  return;
+}
+/** code DPCM
+ * \param scalingList quantization matrix information
+ * \param sizeId      size index
+ * \param listId      list index
+ */
+Void TEncCavlc::xCodeScalingList(const TComScalingList* scalingList, UInt sizeId, UInt listId)
+{
+  Int coefNum = min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]);
+  UInt* scan  = g_scanOrder[SCAN_UNGROUPED][SCAN_DIAG][sizeId==0 ? 2 : 3][sizeId==0 ? 2 : 3];
+  Int nextCoef = SCALING_LIST_START_VALUE;
+  Int data;
+  const Int *src = scalingList->getScalingListAddress(sizeId, listId);
+  if( sizeId > SCALING_LIST_8x8 )
+  {
+    WRITE_SVLC( scalingList->getScalingListDC(sizeId,listId) - 8, "scaling_list_dc_coef_minus8");
+    nextCoef = scalingList->getScalingListDC(sizeId,listId);
+  }
+  for(Int i=0;i<coefNum;i++)
+  {
+    data = src[scan[i]] - nextCoef;
+    nextCoef = src[scan[i]];
+    if(data > 127)
+    {
+      data = data - 256;
+    }
+    if(data < -128)
+    {
+      data = data + 256;
+    }
+
+    WRITE_SVLC( data,  "scaling_list_delta_coef");
+  }
+}
+
+Bool TEncCavlc::findMatchingLTRP ( TComSlice* pcSlice, UInt *ltrpsIndex, Int ltrpPOC, Bool usedFlag )
+{
+  // Bool state = true, state2 = false;
+  Int lsb = ltrpPOC & ((1<<pcSlice->getSPS()->getBitsForPOC())-1);
+  for (Int k = 0; k < pcSlice->getSPS()->getNumLongTermRefPicSPS(); k++)
+  {
+    if ( (lsb == pcSlice->getSPS()->getLtRefPicPocLsbSps(k)) && (usedFlag == pcSlice->getSPS()->getUsedByCurrPicLtSPSFlag(k)) )
+    {
+      *ltrpsIndex = k;
+      return true;
+    }
+  }
+  return false;
+}
+
+Void TEncCavlc::codeExplicitRdpcmMode( TComTU& /*rTu*/, const ComponentID /*compID*/ )
+ {
+   assert(0);
+ }
+
+//! \}
