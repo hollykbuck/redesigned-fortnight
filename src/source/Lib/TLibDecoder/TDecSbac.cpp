@@ -298,3 +298,103 @@ Void TDecSbac::xReadUnarySymbol( UInt& ruiSymbol, ContextModel* pcSCModel, Int i
  * \param maxLog2TrDynamicRange
  */
 #if RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecSbac::xReadCoefRemainExGolomb ( UInt &rSymbol, UInt &rParam, const Bool useLimitedPrefixLength, const Int maxLog2TrDynamicRange, const class TComCodingStatisticsClassType &whichStat )
+#else
+Void TDecSbac::xReadCoefRemainExGolomb ( UInt &rSymbol, UInt &rParam, const Bool useLimitedPrefixLength, const Int maxLog2TrDynamicRange )
+#endif
+{
+  UInt prefix   = 0;
+  UInt codeWord = 0;
+
+  if (useLimitedPrefixLength)
+  {
+    const UInt longestPossiblePrefix = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange)) + COEF_REMAIN_BIN_REDUCTION;
+
+    do
+    {
+      prefix++;
+      m_pcTDecBinIf->decodeBinEP( codeWord RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+    } while((codeWord != 0) && (prefix < longestPossiblePrefix));
+  }
+  else
+  {
+    do
+    {
+      prefix++;
+      m_pcTDecBinIf->decodeBinEP( codeWord RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat) );
+    } while( codeWord);
+  }
+
+  codeWord  = 1 - codeWord;
+  prefix -= codeWord;
+  codeWord=0;
+
+  if (prefix < COEF_REMAIN_BIN_REDUCTION )
+  {
+    m_pcTDecBinIf->decodeBinsEP(codeWord,rParam RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat));
+    rSymbol = (prefix<<rParam) + codeWord;
+  }
+  else if (useLimitedPrefixLength)
+  {
+    const UInt maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange));
+
+    const UInt prefixLength = prefix - COEF_REMAIN_BIN_REDUCTION;
+    const UInt suffixLength = (prefixLength == maximumPrefixLength) ? (maxLog2TrDynamicRange - rParam) : prefixLength;
+
+    m_pcTDecBinIf->decodeBinsEP(codeWord, (suffixLength + rParam) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat));
+
+    rSymbol = codeWord + ((((1 << prefixLength) - 1) + COEF_REMAIN_BIN_REDUCTION) << rParam);
+  }
+  else
+  {
+    m_pcTDecBinIf->decodeBinsEP(codeWord,prefix-COEF_REMAIN_BIN_REDUCTION+rParam RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(whichStat));
+    rSymbol = (((1<<(prefix-COEF_REMAIN_BIN_REDUCTION))+COEF_REMAIN_BIN_REDUCTION-1)<<rParam)+codeWord;
+  }
+}
+
+
+/** Parse I_PCM information.
+ * \param pcCU
+ * \param uiAbsPartIdx
+ * \param uiDepth
+ * \returns Void
+ *
+ * If I_PCM flag indicates that the CU is I_PCM, parse its PCM alignment bits and codes.
+ */
+Void TDecSbac::parseIPCMInfo ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  UInt uiSymbol;
+
+  m_pcTDecBinIf->decodeBinTrm(uiSymbol);
+
+  if (uiSymbol == 1)
+  {
+    Bool bIpcmFlag = true;
+    const TComSPS &sps=*(pcCU->getSlice()->getSPS());
+
+    pcCU->setPartSizeSubParts  ( SIZE_2Nx2N, uiAbsPartIdx, uiDepth );
+    pcCU->setSizeSubParts      ( sps.getMaxCUWidth()>>uiDepth, sps.getMaxCUHeight()>>uiDepth, uiAbsPartIdx, uiDepth );
+    pcCU->setTrIdxSubParts     ( 0, uiAbsPartIdx, uiDepth );
+    pcCU->setIPCMFlagSubParts  ( bIpcmFlag, uiAbsPartIdx, uiDepth );
+
+    const UInt minCoeffSizeY = pcCU->getPic()->getMinCUWidth() * pcCU->getPic()->getMinCUHeight();
+    const UInt offsetY       = minCoeffSizeY * uiAbsPartIdx;
+    for (UInt ch=0; ch < pcCU->getPic()->getNumberValidComponents(); ch++)
+    {
+      const ComponentID compID = ComponentID(ch);
+      const UInt offset = offsetY >> (pcCU->getPic()->getComponentScaleX(compID) + pcCU->getPic()->getComponentScaleY(compID));
+      Pel * pPCMSample  = pcCU->getPCMSample(compID) + offset;
+      const UInt width  = pcCU->getWidth (uiAbsPartIdx) >> pcCU->getPic()->getComponentScaleX(compID);
+      const UInt height = pcCU->getHeight(uiAbsPartIdx) >> pcCU->getPic()->getComponentScaleY(compID);
+      const UInt sampleBits = pcCU->getSlice()->getSPS()->getPCMBitDepth(toChannelType(compID));
+      for (UInt y=0; y<height; y++)
+      {
+        for (UInt x=0; x<width; x++)
+        {
+          UInt sample;
+          m_pcTDecBinIf->xReadPCMCode(sampleBits, sample);
+          pPCMSample[x] = sample;
+        }
+        pPCMSample += width;
+      }
+    }
