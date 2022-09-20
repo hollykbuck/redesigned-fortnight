@@ -98,3 +98,11 @@ private:
   UInt                m_uiBinsCoded;
   Int                 m_binCountIncrement;
 #if FAST_BIT_EST
+  UInt64 m_fracBits;
+#endif
+};
+
+//! \}
+
+#endif
+
