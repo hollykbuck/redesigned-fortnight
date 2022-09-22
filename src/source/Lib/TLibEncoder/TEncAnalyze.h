@@ -98,3 +98,103 @@ private:
   Double    m_dFrmRate; //--CFG_KDY
 
 #if EXTENSION_360_VIDEO
+  TExt360EncAnalyze m_ext360;
+#endif
+
+public:
+  virtual ~TEncAnalyze()  {}
+  TEncAnalyze() { clear(); }
+
+  Void  addResult( const ResultData &result)
+  {
+    m_runningTotal.bits  += result.bits;
+    for(UInt i=0; i<MAX_NUM_COMPONENT; i++)
+    {
+      m_runningTotal.psnr[i] += result.psnr[i];
+      m_runningTotal.MSEyuvframe[i] += result.MSEyuvframe[i];
+      m_runningTotal.MSSSIM[i] += result.MSSSIM[i];
+    }
+
+    m_runningTotal.xpsnr += result.xpsnr;
+    m_uiNumPic++;
+  }
+
+  Double  getPsnr(ComponentID compID) const { return  m_runningTotal.psnr[compID];  }
+  Double  getMsssim(ComponentID compID) const { return  m_runningTotal.MSSSIM[compID];  }
+  Double  getxPSNR()                  const { return m_runningTotal.xpsnr;}
+  Double  getBits()                   const { return m_runningTotal.bits;   }
+  Void    setBits(Double numBits)           { m_runningTotal.bits=numBits; }
+  UInt    getNumPic()                 const { return  m_uiNumPic;   }
+#if EXTENSION_360_VIDEO
+  TExt360EncAnalyze& getExt360Info() { return m_ext360; }
+#endif
+
+  Void    setFrmRate  (Double dFrameRate) { m_dFrmRate = dFrameRate; } //--CFG_KDY
+  Void    clear()
+  {
+    m_runningTotal=ResultData();
+    m_uiNumPic = 0;
+#if EXTENSION_360_VIDEO
+    m_ext360.clear();
+#endif
+  }
+
+
+  Void calculateCombinedValues(const ChromaFormat chFmt, Double &PSNRyuv, Double &MSEyuv, const BitDepths &bitDepths)
+  {
+    MSEyuv    = 0;
+    Int scale = 0;
+
+    Int maximumBitDepth = bitDepths.recon[CHANNEL_TYPE_LUMA];
+    for (UInt channelTypeIndex = 1; channelTypeIndex < MAX_NUM_CHANNEL_TYPE; channelTypeIndex++)
+    {
+      if (bitDepths.recon[channelTypeIndex] > maximumBitDepth)
+      {
+        maximumBitDepth = bitDepths.recon[channelTypeIndex];
+      }
+    }
+
+    const UInt maxval                = 255 << (maximumBitDepth - 8);
+    const UInt numberValidComponents = getNumberValidComponents(chFmt);
+
+    for (UInt comp=0; comp<numberValidComponents; comp++)
+    {
+      const ComponentID compID        = ComponentID(comp);
+      const UInt        csx           = getComponentScaleX(compID, chFmt);
+      const UInt        csy           = getComponentScaleY(compID, chFmt);
+      const Int         scaleChan     = (4>>(csx+csy));
+      const UInt        bitDepthShift = 2 * (maximumBitDepth - bitDepths.recon[toChannelType(compID)]); //*2 because this is a squared number
+
+      const Double      channelMSE    = (m_runningTotal.MSEyuvframe[compID] * Double(1 << bitDepthShift)) / Double(getNumPic());
+
+      scale  += scaleChan;
+      MSEyuv += scaleChan * channelMSE;
+    }
+
+    MSEyuv /= Double(scale);  // i.e. divide by 6 for 4:2:0, 8 for 4:2:2 etc.
+    PSNRyuv = (MSEyuv==0 ? 999.99 : 10*log10((maxval*maxval)/MSEyuv));
+  }
+
+  Void    printOut ( TChar cDelim, const ChromaFormat chFmt, const OutputLogControl &logctrl, const BitDepths &bitDepths )
+  {
+    Double dFps     =   m_dFrmRate; //--CFG_KDY
+    Double dScale   = dFps / 1000 / (Double)m_uiNumPic;
+
+    Double MSEBasedSNR[MAX_NUM_COMPONENT];
+    if (logctrl.printMSEBasedSNR)
+    {
+      for (UInt componentIndex = 0; componentIndex < MAX_NUM_COMPONENT; componentIndex++)
+      {
+        const ComponentID compID = ComponentID(componentIndex);
+
+        if (getNumPic() == 0)
+        {
+          MSEBasedSNR[compID] = 0 * dScale; // this is the same calculation that will be evaluated for any other statistic when there are no frames (it should result in NaN). We use it here so all the output is consistent.
+        }
+        else
+        {
+          //NOTE: this is not the true maximum value for any bitDepth other than 8. It comes from the original HM PSNR calculation
+          const UInt maxval = 255 << (bitDepths.recon[toChannelType(compID)] - 8);
+          const Double MSE = m_runningTotal.MSEyuvframe[compID];
+
+          MSEBasedSNR[compID] = (MSE == 0) ? 999.99 : (10 * log10((maxval * maxval) / (MSE / (Double)getNumPic())));
