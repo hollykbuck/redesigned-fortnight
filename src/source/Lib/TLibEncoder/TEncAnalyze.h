@@ -198,3 +198,103 @@ public:
           const Double MSE = m_runningTotal.MSEyuvframe[compID];
 
           MSEBasedSNR[compID] = (MSE == 0) ? 999.99 : (10 * log10((maxval * maxval) / (MSE / (Double)getNumPic())));
+        }
+      }
+    }
+
+    switch (chFmt)
+    {
+      case CHROMA_400:
+        if (logctrl.printMSEBasedSNR)
+        {
+          printf( "         " );
+        }
+
+        printf( "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    " );
+
+        if (logctrl.printMSSSIM)
+        {
+          printf( "  Y-MS-SSIM  ");
+        }
+
+        if (logctrl.printXPSNR)
+        {
+          printf( "    xPSNR  ");
+        }
+
+        if (logctrl.printSequenceMSE)
+        {
+          printf( "   Y-MSE    \n" );
+        }
+        else
+        {
+          printf("\n");
+        }
+
+
+        if (logctrl.printMSEBasedSNR)
+        {
+          printf( "Average: ");
+        }
+
+        printf( "\t %8d    %c "          "%12.4lf  "    "%8.4lf  ",
+                 getNumPic(), cDelim,
+                 getBits() * dScale,
+                 getPsnr(COMPONENT_Y) / (Double)getNumPic() );
+
+        if (logctrl.printMSSSIM)
+        {
+          printf("   %8.6lf  ", getMsssim(COMPONENT_Y) / (Double)getNumPic());
+        }
+        if(logctrl.printXPSNR)
+        {
+          printf(" %8.4lf  ",
+                 getxPSNR() / (Double)getNumPic());
+        }
+
+        if (logctrl.printSequenceMSE)
+        {
+          printf( "  %8.4lf  \n", m_runningTotal.MSEyuvframe[COMPONENT_Y ] / (Double)getNumPic() );
+        }
+        else
+        {
+          printf("\n");
+        }
+
+        if (logctrl.printMSEBasedSNR)
+        {
+          printf( "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf\n",
+                 getNumPic(), cDelim,
+                 getBits() * dScale,
+                 MSEBasedSNR[COMPONENT_Y] );
+        }
+        break;
+
+      case CHROMA_420:
+      case CHROMA_422:
+      case CHROMA_444:
+        {
+          Double PSNRyuv = MAX_DOUBLE;
+          Double MSEyuv  = MAX_DOUBLE;
+          
+          calculateCombinedValues(chFmt, PSNRyuv, MSEyuv, bitDepths);
+
+          if (logctrl.printMSEBasedSNR)
+          {
+            printf( "         " );
+          }
+
+          printf( "\tTotal Frames |   "   "Bitrate     "  "Y-PSNR    "  "U-PSNR    "  "V-PSNR    "  "YUV-PSNR  " );
+
+          if (logctrl.printMSSSIM)
+          {
+            printf("  Y-MS-SSIM    " "U-MS-SSIM    " "V-MS-SSIM  ");
+          }
+          if (logctrl.printXPSNR)
+          {
+            printf( "    xPSNR  ");
+          }
+
+#if EXTENSION_360_VIDEO
+            m_ext360.printHeader();
+#endif
