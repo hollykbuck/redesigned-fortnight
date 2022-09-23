@@ -598,3 +598,103 @@ Void TDecSbac::parsePartSize( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth 
         }
       }
       else if (eMode == SIZE_Nx2N)
+      {
+        m_pcTDecBinIf->decodeBin(uiSymbol, m_cCUPartSizeSCModel.get( 0, 0, 3 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+        if (uiSymbol == 0)
+        {
+          m_pcTDecBinIf->decodeBinEP(uiSymbol RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+          eMode = (uiSymbol == 0? SIZE_nLx2N : SIZE_nRx2N);
+        }
+      }
+    }
+  }
+  pcCU->setPartSizeSubParts( eMode, uiAbsPartIdx, uiDepth );
+  pcCU->setSizeSubParts( cuWidth, cuHeight, uiAbsPartIdx, uiDepth );
+}
+
+
+/** parse prediction mode
+ * \param pcCU
+ * \param uiAbsPartIdx
+ * \param uiDepth
+ * \returns Void
+ */
+Void TDecSbac::parsePredMode( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  if( pcCU->getSlice()->isIntra() )
+  {
+    pcCU->setPredModeSubParts( MODE_INTRA, uiAbsPartIdx, uiDepth );
+    return;
+  }
+
+  UInt uiSymbol;
+  Int  iPredMode = MODE_INTER;
+  m_pcTDecBinIf->decodeBin( uiSymbol, m_cCUPredModeSCModel.get( 0, 0, 0 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__PRED_MODE) );
+  iPredMode += uiSymbol;
+  pcCU->setPredModeSubParts( (PredMode)iPredMode, uiAbsPartIdx, uiDepth );
+}
+
+
+Void TDecSbac::parseIntraDirLumaAng  ( TComDataCU* pcCU, UInt absPartIdx, UInt depth )
+{
+  PartSize mode = pcCU->getPartitionSize( absPartIdx );
+  UInt partNum = mode==SIZE_NxN?4:1;
+  UInt partOffset = ( pcCU->getPic()->getNumPartitionsInCtu() >> ( pcCU->getDepth(absPartIdx) << 1 ) ) >> 2;
+  UInt mpmPred[4],symbol;
+  Int j,intraPredMode;
+  if (mode==SIZE_NxN)
+  {
+    depth++;
+  }
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  const TComCodingStatisticsClassType ctype(STATS__CABAC_BITS__INTRA_DIR_ANG, g_aucConvertToBit[pcCU->getSlice()->getSPS()->getMaxCUWidth()>>depth]+2, CHANNEL_TYPE_LUMA);
+#endif
+  for (j=0;j<partNum;j++)
+  {
+    m_pcTDecBinIf->decodeBin( symbol, m_cCUIntraPredSCModel.get( 0, 0, 0) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+    mpmPred[j] = symbol;
+  }
+  for (j=0;j<partNum;j++)
+  {
+    Int preds[NUM_MOST_PROBABLE_MODES] = {-1, -1, -1};
+    pcCU->getIntraDirPredictor(absPartIdx+partOffset*j, preds, COMPONENT_Y);
+    if (mpmPred[j])
+    {
+      m_pcTDecBinIf->decodeBinEP( symbol RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+      if (symbol)
+      {
+        m_pcTDecBinIf->decodeBinEP( symbol RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+        symbol++;
+      }
+      intraPredMode = preds[symbol];
+    }
+    else
+    {
+      m_pcTDecBinIf->decodeBinsEP( symbol, 5 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+      intraPredMode = symbol;
+
+      //postponed sorting of MPMs (only in remaining branch)
+      if (preds[0] > preds[1])
+      {
+        std::swap(preds[0], preds[1]);
+      }
+      if (preds[0] > preds[2])
+      {
+        std::swap(preds[0], preds[2]);
+      }
+      if (preds[1] > preds[2])
+      {
+        std::swap(preds[1], preds[2]);
+      }
+      for ( UInt i = 0; i < NUM_MOST_PROBABLE_MODES; i++ )
+      {
+        intraPredMode += ( intraPredMode >= preds[i] );
+      }
+    }
+    pcCU->setIntraDirSubParts(CHANNEL_TYPE_LUMA, (UChar)intraPredMode, absPartIdx+partOffset*j, depth );
+  }
+}
+
+
+Void TDecSbac::parseIntraDirChroma( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
+{
