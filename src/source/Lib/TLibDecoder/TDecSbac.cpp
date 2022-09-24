@@ -698,3 +698,103 @@ Void TDecSbac::parseIntraDirLumaAng  ( TComDataCU* pcCU, UInt absPartIdx, UInt d
 
 Void TDecSbac::parseIntraDirChroma( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
 {
+  UInt uiSymbol;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  const TComCodingStatisticsClassType ctype(STATS__CABAC_BITS__INTRA_DIR_ANG, g_aucConvertToBit[pcCU->getSlice()->getSPS()->getMaxCUWidth()>>uiDepth]+2, CHANNEL_TYPE_CHROMA);
+#endif
+
+  m_pcTDecBinIf->decodeBin( uiSymbol, m_cCUChromaPredSCModel.get( 0, 0, 0 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+  if( uiSymbol == 0 )
+  {
+    uiSymbol = DM_CHROMA_IDX;
+  }
+  else
+  {
+    UInt uiIPredMode;
+    m_pcTDecBinIf->decodeBinsEP( uiIPredMode, 2 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+    UInt uiAllowedChromaDir[ NUM_CHROMA_MODE ];
+    pcCU->getAllowedChromaDir( uiAbsPartIdx, uiAllowedChromaDir );
+    uiSymbol = uiAllowedChromaDir[ uiIPredMode ];
+  }
+
+  pcCU->setIntraDirSubParts( CHANNEL_TYPE_CHROMA, uiSymbol, uiAbsPartIdx, uiDepth );
+}
+
+
+Void TDecSbac::parseInterDir( TComDataCU* pcCU, UInt& ruiInterDir, UInt uiAbsPartIdx )
+{
+  UInt uiSymbol;
+  const UInt uiCtx = pcCU->getCtxInterDir( uiAbsPartIdx );
+  ContextModel *pCtx = m_cCUInterDirSCModel.get( 0 );
+
+  uiSymbol = 0;
+  if (pcCU->getPartitionSize(uiAbsPartIdx) == SIZE_2Nx2N || pcCU->getHeight(uiAbsPartIdx) != 8 )
+  {
+    m_pcTDecBinIf->decodeBin( uiSymbol, *( pCtx + uiCtx ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__INTER_DIR) );
+  }
+
+  if( uiSymbol )
+  {
+    uiSymbol = 2;
+  }
+  else
+  {
+    m_pcTDecBinIf->decodeBin( uiSymbol, *( pCtx + 4 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__INTER_DIR) );
+    assert(uiSymbol == 0 || uiSymbol == 1);
+  }
+
+  uiSymbol++;
+  ruiInterDir = uiSymbol;
+  return;
+}
+
+Void TDecSbac::parseRefFrmIdx( TComDataCU* pcCU, Int& riRefFrmIdx, RefPicList eRefList )
+{
+  UInt uiSymbol;
+
+  ContextModel *pCtx = m_cCURefPicSCModel.get( 0 );
+  m_pcTDecBinIf->decodeBin( uiSymbol, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__REF_FRM_IDX) );
+
+  if( uiSymbol )
+  {
+    UInt uiRefNum = pcCU->getSlice()->getNumRefIdx( eRefList ) - 2;
+    pCtx++;
+    UInt ui;
+    for( ui = 0; ui < uiRefNum; ++ui )
+    {
+      if( ui == 0 )
+      {
+        m_pcTDecBinIf->decodeBin( uiSymbol, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__REF_FRM_IDX) );
+      }
+      else
+      {
+        m_pcTDecBinIf->decodeBinEP( uiSymbol RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__REF_FRM_IDX) );
+      }
+      if( uiSymbol == 0 )
+      {
+        break;
+      }
+    }
+    uiSymbol = ui + 1;
+  }
+  riRefFrmIdx = uiSymbol;
+
+  return;
+}
+
+Void TDecSbac::parseMvd( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth, RefPicList eRefList )
+{
+  UInt uiSymbol;
+  UInt uiHorAbs;
+  UInt uiVerAbs;
+  UInt uiHorSign = 0;
+  UInt uiVerSign = 0;
+  ContextModel *pCtx = m_cCUMvdSCModel.get( 0 );
+
+  if(pcCU->getSlice()->getMvdL1ZeroFlag() && eRefList == REF_PIC_LIST_1 && pcCU->getInterDir(uiAbsPartIdx)==3)
+  {
+    uiHorAbs=0;
+    uiVerAbs=0;
+  }
+  else
+  {
