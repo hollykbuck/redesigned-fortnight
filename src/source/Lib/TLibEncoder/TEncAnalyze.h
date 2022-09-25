@@ -298,3 +298,103 @@ public:
 #if EXTENSION_360_VIDEO
             m_ext360.printHeader();
 #endif
+          if (logctrl.printSequenceMSE)
+          {
+            printf( "  Y-MSE     "  "U-MSE     "  "V-MSE     "  "YUV-MSE  \n" );
+          }
+          else
+          {
+            printf("\n");
+          }
+
+          if (logctrl.printMSEBasedSNR)
+          {
+            printf( "Average: ");
+          }
+            
+          printf( "\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf  ",
+                 getNumPic(), cDelim,
+                 getBits() * dScale,
+                 getPsnr(COMPONENT_Y) / (Double)getNumPic(),
+                 getPsnr(COMPONENT_Cb) / (Double)getNumPic(),
+                 getPsnr(COMPONENT_Cr) / (Double)getNumPic(),
+                 PSNRyuv );
+
+          if (logctrl.printMSSSIM)
+          {
+            printf("   %8.6lf     " "%8.6lf     " "%8.6lf  ",
+                   getMsssim(COMPONENT_Y) / (Double)getNumPic(),
+                   getMsssim(COMPONENT_Cb) / (Double)getNumPic(),
+                   getMsssim(COMPONENT_Cr) / (Double)getNumPic());
+          }
+
+          if(logctrl.printXPSNR)
+          {
+            printf(" %8.4lf  ",
+                   getxPSNR() / (Double)getNumPic());
+          }
+
+#if EXTENSION_360_VIDEO
+          m_ext360.printPSNRs(getNumPic());
+#endif
+
+          if (logctrl.printSequenceMSE)
+          {
+            printf( " %8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf  \n",
+                   m_runningTotal.MSEyuvframe[COMPONENT_Y ] / (Double)getNumPic(),
+                   m_runningTotal.MSEyuvframe[COMPONENT_Cb] / (Double)getNumPic(),
+                   m_runningTotal.MSEyuvframe[COMPONENT_Cr] / (Double)getNumPic(),
+                   MSEyuv );
+          }
+          else
+          {
+            printf("\n");
+          }
+
+          if (logctrl.printMSEBasedSNR)
+          {
+            printf( "From MSE:\t %8d    %c "          "%12.4lf  "    "%8.4lf  "   "%8.4lf  "    "%8.4lf  "   "%8.4lf\n",
+                   getNumPic(), cDelim,
+                   getBits() * dScale,
+                   MSEBasedSNR[COMPONENT_Y],
+                   MSEBasedSNR[COMPONENT_Cb],
+                   MSEBasedSNR[COMPONENT_Cr],
+                   PSNRyuv );
+          }
+        }
+        break;
+      default:
+        fprintf(stderr, "Unknown format during print out\n");
+        exit(1);
+        break;
+    }
+  }
+
+
+  Void printSummary(const ChromaFormat chFmt, const OutputLogControl &logctrl, const BitDepths &bitDepths, const std::string &sFilename)
+  {
+    FILE* pFile = fopen (sFilename.c_str(), "at");
+
+    Double dFps     =   m_dFrmRate; //--CFG_KDY
+    Double dScale   = dFps / 1000 / (Double)m_uiNumPic;
+    switch (chFmt)
+    {
+      case CHROMA_400:
+        fprintf(pFile, "%f\t %f\n",
+            getBits() * dScale,
+            getPsnr(COMPONENT_Y) / (Double)getNumPic() );
+        break;
+      case CHROMA_420:
+      case CHROMA_422:
+      case CHROMA_444:
+        {
+          Double PSNRyuv = MAX_DOUBLE;
+          Double MSEyuv  = MAX_DOUBLE;
+          
+          calculateCombinedValues(chFmt, PSNRyuv, MSEyuv, bitDepths);
+
+          fprintf(pFile, "%f\t %f\t %f\t %f\t %f",
+              getBits() * dScale,
+              getPsnr(COMPONENT_Y) / (Double)getNumPic(),
+              getPsnr(COMPONENT_Cb) / (Double)getNumPic(),
+              getPsnr(COMPONENT_Cr) / (Double)getNumPic(),
