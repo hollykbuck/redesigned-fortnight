@@ -398,3 +398,41 @@ public:
               getPsnr(COMPONENT_Y) / (Double)getNumPic(),
               getPsnr(COMPONENT_Cb) / (Double)getNumPic(),
               getPsnr(COMPONENT_Cr) / (Double)getNumPic(),
+              PSNRyuv );
+
+          if (logctrl.printSequenceMSE)
+          {
+            fprintf(pFile, "\t %f\t %f\t %f\t %f\n",
+                m_runningTotal.MSEyuvframe[COMPONENT_Y ] / (Double)getNumPic(),
+                m_runningTotal.MSEyuvframe[COMPONENT_Cb] / (Double)getNumPic(),
+                m_runningTotal.MSEyuvframe[COMPONENT_Cr] / (Double)getNumPic(),
+                MSEyuv );
+          }
+          else
+          {
+            fprintf(pFile, "\n");
+          }
+
+          break;
+        }
+
+      default:
+          fprintf(stderr, "Unknown format during print out\n");
+          exit(1);
+          break;
+    }
+
+    fclose(pFile);
+  }
+};
+
+extern TEncAnalyze             m_gcAnalyzeAll;
+extern TEncAnalyze             m_gcAnalyzeI;
+extern TEncAnalyze             m_gcAnalyzeP;
+extern TEncAnalyze             m_gcAnalyzeB;
+
+extern TEncAnalyze             m_gcAnalyzeAll_in;
+
+//! \}
+
+#endif // !defined(AFX_TENCANALYZE_H__C79BCAA2_6AC8_4175_A0FE_CF02F5829233__INCLUDED_)
