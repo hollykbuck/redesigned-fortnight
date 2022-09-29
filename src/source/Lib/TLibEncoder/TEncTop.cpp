@@ -198,3 +198,103 @@ Void TEncTop::init(Bool isFieldCoding)
   {
     m_cRateCtrl.initHrdParam(sps0.getVuiParameters()->getHrdParameters(), m_iFrameRate, m_RCInitialCpbFullness);
   }
+
+  m_cRdCost.setCostMode(m_costMode);
+
+  // initialize PPS
+  xInitPPS(pps0, sps0);
+  xInitRPS(sps0, isFieldCoding);
+  xInitScalingLists(sps0, pps0);
+
+  if (m_wcgChromaQpControl.isEnabled())
+  {
+    TComPPS &pps1=*(m_ppsMap.allocatePS(1));
+    xInitPPS(pps1, sps0);
+    xInitScalingLists(sps0, pps1);
+  }
+
+  // initialize processing unit classes
+  m_cGOPEncoder.  init( this );
+  m_cSliceEncoder.init( this );
+  m_cCuEncoder.   init( this );
+  m_cCuEncoder.setSliceEncoder(&m_cSliceEncoder);
+
+  // initialize transform & quantization class
+  m_pcCavlcCoder = getCavlcCoder();
+
+  m_cTrQuant.init( 1 << m_uiQuadtreeTULog2MaxSize,
+                   m_useRDOQ,
+                   m_useRDOQTS,
+                   m_useSelectiveRDOQ,
+                   true
+                  ,m_useTransformSkipFast
+#if ADAPTIVE_QP_SELECTION
+                  ,m_bUseAdaptQpSelect
+#endif
+                  );
+
+  // initialize encoder search class
+  m_cSearch.init( this, &m_cTrQuant, m_iSearchRange, m_bipredSearchRange, m_motionEstimationSearchMethod, m_maxCUWidth, m_maxCUHeight, m_maxTotalCUDepth, &m_cEntropyCoder, &m_cRdCost, getRDSbacCoder(), getRDGoOnSbacCoder() );
+
+  m_iMaxRefPicNum = 0;
+}
+
+Void TEncTop::xInitScalingLists(TComSPS &sps, TComPPS &pps)
+{
+  // Initialise scaling lists
+  // The encoder will only use the SPS scaling lists. The PPS will never be marked present.
+  const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE] =
+  {
+      sps.getMaxLog2TrDynamicRange(CHANNEL_TYPE_LUMA),
+      sps.getMaxLog2TrDynamicRange(CHANNEL_TYPE_CHROMA)
+  };
+  if(getUseScalingListId() == SCALING_LIST_OFF)
+  {
+    getTrQuant()->setFlatScalingList(maxLog2TrDynamicRange, sps.getBitDepths());
+    getTrQuant()->setUseScalingList(false);
+    sps.setScalingListPresentFlag(false);
+    pps.setScalingListPresentFlag(false);
+  }
+  else if(getUseScalingListId() == SCALING_LIST_DEFAULT)
+  {
+    sps.getScalingList().setDefaultScalingList ();
+    sps.setScalingListPresentFlag(false);
+    pps.setScalingListPresentFlag(false);
+
+    getTrQuant()->setScalingList(&(sps.getScalingList()), maxLog2TrDynamicRange, sps.getBitDepths());
+    getTrQuant()->setUseScalingList(true);
+  }
+  else if(getUseScalingListId() == SCALING_LIST_FILE_READ)
+  {
+    sps.getScalingList().setDefaultScalingList ();
+    if(sps.getScalingList().xParseScalingList(getScalingListFileName()))
+    {
+      Bool bParsedScalingList=false; // Use of boolean so that assertion outputs useful string
+      assert(bParsedScalingList);
+      exit(1);
+    }
+    sps.getScalingList().checkDcOfMatrix();
+    sps.setScalingListPresentFlag(sps.getScalingList().checkDefaultScalingList());
+    pps.setScalingListPresentFlag(false);
+    getTrQuant()->setScalingList(&(sps.getScalingList()), maxLog2TrDynamicRange, sps.getBitDepths());
+    getTrQuant()->setUseScalingList(true);
+  }
+  else
+  {
+    printf("error : ScalingList == %d not supported\n",getUseScalingListId());
+    assert(0);
+  }
+
+  if (getUseScalingListId() != SCALING_LIST_OFF)
+  {
+    // Prepare delta's:
+    for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+    {
+      const Int predListStep = (sizeId == SCALING_LIST_32x32? (SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) : 1); // if 32x32, skip over chroma entries.
+
+      for(UInt listId = 0; listId < SCALING_LIST_NUM; listId+=predListStep)
+      {
+        sps.getScalingList().checkPredMode( sizeId, listId );
+      }
+    }
+  }
