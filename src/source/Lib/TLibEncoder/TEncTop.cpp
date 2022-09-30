@@ -398,3 +398,103 @@ Void TEncTop::encode( Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvT
 }
 
 /**------------------------------------------------
+ Separate interlaced frame into two fields
+ -------------------------------------------------**/
+Void separateFields(Pel* org, Pel* dstField, UInt stride, UInt width, UInt height, Bool isTop)
+{
+  if (!isTop)
+  {
+    org += stride;
+  }
+  for (Int y = 0; y < height>>1; y++)
+  {
+    for (Int x = 0; x < width; x++)
+    {
+      dstField[x] = org[x];
+    }
+
+    dstField += stride;
+    org += stride*2;
+  }
+
+}
+
+Void TEncTop::encode(Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvTrueOrg, const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, TComList<TComPicYuv*>& rcListPicYuvRecOut, std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded, Bool isTff)
+{
+  iNumEncoded = 0;
+
+  for (Int fieldNum=0; fieldNum<2; fieldNum++)
+  {
+    if (pcPicYuvOrg)
+    {
+
+      /* -- field initialization -- */
+      const Bool isTopField=isTff==(fieldNum==0);
+
+      TComPic *pcField;
+      xGetNewPicBuffer( pcField, -1 );
+      pcField->setReconMark (false);                     // where is this normally?
+
+      if (fieldNum==1)                                   // where is this normally?
+      {
+        TComPicYuv* rpcPicYuvRec;
+
+        // org. buffer
+        if ( rcListPicYuvRecOut.size() >= (UInt)m_iGOPSize+1 ) // need to maintain field 0 in list of RecOuts while processing field 1. Hence +1 on m_iGOPSize.
+        {
+          rpcPicYuvRec = rcListPicYuvRecOut.popFront();
+        }
+        else
+        {
+          rpcPicYuvRec = new TComPicYuv;
+          rpcPicYuvRec->create( m_iSourceWidth, m_iSourceHeight, m_chromaFormatIDC, m_maxCUWidth, m_maxCUHeight, m_maxTotalCUDepth, true);
+        }
+        rcListPicYuvRecOut.pushBack( rpcPicYuvRec );
+      }
+
+      pcField->getSlice(0)->setPOC( m_iPOCLast );        // superfluous?
+#if !REDUCED_ENCODER_MEMORY
+      pcField->getPicYuvRec()->setBorderExtension(false);// where is this normally?
+#endif
+
+      pcField->setTopField(isTopField);                  // interlaced requirement
+
+      for (UInt componentIndex = 0; componentIndex < pcPicYuvOrg->getNumberValidComponents(); componentIndex++)
+      {
+        const ComponentID component = ComponentID(componentIndex);
+        const UInt stride = pcPicYuvOrg->getStride(component);
+
+        separateFields((pcPicYuvOrg->getBuf(component) + pcPicYuvOrg->getMarginX(component) + (pcPicYuvOrg->getMarginY(component) * stride)),
+                       pcField->getPicYuvOrg()->getAddr(component),
+                       pcPicYuvOrg->getStride(component),
+                       pcPicYuvOrg->getWidth(component),
+                       pcPicYuvOrg->getHeight(component),
+                       isTopField);
+
+        separateFields((pcPicYuvTrueOrg->getBuf(component) + pcPicYuvTrueOrg->getMarginX(component) + (pcPicYuvTrueOrg->getMarginY(component) * stride)),
+                       pcField->getPicYuvTrueOrg()->getAddr(component),
+                       pcPicYuvTrueOrg->getStride(component),
+                       pcPicYuvTrueOrg->getWidth(component),
+                       pcPicYuvTrueOrg->getHeight(component),
+                       isTopField);
+      }
+
+      // compute image characteristics
+      if ( getUseAdaptiveQP() )
+      {
+        m_cPreanalyzer.xPreanalyze( dynamic_cast<TEncPic*>( pcField ) );
+      }
+    }
+
+    if ( m_iNumPicRcvd && ((flush&&fieldNum==1) || (m_iPOCLast/2)==0 || m_iNumPicRcvd==m_iGOPSize ) )
+    {
+      // compress GOP
+      m_cGOPEncoder.compressGOP(m_iPOCLast, m_iNumPicRcvd, m_cListPic, rcListPicYuvRecOut, accessUnitsOut, true, isTff, ipCSC, snrCSC, getOutputLogControl());
+      iNumEncoded += m_iNumPicRcvd;
+      m_uiNumAllPicCoded += m_iNumPicRcvd;
+      m_iNumPicRcvd = 0;
+    }
+  }
+}
+
+// ====================================================================================================================
