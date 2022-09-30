@@ -1198,3 +1198,103 @@ Void TDecSbac::parseLastSignificantXY( UInt& uiPosLastX, UInt& uiPosLastY, Int w
     UInt uiTemp  = 0;
     UInt uiCount = ( uiPosLastX - 2 ) >> 1;
     for ( Int i = uiCount - 1; i >= 0; i-- )
+    {
+      m_pcTDecBinIf->decodeBinEP( uiLast RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+      uiTemp += uiLast << i;
+    }
+    uiPosLastX = g_uiMinInGroup[ uiPosLastX ] + uiTemp;
+  }
+  if ( uiPosLastY > 3 )
+  {
+    UInt uiTemp  = 0;
+    UInt uiCount = ( uiPosLastY - 2 ) >> 1;
+    for ( Int i = uiCount - 1; i >= 0; i-- )
+    {
+      m_pcTDecBinIf->decodeBinEP( uiLast RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+      uiTemp += uiLast << i;
+    }
+    uiPosLastY = g_uiMinInGroup[ uiPosLastY ] + uiTemp;
+  }
+
+  if( uiScanIdx == SCAN_VER )
+  {
+    swap( uiPosLastX, uiPosLastY );
+  }
+}
+
+Void TDecSbac::parseCoeffNxN(  TComTU &rTu, ComponentID compID )
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU(compID);
+  const TComRectangle &rRect=rTu.getRect(compID);
+  const UInt uiWidth=rRect.width;
+  const UInt uiHeight=rRect.height;
+  TCoeff* pcCoef=(pcCU->getCoeff(compID)+rTu.getCoefficientOffset(compID));
+  const TComSPS &sps=*(pcCU->getSlice()->getSPS());
+
+  DTRACE_CABAC_VL( g_nSymbolCounter++ )
+  DTRACE_CABAC_T( "\tparseCoeffNxN()\teType=" )
+  DTRACE_CABAC_V( compID )
+  DTRACE_CABAC_T( "\twidth=" )
+  DTRACE_CABAC_V( uiWidth )
+  DTRACE_CABAC_T( "\theight=" )
+  DTRACE_CABAC_V( uiHeight )
+  DTRACE_CABAC_T( "\tdepth=" )
+//  DTRACE_CABAC_V( rTu.GetTransformDepthTotalAdj(compID) )
+  DTRACE_CABAC_V( rTu.GetTransformDepthTotal() )
+  DTRACE_CABAC_T( "\tabspartidx=" )
+//  DTRACE_CABAC_V( uiAbsPartIdx )
+  DTRACE_CABAC_V( rTu.GetAbsPartIdxTU(compID) )
+  DTRACE_CABAC_T( "\ttoCU-X=" )
+  DTRACE_CABAC_V( pcCU->getCUPelX() )
+  DTRACE_CABAC_T( "\ttoCU-Y=" )
+  DTRACE_CABAC_V( pcCU->getCUPelY() )
+  DTRACE_CABAC_T( "\tCU-addr=" )
+  DTRACE_CABAC_V(  pcCU->getCtuRsAddr() )
+  DTRACE_CABAC_T( "\tinCU-X=" )
+//  DTRACE_CABAC_V( g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ] )
+  DTRACE_CABAC_V( g_auiRasterToPelX[ g_auiZscanToRaster[rTu.GetAbsPartIdxTU(compID)] ] )
+  DTRACE_CABAC_T( "\tinCU-Y=" )
+// DTRACE_CABAC_V( g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ] )
+  DTRACE_CABAC_V( g_auiRasterToPelY[ g_auiZscanToRaster[rTu.GetAbsPartIdxTU(compID)] ] )
+  DTRACE_CABAC_T( "\tpredmode=" )
+  DTRACE_CABAC_V(  pcCU->getPredictionMode( uiAbsPartIdx ) )
+  DTRACE_CABAC_T( "\n" )
+
+  //--------------------------------------------------------------------------------------------------
+
+  if( uiWidth > sps.getMaxTrSize() )
+  {
+    std::cerr << "ERROR: parseCoeffNxN was passed a TU with dimensions larger than the maximum allowed size" << std::endl;
+    assert(false);
+    exit(1);
+  }
+
+  //--------------------------------------------------------------------------------------------------
+
+  //set parameters
+
+  const ChannelType  chType            = toChannelType(compID);
+  const UInt         uiLog2BlockWidth  = g_aucConvertToBit[ uiWidth  ] + 2;
+  const UInt         uiLog2BlockHeight = g_aucConvertToBit[ uiHeight ] + 2;
+  const UInt         uiMaxNumCoeff     = uiWidth * uiHeight;
+  const UInt         uiMaxNumCoeffM1   = uiMaxNumCoeff - 1;
+
+  const ChannelType  channelType       = toChannelType(compID);
+  const Bool         extendedPrecision = sps.getSpsRangeExtension().getExtendedPrecisionProcessingFlag();
+
+  const Bool         alignCABACBeforeBypass = sps.getSpsRangeExtension().getCabacBypassAlignmentEnabledFlag();
+  const Int          maxLog2TrDynamicRange  = sps.getMaxLog2TrDynamicRange(channelType);
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatisticsClassType ctype_group(STATS__CABAC_BITS__SIG_COEFF_GROUP_FLAG, uiLog2BlockWidth, compID);
+  TComCodingStatisticsClassType ctype_map(STATS__CABAC_BITS__SIG_COEFF_MAP_FLAG, uiLog2BlockWidth, compID);
+  TComCodingStatisticsClassType ctype_gt1(STATS__CABAC_BITS__GT1_FLAG, uiLog2BlockWidth, compID);
+  TComCodingStatisticsClassType ctype_gt2(STATS__CABAC_BITS__GT2_FLAG, uiLog2BlockWidth, compID);
+#endif
+
+  Bool beValid;
+  if (pcCU->getCUTransquantBypass(uiAbsPartIdx))
+  {
+    beValid = false;
+    if((!pcCU->isIntra(uiAbsPartIdx)) && pcCU->isRDPCMEnabled(uiAbsPartIdx))
