@@ -498,3 +498,103 @@ Void TEncTop::encode(Bool flush, TComPicYuv* pcPicYuvOrg, TComPicYuv* pcPicYuvTr
 }
 
 // ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+/**
+ - Application has picture buffer list with size of GOP + 1
+ - Picture buffer list acts like as ring buffer
+ - End of the list has the latest picture
+ .
+ \retval rpcPic obtained picture buffer
+ */
+Void TEncTop::xGetNewPicBuffer ( TComPic*& rpcPic, Int ppsId )
+{
+  rpcPic=0;
+
+  // At this point, the SPS and PPS can be considered activated - they are copied to the new TComPic.
+  const TComPPS *pPPS=(ppsId<0) ? m_ppsMap.getFirstPS() : m_ppsMap.getPS(ppsId);
+  assert (pPPS!=0);
+  const TComPPS &pps=*pPPS;
+
+  const TComSPS *pSPS=m_spsMap.getPS(pps.getSPSId());
+  assert (pSPS!=0);
+  const TComSPS &sps=*pSPS;
+
+  TComSlice::sortPicList(m_cListPic);
+
+  // use an entry in the buffered list if the maximum number that need buffering has been reached:
+  if (m_cListPic.size() >= (UInt)(m_iGOPSize + getMaxDecPicBuffering(MAX_TLAYER-1) + 2) )
+  {
+    TComList<TComPic*>::iterator iterPic  = m_cListPic.begin();
+    Int iSize = Int( m_cListPic.size() );
+    for ( Int i = 0; i < iSize; i++ )
+    {
+      rpcPic = *iterPic;
+      if(rpcPic->getSlice(0)->isReferenced() == false)
+      {
+        break;
+      }
+      iterPic++;
+    }
+
+    // If PPS ID is the same, we will assume that it has not changed since it was last used
+    // and return the old object.
+    if (pps.getPPSId() == rpcPic->getPicSym()->getPPS().getPPSId())
+    {
+#if REDUCED_ENCODER_MEMORY
+      rpcPic->releaseAllReconstructionData();
+#if JVET_X0048_X0103_FILM_GRAIN
+      rpcPic->prepareForEncoderSourcePicYuv( getFilmGrainAnalysisEnabled() );
+#else
+      rpcPic->prepareForEncoderSourcePicYuv();
+#endif
+#endif
+    }
+    else
+    {
+      // the IDs differ - free up an entry in the list, and then create a new one, as with the case where the max buffering state has not been reached.
+      delete rpcPic;
+      m_cListPic.erase(iterPic);
+      rpcPic=0;
+    }
+  }
+
+  if (rpcPic==0)
+  {
+    if ( getUseAdaptiveQP() )
+    {
+      TEncPic* pcEPic = new TEncPic;
+#if REDUCED_ENCODER_MEMORY
+      pcEPic->create(sps, pps, pps.getMaxCuDQPDepth() + 1
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , getFilmGrainAnalysisEnabled()
+#endif
+                    );
+#else
+      pcEPic->create( sps, pps, pps.getMaxCuDQPDepth() + 1, false
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , getFilmGrainAnalysisEnabled()
+#endif
+                    );
+#endif
+      rpcPic = pcEPic;
+    }
+    else
+    {
+      rpcPic = new TComPic;
+#if REDUCED_ENCODER_MEMORY
+      rpcPic->create( sps, pps, true, false
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , getFilmGrainAnalysisEnabled()
+#endif
+                    );
