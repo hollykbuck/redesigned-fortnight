@@ -1398,3 +1398,103 @@ Void TDecSbac::parseCoeffNxN(  TComTU &rTu, ComponentID compID )
 
     if( iScanPosSig == (Int) uiScanPosLast )
     {
+      lastNZPosInCG  = iScanPosSig;
+      firstNZPosInCG = iScanPosSig;
+      iScanPosSig--;
+      pos[ numNonZero ] = uiBlkPosLast;
+      numNonZero = 1;
+    }
+
+    // decode significant_coeffgroup_flag
+    Int iCGBlkPos = codingParameters.scanCG[ iSubSet ];
+    Int iCGPosY   = iCGBlkPos / codingParameters.widthInGroups;
+    Int iCGPosX   = iCGBlkPos - (iCGPosY * codingParameters.widthInGroups);
+
+    if( iSubSet == iLastScanSet || iSubSet == 0)
+    {
+      uiSigCoeffGroupFlag[ iCGBlkPos ] = 1;
+    }
+    else
+    {
+      UInt uiSigCoeffGroup;
+      UInt uiCtxSig  = TComTrQuant::getSigCoeffGroupCtxInc( uiSigCoeffGroupFlag, iCGPosX, iCGPosY, codingParameters.widthInGroups, codingParameters.heightInGroups );
+      m_pcTDecBinIf->decodeBin( uiSigCoeffGroup, baseCoeffGroupCtx[ uiCtxSig ] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_group) );
+      uiSigCoeffGroupFlag[ iCGBlkPos ] = uiSigCoeffGroup;
+    }
+
+    // decode significant_coeff_flag
+    const Int patternSigCtx = TComTrQuant::calcPatternSigCtx(uiSigCoeffGroupFlag, iCGPosX, iCGPosY, codingParameters.widthInGroups, codingParameters.heightInGroups);
+
+    UInt uiBlkPos, uiSig, uiCtxSig;
+    for( ; iScanPosSig >= iSubPos; iScanPosSig-- )
+    {
+      uiBlkPos  = codingParameters.scan[ iScanPosSig ];
+      uiSig     = 0;
+
+      if( uiSigCoeffGroupFlag[ iCGBlkPos ] )
+      {
+        if( iScanPosSig > iSubPos || iSubSet == 0  || numNonZero )
+        {
+          uiCtxSig  = TComTrQuant::getSigCtxInc( patternSigCtx, codingParameters, iScanPosSig, uiLog2BlockWidth, uiLog2BlockHeight, chType );
+          m_pcTDecBinIf->decodeBin( uiSig, baseCtx[ uiCtxSig ] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_map) );
+        }
+        else
+        {
+          uiSig = 1;
+        }
+      }
+      pcCoef[ uiBlkPos ] = uiSig;
+      if( uiSig )
+      {
+        pos[ numNonZero ] = uiBlkPos;
+        numNonZero ++;
+        if( lastNZPosInCG == -1 )
+        {
+          lastNZPosInCG = iScanPosSig;
+        }
+        firstNZPosInCG = iScanPosSig;
+      }
+    }
+
+    if( numNonZero > 0 )
+    {
+      Bool signHidden = ( lastNZPosInCG - firstNZPosInCG >= SBH_THRESHOLD );
+
+      absSum = 0;
+
+      const UInt uiCtxSet = getContextSetIndex(compID, iSubSet, (c1 == 0));
+      c1 = 1;
+      UInt uiBin;
+
+      ContextModel *baseCtxMod = m_cCUOneSCModel.get( 0, 0 ) + (NUM_ONE_FLAG_CTX_PER_SET * uiCtxSet);
+
+      Int absCoeff[1 << MLS_CG_SIZE];
+
+      for ( Int i = 0; i < numNonZero; i++)
+      {
+        absCoeff[i] = 1;
+      }
+      Int numC1Flag = min(numNonZero, C1FLAG_NUMBER);
+      Int firstC2FlagIdx = -1;
+
+      for( Int idx = 0; idx < numC1Flag; idx++ )
+      {
+        m_pcTDecBinIf->decodeBin( uiBin, baseCtxMod[c1] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_gt1) );
+        if( uiBin == 1 )
+        {
+          c1 = 0;
+          if (firstC2FlagIdx == -1)
+          {
+            firstC2FlagIdx = idx;
+          }
+          else //if a greater-than-one has been encountered already this group
+          {
+            escapeDataPresentInGroup = true;
+          }
+        }
+        else if( (c1 < 3) && (c1 > 0) )
+        {
+          c1++;
+        }
+        absCoeff[ idx ] = uiBin + 1;
+      }
