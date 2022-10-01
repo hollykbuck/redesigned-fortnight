@@ -1298,3 +1298,103 @@ Void TDecSbac::parseCoeffNxN(  TComTU &rTu, ComponentID compID )
   {
     beValid = false;
     if((!pcCU->isIntra(uiAbsPartIdx)) && pcCU->isRDPCMEnabled(uiAbsPartIdx))
+    {
+      parseExplicitRdpcmMode(rTu, compID);
+    }
+  }
+  else
+  {
+    beValid = pcCU->getSlice()->getPPS()->getSignDataHidingEnabledFlag();
+  }
+
+  UInt absSum = 0;
+
+  //--------------------------------------------------------------------------------------------------
+
+  if(pcCU->getSlice()->getPPS()->getUseTransformSkip())
+  {
+    parseTransformSkipFlags(rTu, compID);
+    //  This TU has coefficients and is transform skipped. Check whether is inter coded and if yes decode the explicit RDPCM mode
+    if(pcCU->getTransformSkip(uiAbsPartIdx, compID) && (!pcCU->isIntra(uiAbsPartIdx)) && pcCU->isRDPCMEnabled(uiAbsPartIdx) )
+    {
+      parseExplicitRdpcmMode(rTu, compID);
+      if(pcCU->getExplicitRdpcmMode(compID, uiAbsPartIdx) != RDPCM_OFF)
+      {
+        //  Sign data hiding is avoided for horizontal and vertical RDPCM modes
+        beValid = false;
+      }
+    }
+  }
+
+  Int uiIntraMode = -1;
+  const Bool       bIsLuma = isLuma(compID);
+  Int isIntra = pcCU->isIntra(uiAbsPartIdx) ? 1 : 0;
+  if ( isIntra && pcCU->isRDPCMEnabled(uiAbsPartIdx) )
+  {
+    const UInt partsPerMinCU = 1<<(2*(sps.getMaxTotalCUDepth() - sps.getLog2DiffMaxMinCodingBlockSize()));
+    uiIntraMode = pcCU->getIntraDir( toChannelType(compID), uiAbsPartIdx );
+    uiIntraMode = (uiIntraMode==DM_CHROMA_IDX && !bIsLuma) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, rTu.GetChromaFormat(), partsPerMinCU)) : uiIntraMode;
+    uiIntraMode = ((rTu.GetChromaFormat() == CHROMA_422) && !bIsLuma) ? g_chroma422IntraAngleMappingTable[uiIntraMode] : uiIntraMode;
+
+    Bool transformSkip = pcCU->getTransformSkip( uiAbsPartIdx,compID);
+    Bool rdpcm_lossy = ( transformSkip /*&& isIntra*/ && ( (uiIntraMode == HOR_IDX) || (uiIntraMode == VER_IDX) ) );
+    if ( rdpcm_lossy )
+    {
+      beValid = false;
+    }
+  }
+
+  //--------------------------------------------------------------------------------------------------
+
+  const Bool  bUseGolombRiceParameterAdaptation = sps.getSpsRangeExtension().getPersistentRiceAdaptationEnabledFlag();
+        UInt &currentGolombRiceStatistic        = m_golombRiceAdaptationStatistics[rTu.getGolombRiceStatisticsIndex(compID)];
+
+  //select scans
+  TUEntropyCodingParameters codingParameters;
+  getTUEntropyCodingParameters(codingParameters, rTu, compID);
+
+  //===== decode last significant =====
+  UInt uiPosLastX, uiPosLastY;
+  parseLastSignificantXY( uiPosLastX, uiPosLastY, uiWidth, uiHeight, compID, codingParameters.scanType );
+  UInt uiBlkPosLast      = uiPosLastX + (uiPosLastY<<uiLog2BlockWidth);
+  pcCoef[ uiBlkPosLast ] = 1;
+
+  //===== decode significance flags =====
+  UInt uiScanPosLast;
+  for( uiScanPosLast = 0; uiScanPosLast < uiMaxNumCoeffM1; uiScanPosLast++ )
+  {
+    UInt uiBlkPos = codingParameters.scan[ uiScanPosLast ];
+    if( uiBlkPosLast == uiBlkPos )
+    {
+      break;
+    }
+  }
+
+  ContextModel * const baseCoeffGroupCtx = m_cCUSigCoeffGroupSCModel.get( 0, isChroma(chType) );
+  ContextModel * const baseCtx = m_cCUSigSCModel.get( 0, 0 ) + getSignificanceMapContextOffset(compID);
+
+  const Int  iLastScanSet  = uiScanPosLast >> MLS_CG_SIZE;
+  UInt c1                  = 1;
+  UInt uiGoRiceParam       = 0;
+
+
+  UInt uiSigCoeffGroupFlag[ MLS_GRP_NUM ];
+  memset( uiSigCoeffGroupFlag, 0, sizeof(UInt) * MLS_GRP_NUM );
+
+  Int  iScanPosSig             = (Int) uiScanPosLast;
+  for( Int iSubSet = iLastScanSet; iSubSet >= 0; iSubSet-- )
+  {
+    Int  iSubPos   = iSubSet << MLS_CG_SIZE;
+    uiGoRiceParam  = currentGolombRiceStatistic / RExt__GOLOMB_RICE_INCREMENT_DIVISOR;
+    Bool updateGolombRiceStatistics = bUseGolombRiceParameterAdaptation; //leave the statistics at 0 when not using the adaptation system
+    Int numNonZero = 0;
+
+    Int lastNZPosInCG  = -1;
+    Int firstNZPosInCG = 1 << MLS_CG_SIZE;
+
+    Bool escapeDataPresentInGroup = false;
+
+    Int pos[1 << MLS_CG_SIZE];
+
+    if( iScanPosSig == (Int) uiScanPosLast )
+    {
