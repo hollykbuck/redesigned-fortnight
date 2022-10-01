@@ -598,3 +598,103 @@ Void TEncTop::xGetNewPicBuffer ( TComPic*& rpcPic, Int ppsId )
                     , getFilmGrainAnalysisEnabled()
 #endif
                     );
+#else
+      rpcPic->create( sps, pps, false
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , getFilmGrainAnalysisEnabled()
+#endif
+                    );
+#endif
+    }
+
+    m_cListPic.pushBack( rpcPic );
+  }
+  rpcPic->setReconMark (false);
+
+  m_iPOCLast++;
+  m_iNumPicRcvd++;
+
+  rpcPic->getSlice(0)->setPOC( m_iPOCLast );
+#if !REDUCED_ENCODER_MEMORY
+  // mark it should be extended
+  rpcPic->getPicYuvRec()->setBorderExtension(false);
+#endif
+}
+
+Void TEncTop::xInitVPS(TComVPS &vps, const TComSPS &sps)
+{
+  // The SPS must have already been set up.
+  // set the VPS profile information.
+  *vps.getPTL() = *sps.getPTL();
+  vps.setMaxOpSets(1);
+  vps.getTimingInfo()->setTimingInfoPresentFlag       ( false );
+  vps.setNumHrdParameters( 0 );
+
+  vps.createHrdParamBuffer();
+  for( UInt i = 0; i < vps.getNumHrdParameters(); i ++ )
+  {
+    vps.setHrdOpSetIdx( 0, i );
+    vps.setCprmsPresentFlag( false, i );
+    // Set up HrdParameters here.
+  }
+}
+
+Void TEncTop::xInitSPS(TComSPS &sps)
+{
+  ProfileTierLevel& profileTierLevel = *sps.getPTL()->getGeneralPTL();
+  profileTierLevel.setLevelIdc(m_level);
+  profileTierLevel.setTierFlag(m_levelTier);
+  profileTierLevel.setProfileIdc(m_profile);
+  profileTierLevel.setProfileCompatibilityFlag(m_profile, 1);
+  profileTierLevel.setProgressiveSourceFlag(m_progressiveSourceFlag);
+  profileTierLevel.setInterlacedSourceFlag(m_interlacedSourceFlag);
+  profileTierLevel.setNonPackedConstraintFlag(m_nonPackedConstraintFlag);
+  profileTierLevel.setFrameOnlyConstraintFlag(m_frameOnlyConstraintFlag);
+  profileTierLevel.setBitDepthConstraint(m_bitDepthConstraintValue);
+  profileTierLevel.setChromaFormatConstraint(m_chromaFormatConstraintValue);
+  profileTierLevel.setIntraConstraintFlag(m_intraConstraintFlag);
+  profileTierLevel.setOnePictureOnlyConstraintFlag(m_onePictureOnlyConstraintFlag);
+  profileTierLevel.setLowerBitRateConstraintFlag(m_lowerBitRateConstraintFlag);
+
+  if ((m_profile == Profile::MAIN10) && (m_bitDepth[CHANNEL_TYPE_LUMA] == 8) && (m_bitDepth[CHANNEL_TYPE_CHROMA] == 8))
+  {
+    /* The above constraint is equal to Profile::MAIN */
+    profileTierLevel.setProfileCompatibilityFlag(Profile::MAIN, 1);
+  }
+  if (m_profile == Profile::MAIN)
+  {
+    /* A Profile::MAIN10 decoder can always decode Profile::MAIN */
+    profileTierLevel.setProfileCompatibilityFlag(Profile::MAIN10, 1);
+  }
+  /* XXX: should Main be marked as compatible with still picture? */
+  /* XXX: may be a good idea to refactor the above into a function
+   * that chooses the actual compatibility based upon options */
+
+  sps.setPicWidthInLumaSamples  ( m_iSourceWidth      );
+  sps.setPicHeightInLumaSamples ( m_iSourceHeight     );
+  sps.setConformanceWindow      ( m_conformanceWindow );
+  sps.setMaxCUWidth             ( m_maxCUWidth        );
+  sps.setMaxCUHeight            ( m_maxCUHeight       );
+  sps.setMaxTotalCUDepth        ( m_maxTotalCUDepth   );
+  sps.setChromaFormatIdc( m_chromaFormatIDC);
+  sps.setLog2DiffMaxMinCodingBlockSize(m_log2DiffMaxMinCodingBlockSize);
+
+  Int minCUSize = sps.getMaxCUWidth() >> ( sps.getLog2DiffMaxMinCodingBlockSize() );
+  Int log2MinCUSize = 0;
+  while(minCUSize > 1)
+  {
+    minCUSize >>= 1;
+    log2MinCUSize++;
+  }
+
+  sps.setLog2MinCodingBlockSize(log2MinCUSize);
+
+  sps.setPCMLog2MinSize (m_uiPCMLog2MinSize);
+  sps.setUsePCM        ( m_usePCM           );
+  sps.setPCMLog2MaxSize( m_pcmLog2MaxSize  );
+
+  sps.setQuadtreeTULog2MaxSize( m_uiQuadtreeTULog2MaxSize );
+  sps.setQuadtreeTULog2MinSize( m_uiQuadtreeTULog2MinSize );
