@@ -1498,3 +1498,103 @@ Void TDecSbac::parseCoeffNxN(  TComTU &rTu, ComponentID compID )
         }
         absCoeff[ idx ] = uiBin + 1;
       }
+
+      if (c1 == 0)
+      {
+        baseCtxMod = m_cCUAbsSCModel.get( 0, 0 ) + (NUM_ABS_FLAG_CTX_PER_SET * uiCtxSet);
+        if ( firstC2FlagIdx != -1)
+        {
+          m_pcTDecBinIf->decodeBin( uiBin, baseCtxMod[0] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_gt2) );
+          absCoeff[ firstC2FlagIdx ] = uiBin + 2;
+          if (uiBin != 0)
+          {
+            escapeDataPresentInGroup = true;
+          }
+        }
+      }
+
+      escapeDataPresentInGroup = escapeDataPresentInGroup || (numNonZero > C1FLAG_NUMBER);
+
+      const Bool alignGroup = escapeDataPresentInGroup && alignCABACBeforeBypass;
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+      TComCodingStatisticsClassType ctype_signs((alignGroup ? STATS__CABAC_BITS__ALIGNED_SIGN_BIT    : STATS__CABAC_BITS__SIGN_BIT   ), uiLog2BlockWidth, compID);
+      TComCodingStatisticsClassType ctype_escs ((alignGroup ? STATS__CABAC_BITS__ALIGNED_ESCAPE_BITS : STATS__CABAC_BITS__ESCAPE_BITS), uiLog2BlockWidth, compID);
+#endif
+
+      if (alignGroup)
+      {
+        m_pcTDecBinIf->align();
+      }
+
+      UInt coeffSigns;
+      if ( signHidden && beValid )
+      {
+        m_pcTDecBinIf->decodeBinsEP( coeffSigns, numNonZero-1 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_signs) );
+        coeffSigns <<= 32 - (numNonZero-1);
+      }
+      else
+      {
+        m_pcTDecBinIf->decodeBinsEP( coeffSigns, numNonZero RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_signs) );
+        coeffSigns <<= 32 - numNonZero;
+      }
+
+      Int iFirstCoeff2 = 1;
+      if (escapeDataPresentInGroup)
+      {
+        for( Int idx = 0; idx < numNonZero; idx++ )
+        {
+          UInt baseLevel  = (idx < C1FLAG_NUMBER)? (2 + iFirstCoeff2) : 1;
+
+          if( absCoeff[ idx ] == baseLevel)
+          {
+            UInt uiLevel;
+            xReadCoefRemainExGolomb( uiLevel, uiGoRiceParam, extendedPrecision, maxLog2TrDynamicRange RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype_escs) );
+
+            absCoeff[ idx ] = uiLevel + baseLevel;
+
+            if (absCoeff[idx] > (3 << uiGoRiceParam))
+            {
+              uiGoRiceParam = bUseGolombRiceParameterAdaptation ? (uiGoRiceParam + 1) : (std::min<UInt>((uiGoRiceParam + 1), 4));
+            }
+
+            if (updateGolombRiceStatistics)
+            {
+              const UInt initialGolombRiceParameter = currentGolombRiceStatistic / RExt__GOLOMB_RICE_INCREMENT_DIVISOR;
+
+              if (uiLevel >= (3 << initialGolombRiceParameter))
+              {
+                currentGolombRiceStatistic++;
+              }
+              else if (((uiLevel * 2) < (1 << initialGolombRiceParameter)) && (currentGolombRiceStatistic > 0))
+              {
+                currentGolombRiceStatistic--;
+              }
+
+              updateGolombRiceStatistics = false;
+            }
+          }
+
+          if(absCoeff[ idx ] >= 2)
+          {
+            iFirstCoeff2 = 0;
+          }
+        }
+      }
+
+      for( Int idx = 0; idx < numNonZero; idx++ )
+      {
+        Int blkPos = pos[ idx ];
+        // Signs applied later.
+        pcCoef[ blkPos ] = absCoeff[ idx ];
+        absSum += absCoeff[ idx ];
+
+        if ( idx == numNonZero-1 && signHidden && beValid )
+        {
+          // Infer sign of 1st element.
+          if (absSum&0x1)
+          {
+            pcCoef[ blkPos ] = -pcCoef[ blkPos ];
+          }
+        }
+        else
