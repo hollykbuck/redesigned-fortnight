@@ -1598,3 +1598,103 @@ Void TDecSbac::parseCoeffNxN(  TComTU &rTu, ComponentID compID )
           }
         }
         else
+        {
+          Int sign = static_cast<Int>( coeffSigns ) >> 31;
+          pcCoef[ blkPos ] = ( pcCoef[ blkPos ] ^ sign ) - sign;
+          coeffSigns <<= 1;
+        }
+      }
+    }
+  }
+
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+  printSBACCoeffData(uiPosLastX, uiPosLastY, uiWidth, uiHeight, compID, uiAbsPartIdx, codingParameters.scanType, pcCoef);
+#endif
+
+  return;
+}
+
+Void TDecSbac::parseSaoMaxUvlc ( UInt& val, UInt maxSymbol )
+{
+  if (maxSymbol == 0)
+  {
+    val = 0;
+    return;
+  }
+
+  UInt code;
+  Int  i;
+  m_pcTDecBinIf->decodeBinEP( code RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+  if ( code == 0 )
+  {
+    val = 0;
+    return;
+  }
+
+  i=1;
+  while (1)
+  {
+    m_pcTDecBinIf->decodeBinEP( code RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+    if ( code == 0 )
+    {
+      break;
+    }
+    i++;
+    if (i == maxSymbol)
+    {
+      break;
+    }
+  }
+
+  val = i;
+}
+
+Void TDecSbac::parseSaoUflc (UInt uiLength, UInt&  riVal)
+{
+  m_pcTDecBinIf->decodeBinsEP ( riVal, uiLength RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+}
+
+Void TDecSbac::parseSaoMerge (UInt&  ruiVal)
+{
+  UInt uiCode;
+  m_pcTDecBinIf->decodeBin( uiCode, m_cSaoMergeSCModel.get( 0, 0, 0 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+  ruiVal = (Int)uiCode;
+}
+
+Void TDecSbac::parseSaoTypeIdx (UInt&  ruiVal)
+{
+  UInt uiCode;
+  m_pcTDecBinIf->decodeBin( uiCode, m_cSaoTypeIdxSCModel.get( 0, 0, 0 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+  if (uiCode == 0)
+  {
+    ruiVal = 0;
+  }
+  else
+  {
+    m_pcTDecBinIf->decodeBinEP( uiCode RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+    if (uiCode == 0)
+    {
+      ruiVal = 1;
+    }
+    else
+    {
+      ruiVal = 2;
+    }
+  }
+}
+
+Void TDecSbac::parseSaoSign(UInt& val)
+{
+  m_pcTDecBinIf->decodeBinEP ( val RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__SAO) );
+}
+
+Void TDecSbac::parseSAOBlkParam (SAOBlkParam& saoBlkParam
+                                , Bool* sliceEnabled
+                                , Bool leftMergeAvail
+                                , Bool aboveMergeAvail
+                                , const BitDepths &bitDepths
+                                )
+{
+  UInt uiSymbol;
+
+  Bool isLeftMerge = false;
