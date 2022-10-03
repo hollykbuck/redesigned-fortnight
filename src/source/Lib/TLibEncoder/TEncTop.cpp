@@ -798,3 +798,103 @@ Void TEncTop::xInitSPS(TComSPS &sps)
   sps.getSpsRangeExtension().setPersistentRiceAdaptationEnabledFlag(m_persistentRiceAdaptationEnabledFlag);
   sps.getSpsRangeExtension().setCabacBypassAlignmentEnabledFlag(m_cabacBypassAlignmentEnabledFlag);
 }
+
+// calculate scale value of bitrate and initial delay
+Int calcScale(Int x)
+{
+  if (x==0)
+  {
+    return 0;
+  }
+  UInt iMask = 0xffffffff;
+  Int ScaleValue = 32;
+
+  while ((x&iMask) != 0)
+  {
+    ScaleValue--;
+    iMask = (iMask >> 1);
+  }
+
+  return ScaleValue;
+}
+
+Void TEncTop::xInitHrdParameters(TComSPS &sps)
+{
+  Bool useSubCpbParams = (getSliceMode() > 0) || (getSliceSegmentMode() > 0);
+  Int  bitRate         = getTargetBitrate();
+  Bool isRandomAccess  = getIntraPeriod() > 0;
+  Int cpbSize          = getCpbSize();
+  assert (cpbSize!=0);  // CPB size may not be equal to zero. ToDo: have a better default and check for level constraints
+  if( !getVuiParametersPresentFlag() && !getCpbSaturationEnabled() )
+  {
+    return;
+  }
+
+  TComVUI *vui = sps.getVuiParameters();
+  TComHRD *hrd = vui->getHrdParameters();
+
+  TimingInfo *timingInfo = vui->getTimingInfo();
+  timingInfo->setTimingInfoPresentFlag( true );
+  switch( getFrameRate() )
+  {
+  case 24:
+    timingInfo->setNumUnitsInTick( 1125000 );    timingInfo->setTimeScale    ( 27000000 );
+    break;
+  case 25:
+    timingInfo->setNumUnitsInTick( 1080000 );    timingInfo->setTimeScale    ( 27000000 );
+    break;
+  case 30:
+    timingInfo->setNumUnitsInTick( 900900 );     timingInfo->setTimeScale    ( 27000000 );
+    break;
+  case 50:
+    timingInfo->setNumUnitsInTick( 540000 );     timingInfo->setTimeScale    ( 27000000 );
+    break;
+  case 60:
+    timingInfo->setNumUnitsInTick( 450450 );     timingInfo->setTimeScale    ( 27000000 );
+    break;
+  default:
+    timingInfo->setNumUnitsInTick( 1001 );       timingInfo->setTimeScale    ( 60000 );
+    break;
+  }
+
+  if (getTemporalSubsampleRatio()>1)
+  {
+    UInt temporalSubsampleRatio = getTemporalSubsampleRatio();
+    if ( Double(timingInfo->getNumUnitsInTick()) * temporalSubsampleRatio > std::numeric_limits<UInt>::max() )
+    {
+      timingInfo->setTimeScale( timingInfo->getTimeScale() / temporalSubsampleRatio );
+    }
+    else
+    {
+      timingInfo->setNumUnitsInTick( timingInfo->getNumUnitsInTick() * temporalSubsampleRatio );
+    }
+  }
+
+  Bool rateCnt = ( bitRate > 0 );
+  hrd->setNalHrdParametersPresentFlag( rateCnt );
+  hrd->setVclHrdParametersPresentFlag( rateCnt );
+  hrd->setSubPicCpbParamsPresentFlag( useSubCpbParams );
+
+  if( hrd->getSubPicCpbParamsPresentFlag() )
+  {
+    hrd->setTickDivisorMinus2( 100 - 2 );                          //
+    hrd->setDuCpbRemovalDelayLengthMinus1( 7 );                    // 8-bit precision ( plus 1 for last DU in AU )
+    hrd->setSubPicCpbParamsInPicTimingSEIFlag( true );
+    hrd->setDpbOutputDelayDuLengthMinus1( 5 + 7 );                 // With sub-clock tick factor of 100, at least 7 bits to have the same value as AU dpb delay
+  }
+  else
+  {
+    hrd->setSubPicCpbParamsInPicTimingSEIFlag( false );
+  }
+
+  if (calcScale(bitRate) <= 6)
+  {
+    hrd->setBitRateScale(0);
+  }
+  else
+  {
+    hrd->setBitRateScale(calcScale(bitRate) - 6);
+  }
+
+  if (calcScale(cpbSize) <= 4)
+  {
