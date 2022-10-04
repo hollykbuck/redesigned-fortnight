@@ -1698,3 +1698,103 @@ Void TDecSbac::parseSAOBlkParam (SAOBlkParam& saoBlkParam
   UInt uiSymbol;
 
   Bool isLeftMerge = false;
+  Bool isAboveMerge= false;
+
+  if(leftMergeAvail)
+  {
+    parseSaoMerge(uiSymbol); //sao_merge_left_flag
+    isLeftMerge = (uiSymbol?true:false);
+  }
+
+  if( aboveMergeAvail && !isLeftMerge)
+  {
+    parseSaoMerge(uiSymbol); //sao_merge_up_flag
+    isAboveMerge = (uiSymbol?true:false);
+  }
+
+  if(isLeftMerge || isAboveMerge) //merge mode
+  {
+    for (UInt componentIndex = 0; componentIndex < MAX_NUM_COMPONENT; componentIndex++)
+    {
+      saoBlkParam[componentIndex].modeIdc = (sliceEnabled[componentIndex]) ? SAO_MODE_MERGE : SAO_MODE_OFF;
+      saoBlkParam[componentIndex].typeIdc = (isLeftMerge)?SAO_MERGE_LEFT:SAO_MERGE_ABOVE;
+    }
+  }
+  else //new or off mode
+  {
+    for(Int compId=COMPONENT_Y; compId < MAX_NUM_COMPONENT; compId++)
+    {
+      const ComponentID compIdx=ComponentID(compId);
+      const ComponentID firstCompOfChType = getFirstComponentOfChannel(toChannelType(compIdx));
+      SAOOffset& ctbParam = saoBlkParam[compIdx];
+#if O0043_BEST_EFFORT_DECODING
+      const Int bitDepthOrig = bitDepths.stream[toChannelType(compIdx)];
+      const Int forceBitDepthAdjust = bitDepthOrig - bitDepths.recon[toChannelType(compIdx)];
+#else
+      const Int bitDepthOrig = bitDepths.recon[toChannelType(compIdx)];
+#endif
+      const Int maxOffsetQVal=TComSampleAdaptiveOffset::getMaxOffsetQVal(bitDepthOrig);
+      if(!sliceEnabled[compIdx])
+      {
+        //off
+        ctbParam.modeIdc = SAO_MODE_OFF;
+        continue;
+      }
+
+      //type
+      if(compIdx == firstCompOfChType)
+      {
+        parseSaoTypeIdx(uiSymbol); //sao_type_idx_luma or sao_type_idx_chroma
+
+        assert(uiSymbol ==0 || uiSymbol ==1 || uiSymbol ==2);
+
+        if(uiSymbol ==0) //OFF
+        {
+          ctbParam.modeIdc = SAO_MODE_OFF;
+        }
+        else if(uiSymbol == 1) //BO
+        {
+          ctbParam.modeIdc = SAO_MODE_NEW;
+          ctbParam.typeIdc = SAO_TYPE_START_BO;
+        }
+        else //2, EO
+        {
+          ctbParam.modeIdc = SAO_MODE_NEW;
+          ctbParam.typeIdc = SAO_TYPE_START_EO;
+        }
+
+      }
+      else //Cr, follow Cb SAO type
+      {
+        ctbParam.modeIdc = saoBlkParam[COMPONENT_Cb].modeIdc;
+        ctbParam.typeIdc = saoBlkParam[COMPONENT_Cb].typeIdc;
+      }
+
+      if(ctbParam.modeIdc == SAO_MODE_NEW)
+      {
+        Int offset[4];
+        for(Int i=0; i< 4; i++)
+        {
+          parseSaoMaxUvlc(uiSymbol, maxOffsetQVal ); //sao_offset_abs
+          offset[i] = (Int)uiSymbol;
+        }
+
+        if(ctbParam.typeIdc == SAO_TYPE_START_BO)
+        {
+          for(Int i=0; i< 4; i++)
+          {
+            if(offset[i] != 0)
+            {
+              parseSaoSign(uiSymbol); //sao_offset_sign
+              if(uiSymbol)
+              {
+#if O0043_BEST_EFFORT_DECODING
+                offset[i] >>= forceBitDepthAdjust;
+#endif
+                offset[i] = -offset[i];
+              }
+            }
+          }
+          parseSaoUflc(NUM_SAO_BO_CLASSES_LOG2, uiSymbol ); //sao_band_position
+          ctbParam.typeAuxInfo = uiSymbol;
+
