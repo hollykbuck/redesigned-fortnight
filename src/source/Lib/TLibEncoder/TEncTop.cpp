@@ -998,3 +998,103 @@ Void TEncTop::xInitPPS(TComPPS &pps, const TComSPS &sps)
 
 
   if ( m_RCEnableRateControl )
+  {
+    pps.setUseDQP(true);
+    pps.setMaxCuDQPDepth( 0 );
+  }
+  else if(bUseDQP)
+  {
+    pps.setUseDQP(true);
+    pps.setMaxCuDQPDepth( m_iMaxCuDQPDepth );
+  }
+  else
+  {
+    pps.setUseDQP(false);
+    pps.setMaxCuDQPDepth( 0 );
+  }
+
+  if ( m_diffCuChromaQpOffsetDepth >= 0 )
+  {
+    pps.getPpsRangeExtension().setDiffCuChromaQpOffsetDepth(m_diffCuChromaQpOffsetDepth);
+    pps.getPpsRangeExtension().clearChromaQpOffsetList();
+    pps.getPpsRangeExtension().setChromaQpOffsetListEntry(1, 6, 6);
+    /* todo, insert table entries from command line (NB, 0 should not be touched) */
+  }
+  else
+  {
+    pps.getPpsRangeExtension().setDiffCuChromaQpOffsetDepth(0);
+    pps.getPpsRangeExtension().clearChromaQpOffsetList();
+  }
+  pps.getPpsRangeExtension().setCrossComponentPredictionEnabledFlag(m_crossComponentPredictionEnabledFlag);
+  pps.getPpsRangeExtension().setLog2SaoOffsetScale(CHANNEL_TYPE_LUMA,   m_log2SaoOffsetScale[CHANNEL_TYPE_LUMA  ]);
+  pps.getPpsRangeExtension().setLog2SaoOffsetScale(CHANNEL_TYPE_CHROMA, m_log2SaoOffsetScale[CHANNEL_TYPE_CHROMA]);
+
+  if (getWCGChromaQPControl().isEnabled())
+  {
+    const Int baseQp=m_iQP+pps.getPPSId();
+    const Double chromaQp = m_wcgChromaQpControl.chromaQpScale * baseQp + m_wcgChromaQpControl.chromaQpOffset;
+    const Double dcbQP = m_wcgChromaQpControl.chromaCbQpScale * chromaQp;
+    const Double dcrQP = m_wcgChromaQpControl.chromaCrQpScale * chromaQp;
+    const Int cbQP =(Int)(dcbQP + ( dcbQP < 0 ? -0.5 : 0.5) );
+    const Int crQP =(Int)(dcrQP + ( dcrQP < 0 ? -0.5 : 0.5) );
+    pps.setQpOffset(COMPONENT_Cb, Clip3( -12, 12, min(0, cbQP) + m_chromaCbQpOffset ));
+    pps.setQpOffset(COMPONENT_Cr, Clip3( -12, 12, min(0, crQP) + m_chromaCrQpOffset));
+  }
+  else
+  {
+    pps.setQpOffset(COMPONENT_Cb, m_chromaCbQpOffset );
+    pps.setQpOffset(COMPONENT_Cr, m_chromaCrQpOffset );
+  }
+  Bool bChromaDeltaQPEnabled = false;
+  {
+    bChromaDeltaQPEnabled = ( m_sliceChromaQpOffsetIntraOrPeriodic[0] || m_sliceChromaQpOffsetIntraOrPeriodic[1] );
+    if( !bChromaDeltaQPEnabled )
+    {
+      for( Int i=0; i<m_iGOPSize; i++ )
+      {
+        if( m_GOPList[i].m_CbQPoffset || m_GOPList[i].m_CrQPoffset )
+        {
+          bChromaDeltaQPEnabled = true;
+          break;
+        }
+      }
+    }
+  }
+  pps.setSliceChromaQpFlag(bChromaDeltaQPEnabled);
+
+  pps.setEntropyCodingSyncEnabledFlag( m_entropyCodingSyncEnabledFlag );
+  pps.setTilesEnabledFlag( (m_iNumColumnsMinus1 > 0 || m_iNumRowsMinus1 > 0) );
+  pps.setUseWP( m_useWeightedPred );
+  pps.setWPBiPred( m_useWeightedBiPred );
+  pps.setOutputFlagPresentFlag( false );
+  pps.setSignDataHidingEnabledFlag(getSignDataHidingEnabledFlag());
+
+  if ( getDeblockingFilterMetric() )
+  {
+    pps.setDeblockingFilterOverrideEnabledFlag(true);
+    pps.setPPSDeblockingFilterDisabledFlag(false);
+  }
+  else
+  {
+    pps.setDeblockingFilterOverrideEnabledFlag( !getLoopFilterOffsetInPPS() );
+    pps.setPPSDeblockingFilterDisabledFlag( getLoopFilterDisable() );
+  }
+
+  if (! pps.getPPSDeblockingFilterDisabledFlag())
+  {
+    pps.setDeblockingFilterBetaOffsetDiv2( getLoopFilterBetaOffset() );
+    pps.setDeblockingFilterTcOffsetDiv2( getLoopFilterTcOffset() );
+  }
+  else
+  {
+    pps.setDeblockingFilterBetaOffsetDiv2(0);
+    pps.setDeblockingFilterTcOffsetDiv2(0);
+  }
+
+  // deblockingFilterControlPresentFlag is true if any of the settings differ from the inferred values:
+  const Bool deblockingFilterControlPresentFlag = pps.getDeblockingFilterOverrideEnabledFlag() ||
+                                                  pps.getPPSDeblockingFilterDisabledFlag()     ||
+                                                  pps.getDeblockingFilterBetaOffsetDiv2() != 0 ||
+                                                  pps.getDeblockingFilterTcOffsetDiv2() != 0;
+
+  pps.setDeblockingFilterControlPresentFlag(deblockingFilterControlPresentFlag);
