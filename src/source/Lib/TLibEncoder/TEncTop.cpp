@@ -1198,3 +1198,103 @@ Void TEncTop::xInitRPS(TComSPS &sps, Bool isFieldCoding)
               count++;
               break;
           }
+        }
+      }
+      if (count != rps->getNumberOfPictures())
+      {
+        printf("Warning: Unable fully predict all delta POCs using the reference RPS index given in the config file.  Setting Inter RPS to false for this RPS.\n");
+        rps->setInterRPSPrediction(0);
+      }
+    }
+    else if (ge.m_interRPSPrediction == 1)  // inter RPS idc based on the RefIdc values provided in config file.
+    {
+      assert (RPSRef!=NULL);
+      rps->setDeltaRPS(ge.m_deltaRPS);
+      rps->setNumRefIdc(ge.m_numRefIdc);
+      for (Int j = 0; j < ge.m_numRefIdc; j++ )
+      {
+        rps->setRefIdc(j, ge.m_refIdc[j]);
+      }
+      // the following code overwrite the deltaPOC and Used by current values read from the config file with the ones
+      // computed from the RefIdc.  A warning is printed if they are not identical.
+      numNeg = 0;
+      numPos = 0;
+      TComReferencePictureSet      RPSTemp;  // temporary variable
+
+      for (Int j = 0; j < ge.m_numRefIdc; j++ )
+      {
+        if (ge.m_refIdc[j])
+        {
+          Int deltaPOC = ge.m_deltaRPS + ((j < RPSRef->getNumberOfPictures())? RPSRef->getDeltaPOC(j) : 0);
+          RPSTemp.setDeltaPOC((numNeg+numPos),deltaPOC);
+          RPSTemp.setUsed((numNeg+numPos),ge.m_refIdc[j]==1?1:0);
+          if (deltaPOC<0)
+          {
+            numNeg++;
+          }
+          else
+          {
+            numPos++;
+          }
+        }
+      }
+      if (numNeg != rps->getNumberOfNegativePictures())
+      {
+        printf("Warning: number of negative pictures in RPS is different between intra and inter RPS specified in the config file.\n");
+        rps->setNumberOfNegativePictures(numNeg);
+        rps->setNumberOfPictures(numNeg+numPos);
+      }
+      if (numPos != rps->getNumberOfPositivePictures())
+      {
+        printf("Warning: number of positive pictures in RPS is different between intra and inter RPS specified in the config file.\n");
+        rps->setNumberOfPositivePictures(numPos);
+        rps->setNumberOfPictures(numNeg+numPos);
+      }
+      RPSTemp.setNumberOfPictures(numNeg+numPos);
+      RPSTemp.setNumberOfNegativePictures(numNeg);
+      RPSTemp.sortDeltaPOC();     // sort the created delta POC before comparing
+      // check if Delta POC and Used are the same
+      // print warning if they are not.
+      for (Int j = 0; j < ge.m_numRefIdc; j++ )
+      {
+        if (RPSTemp.getDeltaPOC(j) != rps->getDeltaPOC(j))
+        {
+          printf("Warning: delta POC is different between intra RPS and inter RPS specified in the config file.\n");
+          rps->setDeltaPOC(j,RPSTemp.getDeltaPOC(j));
+        }
+        if (RPSTemp.getUsed(j) != rps->getUsed(j))
+        {
+          printf("Warning: Used by Current in RPS is different between intra and inter RPS specified in the config file.\n");
+          rps->setUsed(j,RPSTemp.getUsed(j));
+        }
+      }
+    }
+  }
+  //In case of field coding, we need to set special parameters for the first bottom field of the sequence, since it is not specified in the cfg file.
+  //The position = GOPSize + extraRPSs which is (a priori) unused is reserved for this field in the RPS.
+  if (isFieldCoding)
+  {
+    rps = rpsList->getReferencePictureSet(getGOPSize()+m_extraRPSs);
+    rps->setNumberOfPictures(1);
+    rps->setNumberOfNegativePictures(1);
+    rps->setNumberOfPositivePictures(0);
+    rps->setNumberOfLongtermPictures(0);
+    rps->setDeltaPOC(0,-1);
+    rps->setPOC(0,0);
+    rps->setUsed(0,true);
+    rps->setInterRPSPrediction(false);
+    rps->setDeltaRIdxMinus1(0);
+    rps->setDeltaRPS(0);
+    rps->setNumRefIdc(0);
+  }
+}
+
+   // This is a function that
+   // determines what Reference Picture Set to use
+   // for a specific slice (with POC = POCCurr)
+Void TEncTop::selectReferencePictureSet(TComSlice* slice, Int POCCurr, Int GOPid )
+{
+  slice->setRPSidx(GOPid);
+
+  for(Int extraNum=m_iGOPSize; extraNum<m_extraRPSs+m_iGOPSize; extraNum++)
+  {
