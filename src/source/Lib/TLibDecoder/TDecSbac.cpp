@@ -1798,3 +1798,101 @@ Void TDecSbac::parseSAOBlkParam (SAOBlkParam& saoBlkParam
           parseSaoUflc(NUM_SAO_BO_CLASSES_LOG2, uiSymbol ); //sao_band_position
           ctbParam.typeAuxInfo = uiSymbol;
 
+          for(Int i=0; i<4; i++)
+          {
+            ctbParam.offset[(ctbParam.typeAuxInfo+i)%MAX_NUM_SAO_CLASSES] = offset[i];
+          }
+
+        }
+        else //EO
+        {
+          ctbParam.typeAuxInfo = 0;
+
+          if(firstCompOfChType == compIdx)
+          {
+            parseSaoUflc(NUM_SAO_EO_TYPES_LOG2, uiSymbol ); //sao_eo_class_luma or sao_eo_class_chroma
+            ctbParam.typeIdc += uiSymbol;
+          }
+          else
+          {
+            ctbParam.typeIdc = saoBlkParam[firstCompOfChType].typeIdc;
+          }
+          ctbParam.offset[SAO_CLASS_EO_FULL_VALLEY] = offset[0];
+          ctbParam.offset[SAO_CLASS_EO_HALF_VALLEY] = offset[1];
+          ctbParam.offset[SAO_CLASS_EO_PLAIN      ] = 0;
+          ctbParam.offset[SAO_CLASS_EO_HALF_PEAK  ] = -offset[2];
+          ctbParam.offset[SAO_CLASS_EO_FULL_PEAK  ] = -offset[3];
+        }
+      }
+    }
+  }
+}
+
+/**
+ - Initialize our contexts from the nominated source.
+ .
+ \param pSrc Contexts to be copied.
+ */
+Void TDecSbac::xCopyContextsFrom( const TDecSbac* pSrc )
+{
+  memcpy(m_contextModels, pSrc->m_contextModels, m_numContextModels*sizeof(m_contextModels[0]));
+  memcpy(m_golombRiceAdaptationStatistics, pSrc->m_golombRiceAdaptationStatistics, (sizeof(UInt) * RExt__GOLOMB_RICE_ADAPTATION_STATISTICS_SETS));
+}
+
+Void TDecSbac::xCopyFrom( const TDecSbac* pSrc )
+{
+  m_pcTDecBinIf->copyState( pSrc->m_pcTDecBinIf );
+  xCopyContextsFrom( pSrc );
+}
+
+Void TDecSbac::load ( const TDecSbac* pSrc )
+{
+  xCopyFrom(pSrc);
+}
+
+Void TDecSbac::loadContexts ( const TDecSbac* pSrc )
+{
+  xCopyContextsFrom(pSrc);
+}
+
+/** Performs CABAC decoding of the explicit RDPCM mode
+ * \param rTu current TU data structure
+ * \param compID component identifier
+ */
+Void TDecSbac::parseExplicitRdpcmMode( TComTU &rTu, ComponentID compID )
+{
+  TComDataCU* cu = rTu.getCU();
+  const UInt absPartIdx=rTu.GetAbsPartIdxTU(compID);
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt tuHeight = g_aucConvertToBit[rect.height];
+  const UInt tuWidth  = g_aucConvertToBit[rect.width];
+  UInt code = 0;
+
+  assert(tuHeight == tuWidth);
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  const TComCodingStatisticsClassType ctype(STATS__EXPLICIT_RDPCM_BITS, g_aucConvertToBit[cu->getSlice()->getSPS()->getMaxCUWidth()>>rTu.GetTransformDepthTotal()]+2);
+#endif
+
+  m_pcTDecBinIf->decodeBin(code, m_explicitRdpcmFlagSCModel.get (0, toChannelType(compID), 0) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype));
+
+  if(code == 0)
+  {
+    cu->setExplicitRdpcmModePartRange( RDPCM_OFF, compID, absPartIdx, rTu.GetAbsPartIdxNumParts(compID));
+  }
+  else
+  {
+    m_pcTDecBinIf->decodeBin(code, m_explicitRdpcmDirSCModel.get (0, toChannelType(compID), 0) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype));
+    if(code == 0)
+    {
+      cu->setExplicitRdpcmModePartRange( RDPCM_HOR, compID, absPartIdx, rTu.GetAbsPartIdxNumParts(compID));
+    }
+    else
+    {
+      cu->setExplicitRdpcmModePartRange( RDPCM_VER, compID, absPartIdx, rTu.GetAbsPartIdxNumParts(compID));
+    }
+  }
+}
+
+
+//! \}
