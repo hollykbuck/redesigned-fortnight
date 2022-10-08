@@ -298,3 +298,80 @@ uint8_t SEIPrefixIndication::getNumsOfSeiPrefixIndications(const SEI* sei)
   }
   for (auto pt : indication2)
   {
+    if (payloadType == pt)
+    {
+      return 2;
+    }
+  }
+  return 1;
+}
+#endif
+
+
+// Static member
+const TChar *SEI::getSEIMessageString(SEI::PayloadType payloadType)
+{
+  switch (payloadType)
+  {
+    case SEI::BUFFERING_PERIOD:                     return "Buffering period";
+    case SEI::PICTURE_TIMING:                       return "Picture timing";
+    case SEI::PAN_SCAN_RECT:                        return "Pan-scan rectangle";
+    case SEI::FILLER_PAYLOAD:                       return "Filler payload";
+    case SEI::USER_DATA_REGISTERED_ITU_T_T35:       return "User data registered";
+    case SEI::USER_DATA_UNREGISTERED:               return "User data unregistered";
+    case SEI::RECOVERY_POINT:                       return "Recovery point";
+    case SEI::SCENE_INFO:                           return "Scene information";
+    case SEI::PICTURE_SNAPSHOT:                     return "Picture snapshot";
+    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_START: return "Progressive refinement segment start";
+    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_END:   return "Progressive refinement segment end";
+    case SEI::FILM_GRAIN_CHARACTERISTICS:           return "Film grain characteristics";
+    case SEI::POST_FILTER_HINT:                     return "Post filter hint";
+    case SEI::TONE_MAPPING_INFO:                    return "Tone mapping information";
+    case SEI::KNEE_FUNCTION_INFO:                   return "Knee function information";
+    case SEI::FRAME_PACKING:                        return "Frame packing arrangement";
+    case SEI::DISPLAY_ORIENTATION:                  return "Display orientation";
+    case SEI::GREEN_METADATA:                       return "Green metadata information";
+    case SEI::SOP_DESCRIPTION:                      return "Structure of pictures information";
+    case SEI::ACTIVE_PARAMETER_SETS:                return "Active parameter sets";
+    case SEI::DECODING_UNIT_INFO:                   return "Decoding unit information";
+    case SEI::TEMPORAL_LEVEL0_INDEX:                return "Temporal sub-layer zero index";
+    case SEI::DECODED_PICTURE_HASH:                 return "Decoded picture hash";
+    case SEI::SCALABLE_NESTING:                     return "Scalable nesting";
+    case SEI::REGION_REFRESH_INFO:                  return "Region refresh information";
+    case SEI::NO_DISPLAY:                           return "No display";
+    case SEI::TIME_CODE:                            return "Time code";
+    case SEI::MASTERING_DISPLAY_COLOUR_VOLUME:      return "Mastering display colour volume";
+    case SEI::SEGM_RECT_FRAME_PACKING:              return "Segmented rectangular frame packing arrangement";
+    case SEI::TEMP_MOTION_CONSTRAINED_TILE_SETS:    return "Temporal motion constrained tile sets";
+    case SEI::CHROMA_RESAMPLING_FILTER_HINT:        return "Chroma sampling filter hint";
+    case SEI::COLOUR_REMAPPING_INFO:                return "Colour remapping info";
+    case SEI::DEINTERLACE_FIELD_IDENTIFICATION:     return "Deinterlace field identification";
+    case SEI::CONTENT_LIGHT_LEVEL_INFO:             return "Content light level info";
+    case SEI::DEPENDENT_RAP_INDICATION:             return "Dependent RAP indication";
+    case SEI::CODED_REGION_COMPLETION:              return "Coded region completion";
+    case SEI::ALTERNATIVE_TRANSFER_CHARACTERISTICS: return "Alternative transfer characteristics";
+    case SEI::AMBIENT_VIEWING_ENVIRONMENT:          return "Ambient viewing environment";
+    case SEI::CONTENT_COLOUR_VOLUME:                return "Content Colour Volume";
+    case SEI::EQUIRECTANGULAR_PROJECTION:           return "Equirectangular projection";
+    case SEI::SPHERE_ROTATION:                      return "Sphere rotation";
+    case SEI::OMNI_VIEWPORT:                        return "Omni viewport";
+    case SEI::CUBEMAP_PROJECTION:                  return "Cubemap projection";
+    case SEI::REGION_WISE_PACKING:                  return "Region wise packing information";
+    case SEI::FISHEYE_VIDEO_INFO:                   return "Fisheye video information";
+    case SEI::REGIONAL_NESTING:                     return "Regional nesting";
+#if MCTS_EXTRACTION
+    case SEI::MCTS_EXTRACTION_INFO_SET:             return "MCTS extraction information";
+#endif
+#if JCTVC_AD0021_SEI_MANIFEST
+    case SEI::SEI_MANIFEST:                         return "SEI manifest";
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    case SEI::SEI_PREFIX_INDICATION:                return "SEI prefix indication";
+#endif
+    case SEI::ANNOTATED_REGIONS:                    return "Annotated Region";
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+    case SEI::SHUTTER_INTERVAL_INFO:                return "Shutter interval information";
+#endif
+    default:                                        return "Unknown";
+  }
+}
