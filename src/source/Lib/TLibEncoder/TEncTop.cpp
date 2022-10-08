@@ -1398,3 +1398,103 @@ Void  TEncCfg::xCheckGSParameters()
     for(Int i=0; i<m_iNumColumnsMinus1; i++)
     {
       uiCummulativeColumnWidth += m_tileColumnWidth[i];
+    }
+
+    if( uiCummulativeColumnWidth >= iWidthInCU )
+    {
+      printf( "The width of the column is too large.\n" );
+      exit( EXIT_FAILURE );
+    }
+  }
+
+  //check the row relative parameters
+  if( m_iNumRowsMinus1 >= (1<<(LOG2_MAX_NUM_ROWS_MINUS1+1)) )
+  {
+    printf( "The number of rows is larger than the maximum allowed number of rows.\n" );
+    exit( EXIT_FAILURE );
+  }
+
+  if( m_iNumRowsMinus1 >= iHeightInCU )
+  {
+    printf( "The current picture can not have so many rows.\n" );
+    exit( EXIT_FAILURE );
+  }
+
+  if( m_iNumRowsMinus1 && !m_tileUniformSpacingFlag )
+  {
+    for(Int i=0; i<m_iNumRowsMinus1; i++)
+    {
+      uiCummulativeRowHeight += m_tileRowHeight[i];
+    }
+
+    if( uiCummulativeRowHeight >= iHeightInCU )
+    {
+      printf( "The height of the row is too large.\n" );
+      exit( EXIT_FAILURE );
+    }
+  }
+}
+
+Void TEncTop::setParamSetChanged(Int spsId, Int ppsId)
+{
+  m_ppsMap.setChangedFlag(ppsId);
+  m_spsMap.setChangedFlag(spsId);
+}
+
+Bool TEncTop::PPSNeedsWriting(Int ppsId)
+{
+  Bool bChanged=m_ppsMap.getChangedFlag(ppsId);
+  m_ppsMap.clearChangedFlag(ppsId);
+  return bChanged;
+}
+
+Bool TEncTop::SPSNeedsWriting(Int spsId)
+{
+  Bool bChanged=m_spsMap.getChangedFlag(spsId);
+  m_spsMap.clearChangedFlag(spsId);
+  return bChanged;
+}
+
+Int TEncCfg::getQPForPicture(const UInt gopIndex, const TComSlice *pSlice) const
+{
+  const Int lumaQpBDOffset = pSlice->getSPS()->getQpBDOffset(CHANNEL_TYPE_LUMA);
+  Int qp;
+
+  if (getCostMode()==COST_LOSSLESS_CODING)
+  {
+    qp=LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP;
+  }
+  else
+  {
+    const SliceType sliceType=pSlice->getSliceType();
+
+    qp = getBaseQP();
+
+    // modify QP if a fractional QP was originally specified, cause dQPs to be 0 or 1.
+    const Int* pdQPs = getdQPs();
+    if ( pdQPs )
+    {
+      qp += pdQPs[ pSlice->getPOC() ];
+    }
+
+    if(sliceType==I_SLICE)
+    {
+      qp += getIntraQPOffset();
+    }
+    else
+    {
+      // Only adjust QP when not lossless
+#if JVET_Y0077_BIM
+      if (!((getMaxDeltaQP() == 0) && (!getLumaLevelToDeltaQPMapping().isEnabled()) && (!getSmoothQPReductionEnable()) && (!getBIM()) && (qp == -lumaQpBDOffset) && (pSlice->getPPS()->getTransquantBypassEnabledFlag())))
+#else
+#if JVET_V0078
+      if (!((getMaxDeltaQP() == 0) && (!getLumaLevelToDeltaQPMapping().isEnabled()) && (!getSmoothQPReductionEnable()) && (qp == -lumaQpBDOffset) && (pSlice->getPPS()->getTransquantBypassEnabledFlag())))
+#else
+      if (!(( getMaxDeltaQP() == 0 ) && (!getLumaLevelToDeltaQPMapping().isEnabled()) && (qp == -lumaQpBDOffset ) && (pSlice->getPPS()->getTransquantBypassEnabledFlag())))
+#endif
+#endif
+      {
+        const GOPEntry &gopEntry=getGOPEntry(gopIndex);
+        // adjust QP according to the QP offset for the GOP entry.
+        qp +=gopEntry.m_QPOffset;
+
