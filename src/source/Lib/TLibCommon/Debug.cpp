@@ -98,3 +98,103 @@ Void EnvVar::printEnvVar()
 //  getEnvVarList().unique(sameEnvName);
   if (getEnvVarList().size()!=0)
   {
+    std::cout << "--- Environment variables:\n" << std::endl;
+    for_each(getEnvVarList().begin(), getEnvVarList().end(), printPair);
+  }
+  std::cout << std::endl;
+}
+
+Void EnvVar::printEnvVarInUse()
+{
+  if (getEnvVarInUse().size()!=0)
+  {
+    std::cout << "RExt Environment variables set as follows: \n" << std::endl;
+    for_each(getEnvVarInUse().begin(), getEnvVarInUse().end(), printVal);
+  }
+  std::cout << std::endl;
+}
+
+EnvVar::EnvVar(const std::string &sName, const std::string &sDefault, const std::string &sHelp) :
+                                                                m_sName(sName),
+                                                                m_sHelp(sHelp),
+                                                                m_sVal(),
+                                                                m_dVal(0),
+                                                                m_iVal(0),
+                                                                m_bSet(false)
+{
+  if (getenv(m_sName.c_str()))
+  {
+    m_sVal = getenv(m_sName.c_str());
+    m_bSet = true;
+    getEnvVarInUse().push_back(this);
+  }
+  else
+  {
+    m_sVal = sDefault;
+  }
+
+  m_dVal = strtod(m_sVal.c_str(), 0);
+  m_iVal = Int(m_dVal);
+
+  getEnvVarList().push_back( std::pair<std::string, std::string>(m_sName, indentNewLines(lineWrap(splitOnSettings(m_sHelp), settingHelpWidth), (settingNameWidth + 4))) );
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------- //
+
+// Debug environment variables:
+
+EnvVar Debug("-- Debugging","","");
+
+EnvVar DebugOptionList::DebugSBAC             ("DEBUG_SBAC",        "0", "Output debug data from SBAC entropy coder (coefficient data etc.)"                              );
+EnvVar DebugOptionList::DebugRQT              ("DEBUG_RQT",         "0", "Output RQT debug data from entropy coder"                                                       );
+EnvVar DebugOptionList::DebugPred             ("DEBUG_PRED",        "0", "Output prediction debug"                                                                        );
+EnvVar DebugOptionList::ForceLumaMode         ("FORCE_LUMA_MODE",   "0", "Force a particular intra direction for Luma (0-34)"                                             );
+EnvVar DebugOptionList::ForceChromaMode       ("FORCE_CHROMA_MODE", "0", "Force a particular intra direction for chroma (0-5)"                                            );
+
+#if DEBUG_STRING
+EnvVar DebugOptionList::DebugString_Structure ("DEBUG_STRUCTURE",   "0", "Produce output on chosen structure                        bit0=intra, bit1=inter");
+EnvVar DebugOptionList::DebugString_Pred      ("DEBUG_PRED",        "0", "Produce output on prediction data.                        bit0=intra, bit1=inter");
+EnvVar DebugOptionList::DebugString_Resi      ("DEBUG_RESI",        "0", "Produce output on residual data.                          bit0=intra, bit1=inter");
+EnvVar DebugOptionList::DebugString_Reco      ("DEBUG_RECO",        "0", "Produce output on reconstructed data.                     bit0=intra, bit1=inter");
+EnvVar DebugOptionList::DebugString_InvTran   ("DEBUG_INV_QT",      "0", "Produce output on inverse-quantiser and transform stages. bit0=intra, bit1=inter");
+#endif
+
+// --------------------------------------------------------------------------------------------------------------------- //
+
+//macro value printing function
+
+Void printMacroSettings()
+{
+  std::cout << "Non-environment-variable-controlled macros set as follows: \n" << std::endl;
+
+  //------------------------------------------------
+
+  //setting macros
+
+  PRINT_CONSTANT(RExt__DECODER_DEBUG_BIT_STATISTICS,                                settingNameWidth, settingValueWidth);
+  PRINT_CONSTANT(RExt__HIGH_BIT_DEPTH_SUPPORT,                                      settingNameWidth, settingValueWidth);
+  PRINT_CONSTANT(RExt__HIGH_PRECISION_FORWARD_TRANSFORM,                            settingNameWidth, settingValueWidth);
+
+  PRINT_CONSTANT(O0043_BEST_EFFORT_DECODING,                                        settingNameWidth, settingValueWidth);
+
+  PRINT_CONSTANT(ME_ENABLE_ROUNDING_OF_MVS,                                         settingNameWidth, settingValueWidth);
+
+  //------------------------------------------------
+
+  std::cout << std::endl;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------- //
+
+//Debugging
+
+UInt  g_debugCounter  = 0;
+
+#if DEBUG_ENCODER_SEARCH_BINS
+const UInt debugEncoderSearchBinTargetLine = 0;
+const UInt debugEncoderSearchBinWindow     = 1000000;
+#endif
+
+#if DEBUG_CABAC_BINS
