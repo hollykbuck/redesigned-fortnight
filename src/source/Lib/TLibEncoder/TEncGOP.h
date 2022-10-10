@@ -98,3 +98,103 @@ private:
 
 #if EXTENSION_360_VIDEO
   TExt360EncGop           m_ext360;
+public:
+  TExt360EncGop &getExt360Data() { return m_ext360; }
+private:
+#endif
+
+  //  Data
+  Bool                    m_bLongtermTestPictureHasBeenCoded;
+  Bool                    m_bLongtermTestPictureHasBeenCoded2;
+  UInt                    m_numLongTermRefPicSPS;
+  UInt                    m_ltRefPicPocLsbSps[MAX_NUM_LONG_TERM_REF_PICS];
+  Bool                    m_ltRefPicUsedByCurrPicFlag[MAX_NUM_LONG_TERM_REF_PICS];
+  Int                     m_iLastIDR;
+  Int                     m_RASPOCforResetEncoder; // an IDR POC number, after which the next POC (in output order) will be reset. If MAX_INT, then no reset is pending.
+  Int                     m_iGopSize;
+  Int                     m_iNumPicCoded;
+  Bool                    m_bFirst;
+  Int                     m_iLastRecoveryPicPOC;
+
+  //  Access channel
+  TEncTop*                m_pcEncTop;
+  TEncCfg*                m_pcCfg;
+  TEncSlice*              m_pcSliceEncoder;
+  TComList<TComPic*>*     m_pcListPic;
+
+  TEncEntropy*            m_pcEntropyCoder;
+  TEncCavlc*              m_pcCavlcCoder;
+  TEncSbac*               m_pcSbacCoder;
+  TEncBinCABAC*           m_pcBinCABAC;
+  TComLoopFilter*         m_pcLoopFilter;
+
+  SEIWriter               m_seiWriter;
+
+#if JVET_X0048_X0103_FILM_GRAIN
+  FGAnalyser              m_FGAnalyser;
+#endif
+
+  //--Adaptive Loop filter
+  TEncSampleAdaptiveOffset*  m_pcSAO;
+  TEncRateCtrl*           m_pcRateCtrl;
+  // indicate sequence first
+  Bool                    m_bSeqFirst;
+
+  // clean decoding refresh
+  Bool                    m_bRefreshPending;
+  Int                     m_pocCRA;
+  NalUnitType             m_associatedIRAPType;
+  Int                     m_associatedIRAPPOC;
+
+  std::vector<Int> m_vRVM_RP;
+  UInt                    m_lastBPSEI;
+  UInt                    m_totalCoded;
+  Bool                    m_bufferingPeriodSEIPresentInAU;
+  SEIEncoder              m_seiEncoder;
+  TComPicYuv*             m_pcDeblockingTempPicYuv;
+  Int                     m_DBParam[MAX_ENCODER_DEBLOCKING_QUALITY_LAYERS][4];   //[layer_id][0: available; 1: bDBDisabled; 2: Beta Offset Div2; 3: Tc Offset Div2;]
+
+public:
+  TEncGOP();
+  virtual ~TEncGOP();
+
+  Void  create      ();
+  Void  destroy     ();
+
+  Void  init        ( TEncTop* pcTEncTop );
+  Void  compressGOP ( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rcListPic, TComList<TComPicYuv*>& rcListPicYuvRec,
+                     std::list<AccessUnit>& accessUnitsInGOP, Bool isField, Bool isTff, const InputColourSpaceConversion ip_conversion, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl );
+  Void  xAttachSliceDataToNalUnit (OutputNALUnit& rNalu, TComOutputBitstream* pcBitstreamRedirect);
+
+
+  Int   getGOPSize()          { return  m_iGopSize;  }
+
+  TComList<TComPic*>*   getListPic()      { return m_pcListPic; }
+
+  Void  printOutSummary      ( UInt uiNumAllPicCoded, Bool isField, const TEncAnalyze::OutputLogControl &outputLogCtrl, const BitDepths &bitDepths );
+
+  Void  preLoopFilterPicAll  ( TComPic* pcPic, UInt64& ruiDist );
+
+  TEncSlice*  getSliceEncoder()   { return m_pcSliceEncoder; }
+  NalUnitType getNalUnitType( Int pocCurr, Int lastIdr, Bool isField );
+  Void arrangeLongtermPicturesInRPS(TComSlice *, TComList<TComPic*>& );
+
+  TEncAnalyze& getAnalyzeAllData() { return m_gcAnalyzeAll; }
+  TEncAnalyze& getAnalyzeIData()   { return m_gcAnalyzeI; }
+  TEncAnalyze& getAnalyzePData()   { return m_gcAnalyzeP; }
+  TEncAnalyze& getAnalyzeBData()   { return m_gcAnalyzeB; }
+
+#if MCTS_EXTRACTION
+    Void generateVPS_RBSP(TComBitIf* rbsp, const TComVPS *vps);
+    Void generateSPS_RBSP(TComBitIf* rbsp, const TComSPS *sps);
+    Void generatePPS_RBSP(TComBitIf* rbsp, const TComPPS *pps);
+#endif
+
+protected:
+  TEncRateCtrl* getRateCtrl()       { return m_pcRateCtrl;  }
+
+protected:
+
+  Void  xInitGOP          ( Int iPOCLast, Int iNumPicRcvd, Bool isField );
+  Void  xGetBuffer        ( TComList<TComPic*>& rcListPic, TComList<TComPicYuv*>& rcListPicYuvRecOut, Int iNumPicRcvd, Int iTimeOffset, TComPic*& rpcPic, TComPicYuv*& rpcPicYuvRecOut, Int pocCurr, Bool isField );
+
