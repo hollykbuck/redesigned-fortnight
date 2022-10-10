@@ -198,3 +198,103 @@ const UInt debugEncoderSearchBinWindow     = 1000000;
 #endif
 
 #if DEBUG_CABAC_BINS
+const UInt debugCabacBinTargetLine = 0;
+const UInt debugCabacBinWindow     = 1000000;
+#endif
+
+Void printSBACCoeffData(  const UInt          lastX,
+                          const UInt          lastY,
+                          const UInt          width,
+                          const UInt          height,
+                          const UInt          chan,
+                          const UInt          absPart,
+                          const UInt          scanIdx,
+                          const TCoeff *const pCoeff,
+                          const Bool          finalEncode
+                        )
+{
+  if (DebugOptionList::DebugSBAC.getInt()!=0 && finalEncode)
+  {
+    std::cout << "Size: " << width << "x" << height << ", Last X/Y: (" << lastX << ", " << lastY << "), absPartIdx: " << absPart << ", scanIdx: " << scanIdx << ", chan: " << chan << "\n";
+    for (Int i=0; i<width*height; i++)
+    {
+      std::cout << std::setw(3) << pCoeff[i];// + dcVal;
+      if (i%width == width-1)
+      {
+        std::cout << "\n";
+      }
+      else
+      {
+        std::cout << ",";
+      }
+    }
+    std::cout << std::endl;
+  }
+}
+
+Void printCbfArray( TComDataCU* pcCU  )
+{
+  const UInt CUSizeInParts = pcCU->getWidth(0)/4;
+  const UInt numValidComp=pcCU->getPic()->getNumberValidComponents();
+  for (UInt ch=0; ch<numValidComp; ch++)
+  {
+    const ComponentID compID=ComponentID(ch);
+    printf("channel: %d\n", ch);
+    for (Int y=0; y<CUSizeInParts; y++)
+    {
+      for (Int x=0; x<CUSizeInParts; x++)
+      {
+        printf(x+1==CUSizeInParts?"%3d\n":"%3d, ", pcCU->getCbf(compID)[g_auiRasterToZscan[y*CUSizeInParts + x]]);
+      }
+    }
+  }
+}
+
+UInt getDecimalWidth(const Double value)
+{
+  return (value == 0) ? 1 : (UInt(floor(log10(fabs(value)))) + ((value < 0) ? 2 : 1));
+                                                               //for the minus sign
+}
+
+UInt getZScanIndex(const UInt x, const UInt y)
+{
+  UInt remainingX = x;
+  UInt remainingY = y;
+  UInt offset     = 0;
+  UInt result     = 0;
+
+  while ((remainingX != 0) || (remainingY != 0))
+  {
+    result |= ((remainingX & 0x1) << offset) | ((remainingY & 0x1) << (offset + 1));
+
+    remainingX >>= 1;
+    remainingY >>= 1;
+    offset      += 2;
+  }
+
+  return result;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------- //
+
+//String manipulation functions for aligning and wrapping printed text
+
+
+std::string splitOnSettings(const std::string &input)
+{
+  std::string result = input;
+
+  std::string::size_type searchFromPosition = 0;
+
+  while (searchFromPosition < result.length())
+  {
+    //find the " = " that is used to define each setting
+    std::string::size_type equalsPosition = result.find(" = ", searchFromPosition);
+
+    if (equalsPosition == std::string::npos)
+    {
+      break;
+    }
+
+    //then find the end of the numeric characters
