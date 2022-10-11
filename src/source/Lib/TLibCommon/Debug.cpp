@@ -298,3 +298,103 @@ std::string splitOnSettings(const std::string &input)
     }
 
     //then find the end of the numeric characters
+    std::string::size_type splitPosition = result.find_last_of("1234567890", equalsPosition);
+
+    //then find the last space before the first numeric character...
+    if (splitPosition != std::string::npos)
+    {
+      splitPosition = result.find_last_of(' ', splitPosition);
+    }
+
+    //...and replace it with a new line
+    if (splitPosition != std::string::npos)
+    {
+      result.replace(splitPosition, 1, 1, '\n');
+    }
+
+    //start the next search from the end of the " = " string
+    searchFromPosition = (equalsPosition + 3);
+  }
+
+  return result;
+}
+
+
+std::string lineWrap(const std::string &input, const UInt maximumLineLength)
+{
+  if (maximumLineLength == 0)
+  {
+    return input;
+  }
+  std::string result = input;
+
+  std::string::size_type lineStartPosition = result.find_first_not_of(' '); //don't wrap any leading spaces in the string
+
+  while (lineStartPosition != std::string::npos)
+  {
+    //------------------------------------------------
+
+    const std::string::size_type searchFromPosition = lineStartPosition + maximumLineLength;
+
+    if (searchFromPosition >= result.length())
+    {
+      break;
+    }
+
+    //------------------------------------------------
+
+    //first check to see if there is another new line character before the maximum line length
+    //we can't use find for this unfortunately because it doesn't take both a beginning and an end for its search range
+    std::string::size_type nextLineStartPosition = std::string::npos;
+    for (std::string::size_type currentPosition = lineStartPosition; currentPosition <= searchFromPosition; currentPosition++)
+    {
+      if (result[currentPosition] == '\n')
+      {
+        nextLineStartPosition = currentPosition + 1;
+        break;
+      }
+    }
+
+    //------------------------------------------------
+
+    //if there ia another new line character before the maximum line length, we need to start this loop again from that position
+    if (nextLineStartPosition != std::string::npos)
+    {
+      lineStartPosition = nextLineStartPosition;
+    }
+    else
+    {
+      std::string::size_type spacePosition = std::string::npos;
+
+      //search backwards for the last space character (must use signed Int because lineStartPosition can be 0)
+      for (Int currentPosition = Int(searchFromPosition); currentPosition >= Int(lineStartPosition); currentPosition--)
+      {
+        if (result[currentPosition] == ' ')
+        {
+          spacePosition = currentPosition;
+          break;
+        }
+      }
+
+      //if we didn't find a space searching backwards, we must hyphenate
+      if (spacePosition == std::string::npos)
+      {
+        result.insert(searchFromPosition, "-\n");
+        lineStartPosition = searchFromPosition + 2; //make sure the next search ignores the hyphen
+      }
+      else //if we found a space to split on, replace it with a new line character
+      {
+        result.replace(spacePosition, 1, 1, '\n');
+        lineStartPosition = spacePosition + 1;
+      }
+    }
+
+    //------------------------------------------------
+  }
+
+  return result;
+}
+
+
+std::string indentNewLines(const std::string &input, const UInt indentBy)
+{
