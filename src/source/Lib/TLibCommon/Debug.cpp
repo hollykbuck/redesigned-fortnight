@@ -398,3 +398,92 @@ std::string lineWrap(const std::string &input, const UInt maximumLineLength)
 
 std::string indentNewLines(const std::string &input, const UInt indentBy)
 {
+  std::string result = input;
+
+  const std::string indentString(indentBy, ' ');
+  std::string::size_type offset = 0;
+
+  while ((offset = result.find('\n', offset)) != std::string::npos)
+  {
+    if ((++offset) >= result.length())
+    {
+      break; //increment offset so we don't find the same \n again and do no indentation at the end
+    }
+    result.insert(offset, indentString);
+  }
+
+  return result;
+}
+
+
+// --------------------------------------------------------------------------------------------------------------------- //
+
+
+Void printBlockToStream( std::ostream &ss, const TChar *pLinePrefix, TComYuv &src, const UInt numSubBlocksAcross, const UInt numSubBlocksUp, const UInt defWidth )
+{
+  const UInt numValidComp=src.getNumberValidComponents();
+
+  for (UInt ch=0; ch<numValidComp ; ch++)
+  {
+    const ComponentID compID = ComponentID(ch);
+    const UInt width  = src.getWidth(compID);
+    const UInt height = src.getHeight(compID);
+    const UInt stride = src.getStride(compID);
+    const Pel* blkSrc = src.getAddr(compID);
+    const UInt subBlockWidth=width/numSubBlocksAcross;
+    const UInt subBlockHeight=height/numSubBlocksUp;
+
+    ss << pLinePrefix << " compID: " << compID << "\n";
+    for (UInt y=0; y<height; y++)
+    {
+      if ((y%subBlockHeight)==0 && y!=0)
+      {
+        ss << pLinePrefix << '\n';
+      }
+
+      ss << pLinePrefix;
+      for (UInt x=0; x<width; x++)
+      {
+        if ((x%subBlockWidth)==0 && x!=0)
+        {
+          ss << std::setw(defWidth+2) << "";
+        }
+
+        ss << std::setw(defWidth) << blkSrc[y*stride + x] << ' ';
+      }
+      ss << '\n';
+    }
+    ss << pLinePrefix << " --- \n";
+  }
+}
+
+#if DEBUG_STRING
+Int DebugStringGetPredModeMask(PredMode mode)
+{
+  return (mode==MODE_INTRA)?1:2;
+}
+
+Void DebugInterPredResiReco(std::string &sDebug, TComYuv &pred, TComYuv &resi, TComYuv &reco, Int predmode_mask)
+{
+  if (DebugOptionList::DebugString_Pred.getInt()&predmode_mask)
+  {
+    std::stringstream ss(std::stringstream::out);
+    printBlockToStream(ss, "###inter-pred: ", pred);
+    std::string debugTmp;
+    debugTmp=ss.str();
+    sDebug=debugTmp+sDebug;
+  }
+  if (DebugOptionList::DebugString_Resi.getInt()&predmode_mask)
+  {
+    std::stringstream ss(std::stringstream::out);
+    printBlockToStream(ss, "###inter-resi: ", resi);
+    sDebug+=ss.str();
+  }
+  if (DebugOptionList::DebugString_Reco.getInt()&predmode_mask)
+  {
+    std::stringstream ss(std::stringstream::out);
+    printBlockToStream(ss, "###inter-reco: ", reco);
+    sDebug+=ss.str();
+  }
+}
+#endif
