@@ -198,3 +198,103 @@ Void TDecCavlc::parseShortTermRefPicSet( TComSPS* sps, TComReferencePictureSet* 
       rps->setDeltaPOC(j,poc);
       READ_FLAG(code, "used_by_curr_pic_s1_flag");  rps->setUsed(j,code);
     }
+    rps->setNumberOfPictures(rps->getNumberOfNegativePictures()+rps->getNumberOfPositivePictures());
+  }
+#if PRINT_RPS_INFO
+  rps->printDeltaPOC();
+#endif
+}
+
+Void TDecCavlc::parsePPS(TComPPS* pcPPS)
+{
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTracePPSHeaderDec ();
+#else
+  xTracePPSHeader();
+#endif
+#endif
+  UInt  uiCode;
+
+  Int   iCode;
+
+  READ_UVLC_CHK( uiCode, "pps_pic_parameter_set_id", 0, 63);
+  assert(uiCode <= 63);
+  pcPPS->setPPSId (uiCode);
+
+  READ_UVLC_CHK( uiCode, "pps_seq_parameter_set_id", 0, 15);
+  assert(uiCode <= 15);
+  pcPPS->setSPSId (uiCode);
+
+  READ_FLAG( uiCode, "dependent_slice_segments_enabled_flag"    );    pcPPS->setDependentSliceSegmentsEnabledFlag   ( uiCode == 1 );
+
+  READ_FLAG( uiCode, "output_flag_present_flag" );                    pcPPS->setOutputFlagPresentFlag( uiCode==1 );
+
+  READ_CODE(3, uiCode, "num_extra_slice_header_bits");                pcPPS->setNumExtraSliceHeaderBits(uiCode);
+
+  READ_FLAG( uiCode, "sign_data_hiding_enabled_flag" );               pcPPS->setSignDataHidingEnabledFlag( uiCode );
+
+  READ_FLAG( uiCode,   "cabac_init_present_flag" );                   pcPPS->setCabacInitPresentFlag( uiCode ? true : false );
+
+  READ_UVLC_CHK(uiCode, "num_ref_idx_l0_default_active_minus1", 0, 14);
+  assert(uiCode <= 14);
+  pcPPS->setNumRefIdxL0DefaultActive(uiCode+1);
+
+  READ_UVLC_CHK(uiCode, "num_ref_idx_l1_default_active_minus1", 0, 14);
+  assert(uiCode <= 14);
+  pcPPS->setNumRefIdxL1DefaultActive(uiCode+1);
+
+  READ_SVLC_CHK(iCode, "init_qp_minus26", std::numeric_limits<Int>::min(), 25 );  pcPPS->setPicInitQPMinus26(iCode);
+  READ_FLAG( uiCode, "constrained_intra_pred_flag" );              pcPPS->setConstrainedIntraPred( uiCode ? true : false );
+  READ_FLAG( uiCode, "transform_skip_enabled_flag" );
+  pcPPS->setUseTransformSkip ( uiCode ? true : false );
+
+  READ_FLAG( uiCode, "cu_qp_delta_enabled_flag" );            pcPPS->setUseDQP( uiCode ? true : false );
+  if( pcPPS->getUseDQP() )
+  {
+    READ_UVLC( uiCode, "diff_cu_qp_delta_depth" );
+    pcPPS->setMaxCuDQPDepth( uiCode );
+  }
+  else
+  {
+    pcPPS->setMaxCuDQPDepth( 0 );
+  }
+  READ_SVLC_CHK( iCode, "pps_cb_qp_offset", -12, 12);
+  pcPPS->setQpOffset(COMPONENT_Cb, iCode);
+  assert( pcPPS->getQpOffset(COMPONENT_Cb) >= -12 );
+  assert( pcPPS->getQpOffset(COMPONENT_Cb) <=  12 );
+
+  READ_SVLC_CHK( iCode, "pps_cr_qp_offset", -12, 12);
+  pcPPS->setQpOffset(COMPONENT_Cr, iCode);
+  assert( pcPPS->getQpOffset(COMPONENT_Cr) >= -12 );
+  assert( pcPPS->getQpOffset(COMPONENT_Cr) <=  12 );
+
+  assert(MAX_NUM_COMPONENT<=3);
+
+  READ_FLAG( uiCode, "pps_slice_chroma_qp_offsets_present_flag" );
+  pcPPS->setSliceChromaQpFlag( uiCode ? true : false );
+
+  READ_FLAG( uiCode, "weighted_pred_flag" );          // Use of Weighting Prediction (P_SLICE)
+  pcPPS->setUseWP( uiCode==1 );
+  READ_FLAG( uiCode, "weighted_bipred_flag" );         // Use of Bi-Directional Weighting Prediction (B_SLICE)
+  pcPPS->setWPBiPred( uiCode==1 );
+
+  READ_FLAG( uiCode, "transquant_bypass_enabled_flag");
+  pcPPS->setTransquantBypassEnabledFlag(uiCode ? true : false);
+  READ_FLAG( uiCode, "tiles_enabled_flag"               );    pcPPS->setTilesEnabledFlag            ( uiCode == 1 );
+  READ_FLAG( uiCode, "entropy_coding_sync_enabled_flag" );    pcPPS->setEntropyCodingSyncEnabledFlag( uiCode == 1 );
+
+  if( pcPPS->getTilesEnabledFlag() )
+  {
+    READ_UVLC ( uiCode, "num_tile_columns_minus1" );                pcPPS->setNumTileColumnsMinus1( uiCode );  
+    READ_UVLC ( uiCode, "num_tile_rows_minus1" );                   pcPPS->setNumTileRowsMinus1( uiCode );  
+    READ_FLAG ( uiCode, "uniform_spacing_flag" );                   pcPPS->setTileUniformSpacingFlag( uiCode == 1 );
+
+    const UInt tileColumnsMinus1 = pcPPS->getNumTileColumnsMinus1();
+    const UInt tileRowsMinus1    = pcPPS->getNumTileRowsMinus1();
+ 
+    if ( !pcPPS->getTileUniformSpacingFlag())
+    {
+      if (tileColumnsMinus1 > 0)
+      {
+        std::vector<Int> columnWidth(tileColumnsMinus1);
