@@ -298,3 +298,103 @@ Void TDecCavlc::parsePPS(TComPPS* pcPPS)
       if (tileColumnsMinus1 > 0)
       {
         std::vector<Int> columnWidth(tileColumnsMinus1);
+        for(UInt i = 0; i < tileColumnsMinus1; i++)
+        { 
+          READ_UVLC( uiCode, "column_width_minus1" );  
+          columnWidth[i] = uiCode+1;
+        }
+        pcPPS->setTileColumnWidth(columnWidth);
+      }
+
+      if (tileRowsMinus1 > 0)
+      {
+        std::vector<Int> rowHeight (tileRowsMinus1);
+        for(UInt i = 0; i < tileRowsMinus1; i++)
+        {
+          READ_UVLC( uiCode, "row_height_minus1" );
+          rowHeight[i] = uiCode + 1;
+        }
+        pcPPS->setTileRowHeight(rowHeight);
+      }
+    }
+    assert ((tileColumnsMinus1 + tileRowsMinus1) != 0);
+    READ_FLAG ( uiCode, "loop_filter_across_tiles_enabled_flag" );     pcPPS->setLoopFilterAcrossTilesEnabledFlag( uiCode ? true : false );
+  }
+  READ_FLAG( uiCode, "pps_loop_filter_across_slices_enabled_flag" );   pcPPS->setLoopFilterAcrossSlicesEnabledFlag( uiCode ? true : false );
+  READ_FLAG( uiCode, "deblocking_filter_control_present_flag" );       pcPPS->setDeblockingFilterControlPresentFlag( uiCode ? true : false );
+  if(pcPPS->getDeblockingFilterControlPresentFlag())
+  {
+    READ_FLAG( uiCode, "deblocking_filter_override_enabled_flag" );    pcPPS->setDeblockingFilterOverrideEnabledFlag( uiCode ? true : false );
+    READ_FLAG( uiCode, "pps_deblocking_filter_disabled_flag" );        pcPPS->setPPSDeblockingFilterDisabledFlag(uiCode ? true : false );
+    if(!pcPPS->getPPSDeblockingFilterDisabledFlag())
+    {
+      READ_SVLC ( iCode, "pps_beta_offset_div2" );                     pcPPS->setDeblockingFilterBetaOffsetDiv2( iCode );
+      READ_SVLC ( iCode, "pps_tc_offset_div2" );                       pcPPS->setDeblockingFilterTcOffsetDiv2( iCode );
+    }
+  }
+  READ_FLAG( uiCode, "pps_scaling_list_data_present_flag" );           pcPPS->setScalingListPresentFlag( uiCode ? true : false );
+  if(pcPPS->getScalingListPresentFlag ())
+  {
+    parseScalingList( &(pcPPS->getScalingList()) );
+  }
+
+  READ_FLAG( uiCode, "lists_modification_present_flag");
+  pcPPS->setListsModificationPresentFlag(uiCode);
+
+  READ_UVLC( uiCode, "log2_parallel_merge_level_minus2");
+  pcPPS->setLog2ParallelMergeLevelMinus2 (uiCode);
+
+  READ_FLAG( uiCode, "slice_segment_header_extension_present_flag");
+  pcPPS->setSliceHeaderExtensionPresentFlag(uiCode);
+
+  READ_FLAG( uiCode, "pps_extension_present_flag");
+  if (uiCode)
+  {
+#if ENC_DEC_TRACE || RExt__DECODER_DEBUG_BIT_STATISTICS
+    static const TChar *syntaxStrings[]={ "pps_range_extension_flag",
+                                          "pps_multilayer_extension_flag",
+                                          "pps_extension_6bits[0]",
+                                          "pps_extension_6bits[1]",
+                                          "pps_extension_6bits[2]",
+                                          "pps_extension_6bits[3]",
+                                          "pps_extension_6bits[4]",
+                                          "pps_extension_6bits[5]" };
+#endif
+
+    Bool pps_extension_flags[NUM_PPS_EXTENSION_FLAGS];
+    for(Int i=0; i<NUM_PPS_EXTENSION_FLAGS; i++)
+    {
+      READ_FLAG( uiCode, syntaxStrings[i] );
+      pps_extension_flags[i] = uiCode!=0;
+    }
+
+    Bool bSkipTrailingExtensionBits=false;
+    for(Int i=0; i<NUM_PPS_EXTENSION_FLAGS; i++) // loop used so that the order is determined by the enum.
+    {
+      if (pps_extension_flags[i])
+      {
+        switch (PPSExtensionFlagIndex(i))
+        {
+          case PPS_EXT__REXT:
+            {
+              TComPPSRExt &ppsRangeExtension = pcPPS->getPpsRangeExtension();
+              assert(!bSkipTrailingExtensionBits);
+
+              if (pcPPS->getUseTransformSkip())
+              {
+                READ_UVLC( uiCode, "log2_max_transform_skip_block_size_minus2");
+                ppsRangeExtension.setLog2MaxTransformSkipBlockSize(uiCode+2);
+              }
+
+              READ_FLAG( uiCode, "cross_component_prediction_enabled_flag");
+              ppsRangeExtension.setCrossComponentPredictionEnabledFlag(uiCode != 0);
+
+              READ_FLAG( uiCode, "chroma_qp_offset_list_enabled_flag");
+              if (uiCode == 0)
+              {
+                ppsRangeExtension.clearChromaQpOffsetList();
+                ppsRangeExtension.setDiffCuChromaQpOffsetDepth(0);
+              }
+              else
+              {
+                READ_UVLC(uiCode, "diff_cu_chroma_qp_offset_depth"); ppsRangeExtension.setDiffCuChromaQpOffsetDepth(uiCode);
