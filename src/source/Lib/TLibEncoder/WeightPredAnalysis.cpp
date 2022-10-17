@@ -498,3 +498,103 @@ Bool WeightPredAnalysis::xSelectWPHistExtClip(TComSlice *const slice, const Int 
         const Int          refStride  = slice->getRefPic(eRefPicList, refIdxTemp)->getPicYuvRec()->getStride(compID);
         const Int          width      = pPic->getWidth(compID);
         const Int          height     = pPic->getHeight(compID);
+        const Int          bitDepth   = slice->getSPS()->getBitDepth(toChannelType(compID));
+              WPScalingParam &wp      = m_wp[refList][refIdxTemp][compID];
+              Int          weight     = wp.iWeight;
+              Int          offset     = wp.iOffset;
+              Int          weightDef  = defaultWeight;
+              Int          offsetDef  = 0;
+
+        // calculate SAD costs with/without wp for luma
+        const Int64 SADnoWP = xCalcSADvalueWPOptionalClip(bitDepth, pOrg, pRef, width, height, orgStride, refStride, log2Denom, defaultWeight, 0, useHighPrecision, bClipInitialSADWP);
+        if (SADnoWP > 0)
+        {
+          const Int64 SADWP   = xCalcSADvalueWPOptionalClip(bitDepth, pOrg, pRef, width, height, orgStride, refStride, log2Denom, weight,   offset, useHighPrecision, bClipInitialSADWP);
+          const Double dRatioSAD = (Double)SADWP / (Double)SADnoWP;
+          Double dRatioSr0SAD = std::numeric_limits<Double>::max();
+          Double dRatioSrSAD  = std::numeric_limits<Double>::max();
+
+          if (bUseHistogram)
+          {
+            std::vector<Int> histogramOrg;// = pPic->getHistogram(compID);
+            std::vector<Int> histogramRef;// = slice->getRefPic(eRefPicList, refIdxTemp)->getPicYuvRec()->getHistogram(compID);
+            std::vector<Int> searchedHistogram;
+
+            // Compute histograms
+            xCalcHistogram(pOrg, histogramOrg, width, height, orgStride, 1 << bitDepth);
+            xCalcHistogram(pRef, histogramRef, width, height, refStride, 1 << bitDepth);
+
+            // Do a histogram search around DC WP parameters; resulting distortion and 'searchedHistogram' is discarded
+            xSearchHistogram(histogramOrg, histogramRef, searchedHistogram, bitDepth, log2Denom, weight, offset, useHighPrecision, compID);
+            // calculate updated WP SAD
+            const Int64 SADSrWP = xCalcSADvalueWP(bitDepth, pOrg, pRef, width, height, orgStride, refStride, log2Denom, weight, offset, useHighPrecision);
+            dRatioSrSAD  = (Double)SADSrWP  / (Double)SADnoWP;
+
+            if (bDoEnhancement)
+            {
+              // Do the same around the default ones; resulting distortion and 'searchedHistogram' is discarded
+              xSearchHistogram(histogramOrg, histogramRef, searchedHistogram, bitDepth, log2Denom, weightDef, offsetDef, useHighPrecision, compID);
+              // calculate updated WP SAD
+              const Int64 SADSr0WP = xCalcSADvalueWP(bitDepth, pOrg, pRef, width, height, orgStride, refStride, log2Denom, weightDef, offsetDef, useHighPrecision);
+              dRatioSr0SAD = (Double)SADSr0WP / (Double)SADnoWP;
+            }
+          }
+
+          if(min(dRatioSr0SAD, min(dRatioSAD, dRatioSrSAD)) >= WEIGHT_PRED_SAD_RELATIVE_TO_NON_WEIGHT_PRED_SAD)
+          {
+            wp.bPresentFlag      = false;
+            wp.iOffset           = 0;
+            wp.iWeight           = defaultWeight;
+            wp.uiLog2WeightDenom = log2Denom;
+          }
+          else
+          {
+            if (compID != COMPONENT_Y)
+            {
+              useChromaWeight = true;
+            }
+
+            if (dRatioSr0SAD < dRatioSrSAD && dRatioSr0SAD < dRatioSAD)
+            {
+              wp.bPresentFlag      = true;
+              wp.iOffset           = offsetDef;
+              wp.iWeight           = weightDef;
+              wp.uiLog2WeightDenom = log2Denom;
+            }
+            else if (dRatioSrSAD < dRatioSAD)
+            {
+              wp.bPresentFlag      = true;
+              wp.iOffset           = offset;
+              wp.iWeight           = weight;
+              wp.uiLog2WeightDenom = log2Denom;
+            }
+          }
+        }
+        else // (SADnoWP <= 0)
+        {
+          wp.bPresentFlag      = false;
+          wp.iOffset           = 0;
+          wp.iWeight           = defaultWeight;
+          wp.uiLog2WeightDenom = log2Denom;
+        }
+      }
+
+      for(Int comp=1; comp<pPic->getNumberValidComponents(); comp++)
+      {
+        m_wp[refList][refIdxTemp][comp].bPresentFlag = useChromaWeight;
+      }
+    }
+  }
+
+  return true;
+}
+
+//! select whether weighted pred enables or not.
+Bool WeightPredAnalysis::xSelectWP(TComSlice *const slice, const Int log2Denom)
+{
+        TComPicYuv *const pPic                                = slice->getPic()->getPicYuvOrg();
+  const Int               defaultWeight                       = 1<<log2Denom;
+  const Int               numPredDir                          = slice->isInterP() ? 1 : 2;
+  const Bool              useHighPrecisionPredictionWeighting = slice->getSPS()->getSpsRangeExtension().getHighPrecisionOffsetsEnabledFlag();
+
+  assert (numPredDir <= Int(NUM_REF_PIC_LIST_01));
