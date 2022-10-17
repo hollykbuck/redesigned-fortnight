@@ -598,3 +598,103 @@ Void TDecCavlc::parseHrdParameters(TComHRD *hrd, Bool commonInfPresentFlag, UInt
       {
         for( j = 0; j <= ( hrd->getCpbCntMinus1( i ) ); j ++ )
         {
+          READ_UVLC( uiCode, "bit_rate_value_minus1" );             hrd->setBitRateValueMinus1( i, j, nalOrVcl, uiCode );
+          READ_UVLC( uiCode, "cpb_size_value_minus1" );             hrd->setCpbSizeValueMinus1( i, j, nalOrVcl, uiCode );
+          if( hrd->getSubPicCpbParamsPresentFlag() )
+          {
+            READ_UVLC( uiCode, "cpb_size_du_value_minus1" );       hrd->setDuCpbSizeValueMinus1( i, j, nalOrVcl, uiCode );
+            READ_UVLC( uiCode, "bit_rate_du_value_minus1" );       hrd->setDuBitRateValueMinus1( i, j, nalOrVcl, uiCode );
+          }
+          READ_FLAG( uiCode, "cbr_flag" );                          hrd->setCbrFlag( i, j, nalOrVcl, uiCode == 1 ? true : false  );
+        }
+      }
+    }
+  }
+}
+
+Void TDecCavlc::parseSPS(TComSPS* pcSPS)
+{
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTraceSPSHeaderDec ();
+#else
+  xTraceSPSHeader ();
+#endif
+#endif
+
+  UInt  uiCode;
+  READ_CODE( 4,  uiCode, "sps_video_parameter_set_id");             pcSPS->setVPSId        ( uiCode );
+  READ_CODE_CHK( 3,  uiCode, "sps_max_sub_layers_minus1", 0, 6 );   pcSPS->setMaxTLayers   ( uiCode+1 );
+  assert(uiCode <= 6);
+
+  READ_FLAG( uiCode, "sps_temporal_id_nesting_flag" );           pcSPS->setTemporalIdNestingFlag ( uiCode > 0 ? true : false );
+  if ( pcSPS->getMaxTLayers() == 1 )
+  {
+    // sps_temporal_id_nesting_flag must be 1 when sps_max_sub_layers_minus1 is 0
+    TDecConformanceCheck::checkRange(uiCode, "sps_temporal_id_nesting_flag", 1U, 1U);
+    assert( uiCode == 1 );
+  }
+
+  parsePTL(pcSPS->getPTL(), 1, pcSPS->getMaxTLayers() - 1);
+  READ_UVLC_CHK( uiCode, "sps_seq_parameter_set_id", 0, 15 );           pcSPS->setSPSId( uiCode );
+  assert(uiCode <= 15);
+
+  READ_UVLC_CHK(     uiCode, "chroma_format_idc", 0, 3 );               pcSPS->setChromaFormatIdc( ChromaFormat(uiCode) );
+  assert(uiCode <= 3);
+
+  if( pcSPS->getChromaFormatIdc() == CHROMA_444 )
+  {
+    READ_FLAG_CHK(     uiCode, "separate_colour_plane_flag", 0, 0);
+    assert(uiCode == 0);
+  }
+
+  // pic_width_in_luma_samples and pic_height_in_luma_samples needs conformance checking - multiples of MinCbSizeY
+  READ_UVLC_CHK (    uiCode, "pic_width_in_luma_samples", 1, std::numeric_limits<UInt>::max()  );  pcSPS->setPicWidthInLumaSamples ( uiCode    );
+  READ_UVLC_CHK (    uiCode, "pic_height_in_luma_samples", 1, std::numeric_limits<UInt>::max() );  pcSPS->setPicHeightInLumaSamples( uiCode    );
+  READ_FLAG(     uiCode, "conformance_window_flag");
+  if (uiCode != 0)
+  {
+    Window &conf = pcSPS->getConformanceWindow();
+    const UInt subWidthC  = TComSPS::getWinUnitX( pcSPS->getChromaFormatIdc() );
+    const UInt subHeightC = TComSPS::getWinUnitY( pcSPS->getChromaFormatIdc() );
+    READ_UVLC(   uiCode, "conf_win_left_offset" );               conf.setWindowLeftOffset  ( uiCode * subWidthC );
+    READ_UVLC(   uiCode, "conf_win_right_offset" );              conf.setWindowRightOffset ( uiCode * subWidthC );
+    READ_UVLC(   uiCode, "conf_win_top_offset" );                conf.setWindowTopOffset   ( uiCode * subHeightC );
+    READ_UVLC(   uiCode, "conf_win_bottom_offset" );             conf.setWindowBottomOffset( uiCode * subHeightC );
+    TDecConformanceCheck::checkRange<UInt>(conf.getWindowLeftOffset()+conf.getWindowRightOffset(), "conformance window width in pixels", 0, pcSPS->getPicWidthInLumaSamples()-1);
+  }
+
+  READ_UVLC_CHK(     uiCode, "bit_depth_luma_minus8", 0, 8 );
+  assert(uiCode <= 8);
+#if O0043_BEST_EFFORT_DECODING
+  pcSPS->setStreamBitDepth(CHANNEL_TYPE_LUMA, 8 + uiCode);
+  const UInt forceDecodeBitDepth = pcSPS->getForceDecodeBitDepth();
+  if (forceDecodeBitDepth != 0)
+  {
+    uiCode = forceDecodeBitDepth - 8;
+  }
+  assert(uiCode <= 8);
+#endif
+  pcSPS->setBitDepth(CHANNEL_TYPE_LUMA, 8 + uiCode);
+
+#if O0043_BEST_EFFORT_DECODING
+  pcSPS->setQpBDOffset(CHANNEL_TYPE_LUMA, (Int) (6*(pcSPS->getStreamBitDepth(CHANNEL_TYPE_LUMA)-8)) );
+#else
+  pcSPS->setQpBDOffset(CHANNEL_TYPE_LUMA, (Int) (6*uiCode) );
+#endif
+
+  READ_UVLC_CHK( uiCode,    "bit_depth_chroma_minus8", 0, 8 );
+  assert(uiCode <= 8);
+#if O0043_BEST_EFFORT_DECODING
+  pcSPS->setStreamBitDepth(CHANNEL_TYPE_CHROMA, 8 + uiCode);
+  if (forceDecodeBitDepth != 0)
+  {
+    uiCode = forceDecodeBitDepth - 8;
+  }
+  assert(uiCode <= 8);
+#endif
+  pcSPS->setBitDepth(CHANNEL_TYPE_CHROMA, 8 + uiCode);
+#if O0043_BEST_EFFORT_DECODING
+  pcSPS->setQpBDOffset(CHANNEL_TYPE_CHROMA,  (Int) (6*(pcSPS->getStreamBitDepth(CHANNEL_TYPE_CHROMA)-8)) );
+#else
+  pcSPS->setQpBDOffset(CHANNEL_TYPE_CHROMA,  (Int) (6*uiCode) );
