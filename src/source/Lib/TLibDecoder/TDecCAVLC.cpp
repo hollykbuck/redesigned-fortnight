@@ -798,3 +798,103 @@ Void TDecCavlc::parseSPS(TComSPS* pcSPS)
   TComRPSList* rpsList = pcSPS->getRPSList();
   TComReferencePictureSet* rps;
 
+  for(UInt i=0; i< rpsList->getNumberOfReferencePictureSets(); i++)
+  {
+    rps = rpsList->getReferencePictureSet(i);
+    parseShortTermRefPicSet(pcSPS,rps,i);
+  }
+  READ_FLAG( uiCode, "long_term_ref_pics_present_flag" );          pcSPS->setLongTermRefsPresent(uiCode);
+  if (pcSPS->getLongTermRefsPresent())
+  {
+    READ_UVLC_CHK( uiCode, "num_long_term_ref_pics_sps", 0, 32 );
+    pcSPS->setNumLongTermRefPicSPS(uiCode);
+    for (UInt k = 0; k < pcSPS->getNumLongTermRefPicSPS(); k++)
+    {
+      READ_CODE( pcSPS->getBitsForPOC(), uiCode, "lt_ref_pic_poc_lsb_sps" );
+      pcSPS->setLtRefPicPocLsbSps(k, uiCode);
+      READ_FLAG( uiCode,  "used_by_curr_pic_lt_sps_flag[i]");
+      pcSPS->setUsedByCurrPicLtSPSFlag(k, uiCode?1:0);
+    }
+  }
+  READ_FLAG( uiCode, "sps_temporal_mvp_enabled_flag" );           pcSPS->setSPSTemporalMVPEnabledFlag(uiCode);
+
+  READ_FLAG( uiCode, "strong_intra_smoothing_enable_flag" );      pcSPS->setUseStrongIntraSmoothing(uiCode);
+
+  READ_FLAG( uiCode, "vui_parameters_present_flag" );             pcSPS->setVuiParametersPresentFlag(uiCode);
+
+  if (pcSPS->getVuiParametersPresentFlag())
+  {
+    parseVUI(pcSPS->getVuiParameters(), pcSPS);
+  }
+
+  READ_FLAG( uiCode, "sps_extension_present_flag");
+  if (uiCode)
+  {
+#if ENC_DEC_TRACE || RExt__DECODER_DEBUG_BIT_STATISTICS
+    static const TChar *syntaxStrings[]={ "sps_range_extension_flag",
+                                          "sps_multilayer_extension_flag",
+                                          "sps_extension_6bits[0]",
+                                          "sps_extension_6bits[1]",
+                                          "sps_extension_6bits[2]",
+                                          "sps_extension_6bits[3]",
+                                          "sps_extension_6bits[4]",
+                                          "sps_extension_6bits[5]" };
+#endif
+    Bool sps_extension_flags[NUM_SPS_EXTENSION_FLAGS];
+
+    for(Int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++)
+    {
+      READ_FLAG( uiCode, syntaxStrings[i] );
+      sps_extension_flags[i] = uiCode!=0;
+    }
+
+    Bool bSkipTrailingExtensionBits=false;
+    for(Int i=0; i<NUM_SPS_EXTENSION_FLAGS; i++) // loop used so that the order is determined by the enum.
+    {
+      if (sps_extension_flags[i])
+      {
+        switch (SPSExtensionFlagIndex(i))
+        {
+          case SPS_EXT__REXT:
+            assert(!bSkipTrailingExtensionBits);
+            {
+              TComSPSRExt &spsRangeExtension = pcSPS->getSpsRangeExtension();
+              READ_FLAG( uiCode, "transform_skip_rotation_enabled_flag");     spsRangeExtension.setTransformSkipRotationEnabledFlag(uiCode != 0);
+              READ_FLAG( uiCode, "transform_skip_context_enabled_flag");      spsRangeExtension.setTransformSkipContextEnabledFlag (uiCode != 0);
+              READ_FLAG( uiCode, "implicit_rdpcm_enabled_flag");              spsRangeExtension.setRdpcmEnabledFlag(RDPCM_SIGNAL_IMPLICIT, (uiCode != 0));
+              READ_FLAG( uiCode, "explicit_rdpcm_enabled_flag");              spsRangeExtension.setRdpcmEnabledFlag(RDPCM_SIGNAL_EXPLICIT, (uiCode != 0));
+              READ_FLAG( uiCode, "extended_precision_processing_flag");       spsRangeExtension.setExtendedPrecisionProcessingFlag (uiCode != 0);
+              READ_FLAG( uiCode, "intra_smoothing_disabled_flag");            spsRangeExtension.setIntraSmoothingDisabledFlag      (uiCode != 0);
+              READ_FLAG( uiCode, "high_precision_offsets_enabled_flag");      spsRangeExtension.setHighPrecisionOffsetsEnabledFlag (uiCode != 0);
+              READ_FLAG( uiCode, "persistent_rice_adaptation_enabled_flag");  spsRangeExtension.setPersistentRiceAdaptationEnabledFlag (uiCode != 0);
+              READ_FLAG( uiCode, "cabac_bypass_alignment_enabled_flag");      spsRangeExtension.setCabacBypassAlignmentEnabledFlag  (uiCode != 0);
+            }
+            break;
+          default:
+            bSkipTrailingExtensionBits=true;
+            break;
+        }
+      }
+    }
+    if (bSkipTrailingExtensionBits)
+    {
+      while ( xMoreRbspData() )
+      {
+        READ_FLAG( uiCode, "sps_extension_data_flag");
+      }
+    }
+  }
+
+  xReadRbspTrailingBits();
+}
+
+Void TDecCavlc::parseVPS(TComVPS* pcVPS)
+{
+#if ENC_DEC_TRACE
+#if MCTS_EXTRACTION
+  xTraceVPSHeaderDec ();
+#else
+  xTraceVPSHeader();
+#endif
+#endif
+  UInt  uiCode;
