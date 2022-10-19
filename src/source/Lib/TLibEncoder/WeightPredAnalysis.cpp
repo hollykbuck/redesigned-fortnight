@@ -698,3 +698,32 @@ Int64 xCalcSADvalueWPOptionalClip(const Int   bitDepth,
     const Int64 minValue = 0;
     const Int64 maxValue = (1 << bitDepth) - 1;
 
+    for( Int y = 0; y < height; y++ )
+    {
+      for( Int x = 0; x < width; x++ )
+      {
+        Int64 scaledValue = Clip3(minValue, maxValue,  ((((Int64) pRefPel[x] * (Int64) weight + roundOffset) ) >>  (Int64) log2Denom) + realOffset);
+        SAD += abs((Int64)pOrgPel[x] -  scaledValue);
+      }
+      pOrgPel += orgStride;
+      pRefPel += refStride;
+    }
+  }
+  else
+  {
+    //const Int64 iSize          = iWidth*iHeight;
+    const Int64 realLog2Denom = useHighPrecision ? log2Denom : (log2Denom + (bitDepth - 8));
+    const Int64 realOffset    = ((Int64)offset)<<realLog2Denom;
+
+    for( Int y = 0; y < height; y++ )
+    {
+      for( Int x = 0; x < width; x++ )
+      {
+        SAD += abs(( ((Int64)pOrgPel[x] << (Int64) log2Denom) - ( (Int64) pRefPel[x] * (Int64) weight + (realOffset) ) ) );
+      }
+      pOrgPel += orgStride;
+      pRefPel += refStride;
+    }
+  }
+  return SAD;
+}
