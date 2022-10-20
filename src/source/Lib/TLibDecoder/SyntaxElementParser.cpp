@@ -98,3 +98,103 @@ Void SyntaxElementParser::xReadFlagChk ( UInt&  val, const TChar *pSymbolName, c
 // ====================================================================================================================
 // Protected member functions
 // ====================================================================================================================
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+Void SyntaxElementParser::xReadSCode (UInt uiLength, Int& rValue, const TChar *pSymbolName)
+#else
+Void SyntaxElementParser::xReadSCode (UInt uiLength, Int& rValue)
+#endif
+{
+  UInt val;
+  assert ( uiLength > 0 && uiLength<=32);
+  m_pcBitstream->read (uiLength, val);
+  rValue= uiLength>=32 ? Int(val) : ( (-Int( val & (UInt(1)<<(uiLength-1)))) | Int(val) );
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(pSymbolName, uiLength, rValue);
+#endif
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "%8lld  ", g_nSymbolCounter++ );
+  if (uiLength < 10)
+  {
+    fprintf( g_hTrace, "%-50s i(%d)  : %d\n", pSymbolName, uiLength, rValue );
+  }
+  else
+  {
+    fprintf( g_hTrace, "%-50s i(%d) : %d\n", pSymbolName, uiLength, rValue );
+  }
+  fflush ( g_hTrace );
+#endif
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+Void SyntaxElementParser::xReadCode (UInt uiLength, UInt& rValue, const TChar *pSymbolName)
+#else
+Void SyntaxElementParser::xReadCode (UInt uiLength, UInt& rValue)
+#endif
+{
+  assert ( uiLength > 0 );
+  m_pcBitstream->read (uiLength, rValue);
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(pSymbolName, uiLength, rValue);
+#endif
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "%8lld  ", g_nSymbolCounter++ );
+  if (uiLength < 10)
+  {
+    fprintf( g_hTrace, "%-50s u(%d)  : %u\n", pSymbolName, uiLength, rValue );
+  }
+  else
+  {
+    fprintf( g_hTrace, "%-50s u(%d) : %u\n", pSymbolName, uiLength, rValue );
+  }
+  fflush ( g_hTrace );
+#endif
+}
+
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+Void SyntaxElementParser::xReadUvlc( UInt& rValue, const TChar *pSymbolName)
+#else
+Void SyntaxElementParser::xReadUvlc( UInt& rValue)
+#endif
+{
+  UInt uiVal = 0;
+  UInt uiCode = 0;
+  UInt uiLength;
+  m_pcBitstream->read( 1, uiCode );
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  UInt totalLen=1;
+#endif
+
+  if( 0 == uiCode )
+  {
+    uiLength = 0;
+
+    while( ! ( uiCode & 1 ))
+    {
+      m_pcBitstream->read( 1, uiCode );
+      uiLength++;
+    }
+
+    m_pcBitstream->read( uiLength, uiVal );
+
+    uiVal += (1 << uiLength)-1;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    totalLen+=uiLength+uiLength;
+#endif
+  }
+
+  rValue = uiVal;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(pSymbolName, Int(totalLen), rValue);
+#endif
+
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "%8lld  ", g_nSymbolCounter++ );
+  fprintf( g_hTrace, "%-50s ue(v) : %u\n", pSymbolName, rValue );
+  fflush ( g_hTrace );
+#endif
+}
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS || ENC_DEC_TRACE
+Void SyntaxElementParser::xReadSvlc( Int& rValue, const TChar *pSymbolName)
