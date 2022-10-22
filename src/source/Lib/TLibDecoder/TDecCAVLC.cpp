@@ -998,3 +998,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
 #else
   xTraceSliceHeader();
 #endif
+#endif
+  TComPPS* pps = NULL;
+  TComSPS* sps = NULL;
+
+  UInt firstSliceSegmentInPic;
+  READ_FLAG( firstSliceSegmentInPic, "first_slice_segment_in_pic_flag" );
+  if( pcSlice->getRapPicFlag())
+  {
+    READ_FLAG( uiCode, "no_output_of_prior_pics_flag" );  //ignored -- updated already
+    pcSlice->setNoOutputPriorPicsFlag(uiCode ? true : false);
+  }
+  READ_UVLC (    uiCode, "slice_pic_parameter_set_id" );  pcSlice->setPPSId(uiCode);
+  pps = parameterSetManager->getPPS(uiCode);
+  //!KS: need to add error handling code here, if PPS is not available
+  assert(pps!=0);
+  sps = parameterSetManager->getSPS(pps->getSPSId());
+  //!KS: need to add error handling code here, if SPS is not available
+  assert(sps!=0);
+
+  const ChromaFormat chFmt = sps->getChromaFormatIdc();
+  const UInt numValidComp=getNumberValidComponents(chFmt);
+  const Bool bChroma=(chFmt!=CHROMA_400);
+
+  if( pps->getDependentSliceSegmentsEnabledFlag() && ( !firstSliceSegmentInPic ))
+  {
+    READ_FLAG( uiCode, "dependent_slice_segment_flag" );       pcSlice->setDependentSliceSegmentFlag(uiCode ? true : false);
+  }
+  else
+  {
+    pcSlice->setDependentSliceSegmentFlag(false);
+  }
+  Int numCTUs = ((sps->getPicWidthInLumaSamples()+sps->getMaxCUWidth()-1)/sps->getMaxCUWidth())*((sps->getPicHeightInLumaSamples()+sps->getMaxCUHeight()-1)/sps->getMaxCUHeight());
+  UInt sliceSegmentAddress = 0;
+  Int bitsSliceSegmentAddress = 0;
+  while(numCTUs>(1<<bitsSliceSegmentAddress))
+  {
+    bitsSliceSegmentAddress++;
+  }
+
+  if(!firstSliceSegmentInPic)
+  {
+    READ_CODE( bitsSliceSegmentAddress, sliceSegmentAddress, "slice_segment_address" );
+  }
+  //set uiCode to equal slice start address (or dependent slice start address)
+  pcSlice->setSliceSegmentCurStartCtuTsAddr( sliceSegmentAddress );// this is actually a Raster-Scan (RS) address, but we do not have the RS->TS conversion table defined yet.
+  pcSlice->setSliceSegmentCurEndCtuTsAddr(numCTUs);                // Set end as the last CTU of the picture.
+
+  if (!pcSlice->getDependentSliceSegmentFlag())
+  {
+    pcSlice->setSliceCurStartCtuTsAddr(sliceSegmentAddress); // this is actually a Raster-Scan (RS) address, but we do not have the RS->TS conversion table defined yet.
+    pcSlice->setSliceCurEndCtuTsAddr(numCTUs);
+  }
+
+  if(!pcSlice->getDependentSliceSegmentFlag())
+  {
+    for (Int i = 0; i < pps->getNumExtraSliceHeaderBits(); i++)
+    {
+      READ_FLAG(uiCode, "slice_reserved_flag[]"); // ignored
+    }
+
+    READ_UVLC (    uiCode, "slice_type" );            pcSlice->setSliceType((SliceType)uiCode);
+    if( pps->getOutputFlagPresentFlag() )
+    {
+      READ_FLAG( uiCode, "pic_output_flag" );    pcSlice->setPicOutputFlag( uiCode ? true : false );
+    }
+    else
+    {
+      pcSlice->setPicOutputFlag( true );
+    }
+
+    // if (separate_colour_plane_flag == 1)
+    //   read colour_plane_id
+    //   (separate_colour_plane_flag == 1) is not supported in this version of the standard.
+
+    if( pcSlice->getIdrPicFlag() )
+    {
+      pcSlice->setPOC(0);
+      TComReferencePictureSet* rps = pcSlice->getLocalRPS();
+      (*rps)=TComReferencePictureSet();
+      pcSlice->setRPS(rps);
+    }
+    else
+    {
+      READ_CODE(sps->getBitsForPOC(), uiCode, "slice_pic_order_cnt_lsb");
+      Int iPOClsb = uiCode;
+      Int iPrevPOC = prevTid0POC;
+      Int iMaxPOClsb = 1<< sps->getBitsForPOC();
+      Int iPrevPOClsb = iPrevPOC & (iMaxPOClsb - 1);
+      Int iPrevPOCmsb = iPrevPOC-iPrevPOClsb;
+      Int iPOCmsb;
+      if( ( iPOClsb  <  iPrevPOClsb ) && ( ( iPrevPOClsb - iPOClsb )  >=  ( iMaxPOClsb / 2 ) ) )
+      {
+        iPOCmsb = iPrevPOCmsb + iMaxPOClsb;
+      }
+      else if( (iPOClsb  >  iPrevPOClsb )  && ( (iPOClsb - iPrevPOClsb )  >  ( iMaxPOClsb / 2 ) ) )
+      {
+        iPOCmsb = iPrevPOCmsb - iMaxPOClsb;
+      }
+      else
+      {
