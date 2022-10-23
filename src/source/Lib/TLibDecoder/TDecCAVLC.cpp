@@ -1298,3 +1298,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
       {
         refPicListModification->setRefPicListModificationFlagL0( 0 );
       }
+      else
+      {
+        READ_FLAG( uiCode, "ref_pic_list_modification_flag_l0" ); refPicListModification->setRefPicListModificationFlagL0( uiCode ? 1 : 0 );
+      }
+
+      if(refPicListModification->getRefPicListModificationFlagL0())
+      {
+        uiCode = 0;
+        Int i = 0;
+        Int numRpsCurrTempList0 = pcSlice->getNumRpsCurrTempList();
+        if ( numRpsCurrTempList0 > 1 )
+        {
+          Int length = 1;
+          numRpsCurrTempList0 --;
+          while ( numRpsCurrTempList0 >>= 1)
+          {
+            length ++;
+          }
+          for (i = 0; i < pcSlice->getNumRefIdx(REF_PIC_LIST_0); i ++)
+          {
+            READ_CODE( length, uiCode, "list_entry_l0" );
+            refPicListModification->setRefPicSetIdxL0(i, uiCode );
+          }
+        }
+        else
+        {
+          for (i = 0; i < pcSlice->getNumRefIdx(REF_PIC_LIST_0); i ++)
+          {
+            refPicListModification->setRefPicSetIdxL0(i, 0 );
+          }
+        }
+      }
+    }
+    else
+    {
+      refPicListModification->setRefPicListModificationFlagL0(0);
+    }
+    if(pcSlice->isInterB())
+    {
+      if( !pps->getListsModificationPresentFlag() || pcSlice->getNumRpsCurrTempList() <= 1 )
+      {
+        refPicListModification->setRefPicListModificationFlagL1( 0 );
+      }
+      else
+      {
+        READ_FLAG( uiCode, "ref_pic_list_modification_flag_l1" ); refPicListModification->setRefPicListModificationFlagL1( uiCode ? 1 : 0 );
+      }
+      if(refPicListModification->getRefPicListModificationFlagL1())
+      {
+        uiCode = 0;
+        Int i = 0;
+        Int numRpsCurrTempList1 = pcSlice->getNumRpsCurrTempList();
+        if ( numRpsCurrTempList1 > 1 )
+        {
+          Int length = 1;
+          numRpsCurrTempList1 --;
+          while ( numRpsCurrTempList1 >>= 1)
+          {
+            length ++;
+          }
+          for (i = 0; i < pcSlice->getNumRefIdx(REF_PIC_LIST_1); i ++)
+          {
+            READ_CODE( length, uiCode, "list_entry_l1" );
+            refPicListModification->setRefPicSetIdxL1(i, uiCode );
+          }
+        }
+        else
+        {
+          for (i = 0; i < pcSlice->getNumRefIdx(REF_PIC_LIST_1); i ++)
+          {
+            refPicListModification->setRefPicSetIdxL1(i, 0 );
+          }
+        }
+      }
+    }
+    else
+    {
+      refPicListModification->setRefPicListModificationFlagL1(0);
+    }
+    if (pcSlice->isInterB())
+    {
+      READ_FLAG( uiCode, "mvd_l1_zero_flag" );       pcSlice->setMvdL1ZeroFlag( (uiCode ? true : false) );
+    }
+
+    pcSlice->setCabacInitFlag( false ); // default
+    if(pps->getCabacInitPresentFlag() && !pcSlice->isIntra())
+    {
+      READ_FLAG(uiCode, "cabac_init_flag");
+      pcSlice->setCabacInitFlag( uiCode ? true : false );
+    }
+
+    if ( pcSlice->getEnableTMVPFlag() )
+    {
+      if ( pcSlice->getSliceType() == B_SLICE )
+      {
+        READ_FLAG( uiCode, "collocated_from_l0_flag" );
+        pcSlice->setColFromL0Flag(uiCode);
+      }
+      else
+      {
