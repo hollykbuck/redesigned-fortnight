@@ -98,3 +98,103 @@ Void TEncEntropy::encodeCUTransquantBypassFlag( TComDataCU* pcCU, UInt uiAbsPart
 }
 
 Void TEncEntropy::encodeVPS( const TComVPS* pcVPS )
+{
+  m_pcEntropyCoderIf->codeVPS( pcVPS );
+  return;
+}
+
+Void TEncEntropy::encodeSkipFlag( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
+{
+  if ( pcCU->getSlice()->isIntra() )
+  {
+    return;
+  }
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+  m_pcEntropyCoderIf->codeSkipFlag( pcCU, uiAbsPartIdx );
+}
+
+//! encode merge flag
+Void TEncEntropy::encodeMergeFlag( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  // at least one merge candidate exists
+  m_pcEntropyCoderIf->codeMergeFlag( pcCU, uiAbsPartIdx );
+}
+
+//! encode merge index
+Void TEncEntropy::encodeMergeIndex( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
+{
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+    assert( pcCU->getPartitionSize(uiAbsPartIdx) == SIZE_2Nx2N );
+  }
+  m_pcEntropyCoderIf->codeMergeIndex( pcCU, uiAbsPartIdx );
+}
+
+
+//! encode prediction mode
+Void TEncEntropy::encodePredMode( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
+{
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+
+  if ( pcCU->getSlice()->isIntra() )
+  {
+    return;
+  }
+
+  m_pcEntropyCoderIf->codePredMode( pcCU, uiAbsPartIdx );
+}
+
+//! encode split flag
+Void TEncEntropy::encodeSplitFlag( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool bRD )
+{
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+
+  m_pcEntropyCoderIf->codeSplitFlag( pcCU, uiAbsPartIdx, uiDepth );
+}
+
+//! encode partition size
+Void TEncEntropy::encodePartSize( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool bRD )
+{
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+
+  m_pcEntropyCoderIf->codePartSize( pcCU, uiAbsPartIdx, uiDepth );
+}
+
+
+/** Encode I_PCM information.
+ * \param pcCU          pointer to CU
+ * \param uiAbsPartIdx  CU index
+ * \param bRD           flag indicating estimation or encoding
+ */
+Void TEncEntropy::encodeIPCMInfo( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
+{
+  if(!pcCU->getSlice()->getSPS()->getUsePCM()
+    || pcCU->getWidth(uiAbsPartIdx) > (1<<pcCU->getSlice()->getSPS()->getPCMLog2MaxSize())
+    || pcCU->getWidth(uiAbsPartIdx) < (1<<pcCU->getSlice()->getSPS()->getPCMLog2MinSize()))
+  {
+    return;
+  }
+
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+
+  m_pcEntropyCoderIf->codeIPCMInfo ( pcCU, uiAbsPartIdx );
+
+}
+
+Void TEncEntropy::xEncodeTransform( Bool& bCodeDQP, Bool& codeChromaQpAdj, TComTU &rTu )
