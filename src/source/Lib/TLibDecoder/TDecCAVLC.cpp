@@ -1098,3 +1098,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
       }
       else
       {
+        iPOCmsb = iPrevPOCmsb;
+      }
+      if ( pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP )
+      {
+        // For BLA picture types, POCmsb is set to 0.
+        iPOCmsb = 0;
+      }
+      pcSlice->setPOC              (iPOCmsb+iPOClsb);
+
+      TComReferencePictureSet* rps;
+      rps = pcSlice->getLocalRPS();
+      (*rps)=TComReferencePictureSet();
+
+      pcSlice->setRPS(rps);
+      READ_FLAG( uiCode, "short_term_ref_pic_set_sps_flag" );
+      if(uiCode == 0) // use short-term reference picture set explicitly signalled in slice header
+      {
+        parseShortTermRefPicSet(sps,rps, sps->getRPSList()->getNumberOfReferencePictureSets());
+#if MCTS_EXTRACTION
+        pcSlice->setRPSidx(-1); // when -1, reference picture set explicitly signalled in slice header, otherwise identify the PPS RPS; added for MCTS extraction
+#endif
+      }
+      else // use reference to short-term reference picture set in PPS
+      {
+        Int numBits = 0;
+        while ((1 << numBits) < sps->getRPSList()->getNumberOfReferencePictureSets())
+        {
+          numBits++;
+        }
+        if (numBits > 0)
+        {
+          READ_CODE( numBits, uiCode, "short_term_ref_pic_set_idx");
+#if MCTS_EXTRACTION
+          pcSlice->setRPSidx(uiCode); // when -1, reference picture set explicitly signalled in slice header, otherwise identify the PPS RPS; added for MCTS extraction
+#endif
+        }
+        else
+        {
+          uiCode = 0;
+       
+        }
+        *rps = *(sps->getRPSList()->getReferencePictureSet(uiCode));
+      }
+      if(sps->getLongTermRefsPresent())
+      {
+        Int offset = rps->getNumberOfNegativePictures()+rps->getNumberOfPositivePictures();
+        UInt numOfLtrp = 0;
+        UInt numLtrpInSPS = 0;
+        if (sps->getNumLongTermRefPicSPS() > 0)
+        {
+          READ_UVLC( uiCode, "num_long_term_sps");
+          numLtrpInSPS = uiCode;
+          numOfLtrp += numLtrpInSPS;
+          rps->setNumberOfLongtermPictures(numOfLtrp);
+        }
+        Int bitsForLtrpInSPS = 0;
+        while (sps->getNumLongTermRefPicSPS() > (1 << bitsForLtrpInSPS))
+        {
+          bitsForLtrpInSPS++;
+        }
+        READ_UVLC( uiCode, "num_long_term_pics");             rps->setNumberOfLongtermPictures(uiCode);
+        numOfLtrp += uiCode;
+        rps->setNumberOfLongtermPictures(numOfLtrp);
+        Int maxPicOrderCntLSB = 1 << sps->getBitsForPOC();
+        Int prevDeltaMSB = 0, deltaPocMSBCycleLT = 0;
+        for(Int j=offset+rps->getNumberOfLongtermPictures()-1, k = 0; k < numOfLtrp; j--, k++)
+        {
+          Int pocLsbLt;
+          if (k < numLtrpInSPS)
+          {
+            uiCode = 0;
+            if (bitsForLtrpInSPS > 0)
+            {
+              READ_CODE(bitsForLtrpInSPS, uiCode, "lt_idx_sps[i]");
+            }
+            Bool usedByCurrFromSPS=sps->getUsedByCurrPicLtSPSFlag(uiCode);
+
+            pocLsbLt = sps->getLtRefPicPocLsbSps(uiCode);
+            rps->setUsed(j,usedByCurrFromSPS);
+          }
+          else
+          {
+            READ_CODE(sps->getBitsForPOC(), uiCode, "poc_lsb_lt"); pocLsbLt= uiCode;
+            READ_FLAG( uiCode, "used_by_curr_pic_lt_flag");     rps->setUsed(j,uiCode);
+          }
+          READ_FLAG(uiCode,"delta_poc_msb_present_flag");
+          Bool mSBPresentFlag = uiCode ? true : false;
+          if(mSBPresentFlag)
+          {
+            READ_UVLC( uiCode, "delta_poc_msb_cycle_lt[i]" );
+            Bool deltaFlag = false;
+            //            First LTRP                               || First LTRP from SH
+            if( (j == offset+rps->getNumberOfLongtermPictures()-1) || (j == offset+(numOfLtrp-numLtrpInSPS)-1) )
+            {
+              deltaFlag = true;
+            }
+            if(deltaFlag)
+            {
