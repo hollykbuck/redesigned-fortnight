@@ -1598,3 +1598,103 @@ Void TDecCavlc::parsePTL( TComPTL *rpcPTL, Bool profilePresentFlag, Int maxNumSu
 
   for (Int i = 0; i < maxNumSubLayersMinus1; i++)
   {
+    READ_FLAG( uiCode, "sub_layer_profile_present_flag[i]" ); rpcPTL->setSubLayerProfilePresentFlag(i, uiCode);
+    READ_FLAG( uiCode, "sub_layer_level_present_flag[i]"   ); rpcPTL->setSubLayerLevelPresentFlag  (i, uiCode);
+  }
+
+  if (maxNumSubLayersMinus1 > 0)
+  {
+    for (Int i = maxNumSubLayersMinus1; i < 8; i++)
+    {
+      READ_CODE(2, uiCode, "reserved_zero_2bits");
+      assert(uiCode == 0);
+    }
+  }
+
+  for(Int i = 0; i < maxNumSubLayersMinus1; i++)
+  {
+    if( rpcPTL->getSubLayerProfilePresentFlag(i) )
+    {
+      parseProfileTier(rpcPTL->getSubLayerPTL(i), true);
+    }
+    if(rpcPTL->getSubLayerLevelPresentFlag(i))
+    {
+      READ_CODE( 8, uiCode, "sub_layer_level_idc[i]" );   rpcPTL->getSubLayerPTL(i)->setLevelIdc(Level::Name(uiCode));
+    }
+  }
+}
+
+#if ENC_DEC_TRACE || RExt__DECODER_DEBUG_BIT_STATISTICS
+Void TDecCavlc::parseProfileTier(ProfileTierLevel *ptl, const Bool bIsSubLayer)
+#define PTL_TRACE_TEXT(txt) bIsSubLayer?("sub_layer_" txt) : ("general_" txt)
+#else
+Void TDecCavlc::parseProfileTier(ProfileTierLevel *ptl, const Bool /*bIsSubLayer*/)
+#define PTL_TRACE_TEXT(txt) txt
+#endif
+{
+  UInt uiCode;
+  READ_CODE(2 , uiCode,   PTL_TRACE_TEXT("profile_space"                   )); ptl->setProfileSpace(uiCode);
+  READ_FLAG(    uiCode,   PTL_TRACE_TEXT("tier_flag"                       )); ptl->setTierFlag    (uiCode ? Level::HIGH : Level::MAIN);
+  READ_CODE(5 , uiCode,   PTL_TRACE_TEXT("profile_idc"                     )); ptl->setProfileIdc  (Profile::Name(uiCode));
+  for(Int j = 0; j < 32; j++)
+  {
+    READ_FLAG(  uiCode,   PTL_TRACE_TEXT("profile_compatibility_flag[][j]" )); ptl->setProfileCompatibilityFlag(j, uiCode ? 1 : 0);
+  }
+  READ_FLAG(uiCode,       PTL_TRACE_TEXT("progressive_source_flag"         )); ptl->setProgressiveSourceFlag(uiCode ? true : false);
+
+  READ_FLAG(uiCode,       PTL_TRACE_TEXT("interlaced_source_flag"          )); ptl->setInterlacedSourceFlag(uiCode ? true : false);
+
+  READ_FLAG(uiCode,       PTL_TRACE_TEXT("non_packed_constraint_flag"      )); ptl->setNonPackedConstraintFlag(uiCode ? true : false);
+
+  READ_FLAG(uiCode,       PTL_TRACE_TEXT("frame_only_constraint_flag"      )); ptl->setFrameOnlyConstraintFlag(uiCode ? true : false);
+
+  if (ptl->getProfileIdc() == Profile::MAINREXT           || ptl->getProfileCompatibilityFlag(Profile::MAINREXT) ||
+      ptl->getProfileIdc() == Profile::HIGHTHROUGHPUTREXT || ptl->getProfileCompatibilityFlag(Profile::HIGHTHROUGHPUTREXT))
+  {
+    UInt maxBitDepth=16;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_12bit_constraint_flag"       )); if (uiCode) maxBitDepth=12;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_10bit_constraint_flag"       )); if (uiCode) maxBitDepth=10;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_8bit_constraint_flag"        )); if (uiCode) maxBitDepth=8;
+    ptl->setBitDepthConstraint(maxBitDepth);
+    ChromaFormat chromaFmtConstraint=CHROMA_444;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_422chroma_constraint_flag"   )); if (uiCode) chromaFmtConstraint=CHROMA_422;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_420chroma_constraint_flag"   )); if (uiCode) chromaFmtConstraint=CHROMA_420;
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("max_monochrome_constraint_flag"  )); if (uiCode) chromaFmtConstraint=CHROMA_400;
+    ptl->setChromaFormatConstraint(chromaFmtConstraint);
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("intra_constraint_flag"           )); ptl->setIntraConstraintFlag(uiCode != 0);
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("one_picture_only_constraint_flag")); ptl->setOnePictureOnlyConstraintFlag(uiCode != 0);
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("lower_bit_rate_constraint_flag"  )); ptl->setLowerBitRateConstraintFlag(uiCode != 0);
+    READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_34bits[0..15]"     ));
+    READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_34bits[16..31]"    ));
+    READ_CODE(2,  uiCode, PTL_TRACE_TEXT("reserved_zero_34bits[32..33]"    ));
+  }
+  else
+  {
+    ptl->setBitDepthConstraint((ptl->getProfileIdc() == Profile::MAIN10)?10:8);
+    ptl->setChromaFormatConstraint(CHROMA_420);
+    ptl->setIntraConstraintFlag(false);
+    ptl->setLowerBitRateConstraintFlag(true);
+    if (ptl->getProfileIdc() == Profile::MAIN10           || ptl->getProfileCompatibilityFlag(Profile::MAIN10))
+    {
+      READ_CODE(7, uiCode, PTL_TRACE_TEXT("reserved_zero_7bits"     ));
+      READ_FLAG(    uiCode, PTL_TRACE_TEXT("one_picture_only_constraint_flag")); ptl->setOnePictureOnlyConstraintFlag(uiCode != 0);
+      READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_35bits[0..15]"     ));
+      READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_35bits[16..31]"    ));
+      READ_CODE(3,  uiCode, PTL_TRACE_TEXT("reserved_zero_35bits[32..34]"    ));
+    }
+    else
+    {
+      READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_43bits[0..15]"     ));
+      READ_CODE(16, uiCode, PTL_TRACE_TEXT("reserved_zero_43bits[16..31]"    ));
+      READ_CODE(11, uiCode, PTL_TRACE_TEXT("reserved_zero_43bits[32..42]"    ));
+    }
+  }
+
+  if ((ptl->getProfileIdc() >= Profile::MAIN && ptl->getProfileIdc() <= Profile::HIGHTHROUGHPUTREXT) ||
+       ptl->getProfileCompatibilityFlag(Profile::MAIN) ||
+       ptl->getProfileCompatibilityFlag(Profile::MAIN10) ||
+       ptl->getProfileCompatibilityFlag(Profile::MAINSTILLPICTURE) ||
+       ptl->getProfileCompatibilityFlag(Profile::MAINREXT) ||
+       ptl->getProfileCompatibilityFlag(Profile::HIGHTHROUGHPUTREXT) )
+  {
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("inbld_flag"                      )); assert(uiCode == 0);
