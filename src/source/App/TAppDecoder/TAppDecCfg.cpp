@@ -98,3 +98,94 @@ Bool TAppDecCfg::parseCfg( Int argc, TChar* argv[] )
 #endif
   ("OutputDecodedSEIMessagesFilename",  m_outputDecodedSEIMessagesFilename,    string(""), "When non empty, output decoded SEI messages to the indicated file. If file is '-', then output to stdout\n")
   ("ClipOutputVideoToRec709Range",      m_bClipOutputVideoToRec709Range,  false, "If true then clip output video to the Rec. 709 Range on saving")
+#if MCTS_ENC_CHECK
+  ("TMCTSCheck",                  m_tmctsCheck,                          false,    "If enabled, the decoder checks for violations of mc_exact_sample_value_match_flag in Temporal MCTS ")
+#endif
+  ;
+
+  po::setDefaults(opts);
+  po::ErrorReporter err;
+  const list<const TChar*>& argv_unhandled = po::scanArgv(opts, argc, (const TChar**) argv, err);
+
+  for (list<const TChar*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++)
+  {
+    fprintf(stderr, "Unhandled argument ignored: `%s'\n", *it);
+  }
+
+  if (argc == 1 || do_help)
+  {
+    po::doHelp(cout, opts);
+    return false;
+  }
+
+  if (err.is_errored)
+  {
+    if (!warnUnknowParameter)
+    {
+      /* errors have already been reported to stderr */
+      return false;
+    }
+  }
+
+  m_outputColourSpaceConvert = stringToInputColourSpaceConvert(outputColourSpaceConvert, false);
+  if (m_outputColourSpaceConvert>=NUMBER_INPUT_COLOUR_SPACE_CONVERSIONS)
+  {
+    fprintf(stderr, "Bad output colour space conversion string\n");
+    return false;
+  }
+
+  if (m_bitstreamFileName.empty())
+  {
+    fprintf(stderr, "No input file specified, aborting\n");
+    return false;
+  }
+
+  if ( !cfg_TargetDecLayerIdSetFile.empty() )
+  {
+    FILE* targetDecLayerIdSetFile = fopen ( cfg_TargetDecLayerIdSetFile.c_str(), "r" );
+    if ( targetDecLayerIdSetFile )
+    {
+      Bool isLayerIdZeroIncluded = false;
+      while ( !feof(targetDecLayerIdSetFile) )
+      {
+        Int layerIdParsed = 0;
+        if ( fscanf( targetDecLayerIdSetFile, "%d ", &layerIdParsed ) != 1 )
+        {
+          if ( m_targetDecLayerIdSet.size() == 0 )
+          {
+            fprintf(stderr, "No LayerId could be parsed in file %s. Decoding all LayerIds as default.\n", cfg_TargetDecLayerIdSetFile.c_str() );
+          }
+          break;
+        }
+        if ( layerIdParsed  == -1 ) // The file includes a -1, which means all LayerIds are to be decoded.
+        {
+          m_targetDecLayerIdSet.clear(); // Empty set means decoding all layers.
+          break;
+        }
+        if ( layerIdParsed < 0 || layerIdParsed >= MAX_NUM_LAYER_IDS )
+        {
+          fprintf(stderr, "Warning! Parsed LayerId %d is not within allowed range [0,%d]. Ignoring this value.\n", layerIdParsed, MAX_NUM_LAYER_IDS-1 );
+        }
+        else
+        {
+          isLayerIdZeroIncluded = layerIdParsed == 0 ? true : isLayerIdZeroIncluded;
+          m_targetDecLayerIdSet.push_back ( layerIdParsed );
+        }
+      }
+      fclose (targetDecLayerIdSetFile);
+      if ( m_targetDecLayerIdSet.size() > 0 && !isLayerIdZeroIncluded )
+      {
+        fprintf(stderr, "TargetDecLayerIdSet must contain LayerId=0, aborting" );
+        return false;
+      }
+    }
+    else
+    {
+      fprintf(stderr, "File %s could not be opened. Using all LayerIds as default.\n", cfg_TargetDecLayerIdSetFile.c_str() );
+    }
+  }
+
+  return true;
+}
+
+//! \}
