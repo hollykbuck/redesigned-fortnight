@@ -2098,3 +2098,9 @@ Bool TDecCavlc::xMoreRbspData()
 
 Void TDecCavlc::parseExplicitRdpcmMode( TComTU& /*rTu*/, ComponentID /*compID*/ )
 {
+  assert(0);
+}
+
+
+//! \}
+
