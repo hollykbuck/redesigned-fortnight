@@ -498,3 +498,103 @@ Void TEncEntropy::encodePUWise( TComDataCU* pcCU, UInt uiAbsPartIdx )
             std::cout << "MVPIdxPU: " << pcCU->getMVPIdx(RefPicList( uiRefListIdx ), uiSubPartIdx) << std::endl;
             std::cout << "InterDir: " << (UInt)pcCU->getInterDir(uiSubPartIdx) << std::endl;
           }
+#endif
+        }
+      }
+    }
+  }
+
+  return;
+}
+
+Void TEncEntropy::encodeInterDirPU( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  if ( !pcCU->getSlice()->isInterB() )
+  {
+    return;
+  }
+
+  m_pcEntropyCoderIf->codeInterDir( pcCU, uiAbsPartIdx );
+
+  return;
+}
+
+//! encode reference frame index for a PU block
+Void TEncEntropy::encodeRefFrmIdxPU( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList )
+{
+  assert( pcCU->isInter( uiAbsPartIdx ) );
+
+  if ( ( pcCU->getSlice()->getNumRefIdx( eRefList ) == 1 ) )
+  {
+    return;
+  }
+
+  if ( pcCU->getInterDir( uiAbsPartIdx ) & ( 1 << eRefList ) )
+  {
+    m_pcEntropyCoderIf->codeRefFrmIdx( pcCU, uiAbsPartIdx, eRefList );
+  }
+
+  return;
+}
+
+//! encode motion vector difference for a PU block
+Void TEncEntropy::encodeMvdPU( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList )
+{
+  assert( pcCU->isInter( uiAbsPartIdx ) );
+
+  if ( pcCU->getInterDir( uiAbsPartIdx ) & ( 1 << eRefList ) )
+  {
+    m_pcEntropyCoderIf->codeMvd( pcCU, uiAbsPartIdx, eRefList );
+  }
+  return;
+}
+
+Void TEncEntropy::encodeMVPIdxPU( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList )
+{
+  if ( (pcCU->getInterDir( uiAbsPartIdx ) & ( 1 << eRefList )) )
+  {
+    m_pcEntropyCoderIf->codeMVPIdx( pcCU, uiAbsPartIdx, eRefList );
+  }
+
+  return;
+}
+
+Void TEncEntropy::encodeQtCbf( TComTU &rTu, const ComponentID compID, const Bool lowestLevel )
+{
+  m_pcEntropyCoderIf->codeQtCbf( rTu, compID, lowestLevel );
+}
+
+Void TEncEntropy::encodeTransformSubdivFlag( UInt uiSymbol, UInt uiCtx )
+{
+  m_pcEntropyCoderIf->codeTransformSubdivFlag( uiSymbol, uiCtx );
+}
+
+Void TEncEntropy::encodeQtRootCbf( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  m_pcEntropyCoderIf->codeQtRootCbf( pcCU, uiAbsPartIdx );
+}
+
+Void TEncEntropy::encodeQtCbfZero( TComTU &rTu, const ChannelType chType )
+{
+  m_pcEntropyCoderIf->codeQtCbfZero( rTu, chType );
+}
+
+Void TEncEntropy::encodeQtRootCbfZero( )
+{
+  m_pcEntropyCoderIf->codeQtRootCbfZero( );
+}
+
+// dQP
+Void TEncEntropy::encodeQP( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
+{
+  if( bRD )
+  {
+    uiAbsPartIdx = 0;
+  }
+
+  if ( pcCU->getSlice()->getPPS()->getUseDQP() )
+  {
+    m_pcEntropyCoderIf->codeDeltaQP( pcCU, uiAbsPartIdx );
+  }
+}
+
