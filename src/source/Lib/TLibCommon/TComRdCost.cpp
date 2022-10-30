@@ -198,3 +198,103 @@ Void TComRdCost::setDistParam( UInt uiBlkWidth, UInt uiBlkHeight, DFunc eDFunc, 
 
   // initialize
   rcDistParam.iSubShift  = 0;
+  rcDistParam.m_maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
+}
+
+// Setting the Distortion Parameter for Inter (ME)
+Void TComRdCost::setDistParam( const TComPattern* const pcPatternKey, const Pel* piRefY, Int iRefStride, DistParam& rcDistParam )
+{
+  // set Original & Curr Pointer / Stride
+  rcDistParam.pOrg = pcPatternKey->getROIY();
+  rcDistParam.pCur = piRefY;
+
+  rcDistParam.iStrideOrg = pcPatternKey->getPatternLStride();
+  rcDistParam.iStrideCur = iRefStride;
+
+  // set Block Width / Height
+  rcDistParam.iCols    = pcPatternKey->getROIYWidth();
+  rcDistParam.iRows    = pcPatternKey->getROIYHeight();
+  rcDistParam.DistFunc = m_afpDistortFunc[DF_SAD + g_aucConvertToBit[ rcDistParam.iCols ] + 1 ];
+  rcDistParam.m_maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
+
+  if (rcDistParam.iCols == 12)
+  {
+    rcDistParam.DistFunc = m_afpDistortFunc[DF_SAD12];
+  }
+  else if (rcDistParam.iCols == 24)
+  {
+    rcDistParam.DistFunc = m_afpDistortFunc[DF_SAD24];
+  }
+  else if (rcDistParam.iCols == 48)
+  {
+    rcDistParam.DistFunc = m_afpDistortFunc[DF_SAD48];
+  }
+
+  // initialize
+  rcDistParam.iSubShift  = 0;
+}
+
+// Setting the Distortion Parameter for Inter (subpel ME with step)
+Void TComRdCost::setDistParam( const TComPattern* const pcPatternKey, const Pel* piRefY, Int iRefStride, Int iStep, DistParam& rcDistParam, Bool bHADME )
+{
+  // set Original & Curr Pointer / Stride
+  rcDistParam.pOrg = pcPatternKey->getROIY();
+  rcDistParam.pCur = piRefY;
+
+  rcDistParam.iStrideOrg = pcPatternKey->getPatternLStride();
+  rcDistParam.iStrideCur = iRefStride * iStep;
+
+  // set Step for interpolated buffer
+  rcDistParam.iStep = iStep;
+
+  // set Block Width / Height
+  rcDistParam.iCols    = pcPatternKey->getROIYWidth();
+  rcDistParam.iRows    = pcPatternKey->getROIYHeight();
+
+  rcDistParam.m_maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
+
+  // set distortion function
+  if ( !bHADME )
+  {
+    rcDistParam.DistFunc = m_afpDistortFunc[DF_SADS + g_aucConvertToBit[ rcDistParam.iCols ] + 1 ];
+    if (rcDistParam.iCols == 12)
+    {
+      rcDistParam.DistFunc = m_afpDistortFunc[DF_SADS12];
+    }
+    else if (rcDistParam.iCols == 24)
+    {
+      rcDistParam.DistFunc = m_afpDistortFunc[DF_SADS24];
+    }
+    else if (rcDistParam.iCols == 48)
+    {
+      rcDistParam.DistFunc = m_afpDistortFunc[DF_SADS48];
+    }
+  }
+  else
+  {
+    rcDistParam.DistFunc = m_afpDistortFunc[DF_HADS + g_aucConvertToBit[ rcDistParam.iCols ] + 1 ];
+  }
+
+  // initialize
+  rcDistParam.iSubShift  = 0;
+}
+
+Void TComRdCost::setDistParam( DistParam& rcDP, Int bitDepth, const Pel* p1, Int iStride1, const Pel* p2, Int iStride2, Int iWidth, Int iHeight, Bool bHadamard )
+{
+  rcDP.pOrg         = p1;
+  rcDP.pCur         = p2;
+  rcDP.iStrideOrg   = iStride1;
+  rcDP.iStrideCur   = iStride2;
+  rcDP.iCols        = iWidth;
+  rcDP.iRows        = iHeight;
+  rcDP.iStep        = 1;
+  rcDP.iSubShift    = 0;
+  rcDP.bitDepth     = bitDepth;
+  rcDP.DistFunc     = m_afpDistortFunc[ ( bHadamard ? DF_HADS : DF_SADS ) + g_aucConvertToBit[ iWidth ] + 1 ];
+  rcDP.m_maximumDistortionForEarlyExit = std::numeric_limits<Distortion>::max();
+}
+
+Distortion TComRdCost::calcHAD( Int bitDepth, const Pel* pi0, Int iStride0, const Pel* pi1, Int iStride1, Int iWidth, Int iHeight )
+{
+  Distortion uiSum = 0;
+  Int x, y;
