@@ -598,3 +598,103 @@ Void TEncEntropy::encodeQP( TComDataCU* pcCU, UInt uiAbsPartIdx, Bool bRD )
   }
 }
 
+//! encode chroma qp adjustment
+Void TEncEntropy::encodeChromaQpAdjustment( TComDataCU* cu, UInt absPartIdx, Bool inRd )
+{
+  if( inRd )
+  {
+    absPartIdx = 0;
+  }
+
+  m_pcEntropyCoderIf->codeChromaQpAdjustment( cu, absPartIdx );
+}
+
+// texture
+
+//! encode coefficients
+Void TEncEntropy::encodeCoeff( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, Bool& bCodeDQP, Bool& codeChromaQpAdj )
+{
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+  const Bool bDebugRQT=pcCU->getSlice()->getFinalized() && DebugOptionList::DebugRQT.getInt()!=0;
+#endif
+
+  if( pcCU->isIntra(uiAbsPartIdx) )
+  {
+    if (false)
+    {
+      DTRACE_CABAC_VL( g_nSymbolCounter++ )
+      DTRACE_CABAC_T( "\tdecodeTransformIdx()\tCUDepth=" )
+      DTRACE_CABAC_V( uiDepth )
+      DTRACE_CABAC_T( "\n" )
+    }
+  }
+  else
+  {
+    if( !(pcCU->getMergeFlag( uiAbsPartIdx ) && pcCU->getPartitionSize(uiAbsPartIdx) == SIZE_2Nx2N ) )
+    {
+      m_pcEntropyCoderIf->codeQtRootCbf( pcCU, uiAbsPartIdx );
+    }
+    if ( !pcCU->getQtRootCbf( uiAbsPartIdx ) )
+    {
+      return;
+    }
+  }
+
+  TComTURecurse tuRecurse(pcCU, uiAbsPartIdx, uiDepth);
+#if ENVIRONMENT_VARIABLE_DEBUG_AND_TEST
+  if (bDebugRQT)
+  {
+    printf("..codeCoeff: uiAbsPartIdx=%d, PU format=%d, 2Nx2N=%d, NxN=%d\n", uiAbsPartIdx, pcCU->getPartitionSize(uiAbsPartIdx), SIZE_2Nx2N, SIZE_NxN);
+  }
+#endif
+
+  xEncodeTransform( bCodeDQP, codeChromaQpAdj, tuRecurse );
+}
+
+Void TEncEntropy::encodeCoeffNxN( TComTU &rTu, TCoeff* pcCoef, const ComponentID compID)
+{
+  TComDataCU *pcCU = rTu.getCU();
+
+  if (pcCU->getCbf(rTu.GetAbsPartIdxTU(), compID, rTu.GetTransformDepthRel()) != 0)
+  {
+    if (rTu.getRect(compID).width != rTu.getRect(compID).height)
+    {
+      //code two sub-TUs
+      TComTURecurse subTUIterator(rTu, false, TComTU::VERTICAL_SPLIT, true, compID);
+
+      const UInt subTUSize = subTUIterator.getRect(compID).width * subTUIterator.getRect(compID).height;
+
+      do
+      {
+        const UChar subTUCBF = pcCU->getCbf(subTUIterator.GetAbsPartIdxTU(compID), compID, (subTUIterator.GetTransformDepthRel() + 1));
+
+        if (subTUCBF != 0)
+        {
+          m_pcEntropyCoderIf->codeCoeffNxN( subTUIterator, (pcCoef + (subTUIterator.GetSectionNumber() * subTUSize)), compID);
+        }
+      }
+      while (subTUIterator.nextSection(rTu));
+    }
+    else
+    {
+      m_pcEntropyCoderIf->codeCoeffNxN(rTu, pcCoef, compID);
+    }
+  }
+}
+
+Void TEncEntropy::estimateBit (estBitsSbacStruct* pcEstBitsSbac, Int width, Int height, const ChannelType chType, COEFF_SCAN_TYPE scanType )
+{
+  const UInt heightAtEntropyCoding = (width != height) ? (height >> 1) : height;
+
+  m_pcEntropyCoderIf->estBit ( pcEstBitsSbac, width, heightAtEntropyCoding, chType, scanType );
+}
+
+Int TEncEntropy::countNonZeroCoeffs( TCoeff* pcCoef, UInt uiSize )
+{
+  Int count = 0;
+
+  for ( Int i = 0; i < uiSize; i++ )
+  {
+    count += pcCoef[i] != 0;
+  }
+
