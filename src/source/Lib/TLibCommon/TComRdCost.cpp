@@ -498,3 +498,103 @@ UInt simdHADs8x8( const Pel * piOrg, const Pel * piCur, Int iStrideOrg, Int iStr
   __m128i mmSum = _mm_setzero_si128();
   for( Int n = 0 ; n < 8 ; n++ )
   {
+    mmSum = _mm_add_epi32( mmSum , simdAbs32b( mmDiff[n][0] ) );
+    mmSum = _mm_add_epi32( mmSum , simdAbs32b( mmDiff[n][1] ) );
+  }
+  mmSum = _mm_add_epi32( mmSum , _mm_shuffle_epi32( mmSum , _MM_SHUFFLE( 2 , 3 , 0 , 1 ) ) );
+  mmSum = _mm_add_epi32( mmSum , _mm_shuffle_epi32( mmSum , _MM_SHUFFLE( 1 , 0 , 3 , 2 ) ) );
+
+  UInt sad = _mm_cvtsi128_si32( mmSum );
+  sad = ( sad + 2 ) >> 2;
+
+  return( sad );
+}
+#endif
+
+// --------------------------------------------------------------------------------------------------------------------
+// SAD
+// --------------------------------------------------------------------------------------------------------------------
+
+Distortion TComRdCost::xGetSAD( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSADw( pcDtParam );
+  }
+  const Pel* piOrg           = pcDtParam->pOrg;
+  const Pel* piCur           = pcDtParam->pCur;
+  const Int  iCols           = pcDtParam->iCols;
+  const Int  iStrideCur      = pcDtParam->iStrideCur;
+  const Int  iStrideOrg      = pcDtParam->iStrideOrg;
+  const UInt distortionShift = DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth - 8);
+
+  Distortion uiSum = 0;
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( pcDtParam->bitDepth <= 10 )
+  {
+    if( ( iCols & 0x07 ) == 0 )
+    {
+      for( Int iRows   = pcDtParam->iRows ; iRows != 0; iRows-- )
+      {
+        uiSum += simdSADLine8n16b( piOrg , piCur , iCols );
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+      }
+    }
+    else
+    {
+      for( Int  iRows   = pcDtParam->iRows; iRows != 0; iRows-- )
+      {
+        uiSum += simdSADLine4n16b( piOrg , piCur , iCols );
+        piOrg += iStrideOrg;
+        piCur += iStrideCur;
+      }
+    }
+  }
+  else
+  {
+#endif
+  for(Int iRows = pcDtParam->iRows ; iRows != 0; iRows-- )
+  {
+    for (Int n = 0; n < iCols; n++ )
+    {
+      uiSum += abs( piOrg[n] - piCur[n] );
+    }
+    if (pcDtParam->m_maximumDistortionForEarlyExit < ( uiSum >> distortionShift ))
+    {
+      return ( uiSum >> distortionShift );
+    }
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
+#endif
+
+  return ( uiSum >> distortionShift );
+}
+
+Distortion TComRdCost::xGetSAD4( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSADw( pcDtParam );
+  }
+  const Pel* piOrg   = pcDtParam->pOrg;
+  const Pel* piCur   = pcDtParam->pCur;
+  Int  iRows   = pcDtParam->iRows;
+  Int  iSubShift  = pcDtParam->iSubShift;
+  Int  iSubStep   = ( 1 << iSubShift );
+  Int  iStrideCur = pcDtParam->iStrideCur*iSubStep;
+  Int  iStrideOrg = pcDtParam->iStrideOrg*iSubStep;
+
+  Distortion uiSum = 0;
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( pcDtParam->bitDepth <= 10 )
+  {
+    for( ; iRows != 0; iRows-=iSubStep )
+    {
+      uiSum += simdSADLine4n16b( piOrg , piCur , 4 );
+      piOrg += iStrideOrg;
