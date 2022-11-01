@@ -98,3 +98,103 @@ public:
   Void  codeSaoUflc          ( UInt uiLength, UInt  uiCode );
   Void  codeSAOSign          ( UInt  uiCode);  //<! code SAO offset sign
 
+  Void codeSAOOffsetParam(ComponentID compIdx, SAOOffset& ctbParam, Bool sliceEnabled, const Int channelBitDepth);
+  Void codeSAOBlkParam(SAOBlkParam& saoBlkParam, const BitDepths &bitDepths
+                    , Bool* sliceEnabled
+                    , Bool leftMergeAvail
+                    , Bool aboveMergeAvail
+                    , Bool onlyEstMergeInfo = false
+                    );
+
+private:
+  Void  xWriteUnarySymbol    ( UInt uiSymbol, ContextModel* pcSCModel, Int iOffset );
+  Void  xWriteUnaryMaxSymbol ( UInt uiSymbol, ContextModel* pcSCModel, Int iOffset, UInt uiMaxSymbol );
+  Void  xWriteEpExGolomb     ( UInt uiSymbol, UInt uiCount );
+  Void  xWriteCoefRemainExGolomb ( UInt symbol, UInt &rParam, const Bool useLimitedPrefixLength, const Int maxLog2TrDynamicRange );
+
+  Void  xCopyFrom            ( const TEncSbac* pSrc );
+  Void  xCopyContextsFrom    ( const TEncSbac* pSrc );
+
+protected:
+  TComBitIf*    m_pcBitIf;
+  TEncBinIf*    m_pcBinIf;
+
+  //--Adaptive loop filter
+
+public:
+  Void codeCUTransquantBypassFlag( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeSkipFlag      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeMergeFlag     ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeMergeIndex    ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeSplitFlag     ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void codeMVPIdx        ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+
+  Void codePartSize      ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void codePredMode      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeIPCMInfo      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeTransformSubdivFlag ( UInt uiSymbol, UInt uiCtx );
+  Void codeQtCbf               ( TComTU & rTu, const ComponentID compID, const Bool lowestLevel );
+  Void codeQtRootCbf           ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeQtCbfZero           ( TComTU &rTu, const ChannelType chType );
+  Void codeQtRootCbfZero       ( );
+  Void codeIntraDirLumaAng     ( TComDataCU* pcCU, UInt absPartIdx, Bool isMultiple);
+
+  Void codeIntraDirChroma      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeInterDir            ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeRefFrmIdx           ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+  Void codeMvd                 ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+
+  Void codeCrossComponentPrediction( TComTU &rTu, ComponentID compID );
+
+  Void codeDeltaQP             ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeChromaQpAdjustment  ( TComDataCU* cu, UInt absPartIdx );
+
+  Void codeLastSignificantXY ( UInt uiPosX, UInt uiPosY, Int width, Int height, ComponentID component, UInt uiScanIdx );
+  Void codeCoeffNxN            ( TComTU &rTu, TCoeff* pcCoef, const ComponentID compID );
+  Void codeTransformSkipFlags ( TComTU &rTu, ComponentID component );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // for RD-optimizatioon
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void estBit               (estBitsSbacStruct* pcEstBitsSbac, Int width, Int height, ChannelType chType, COEFF_SCAN_TYPE scanType);
+  Void estCBFBit                     ( estBitsSbacStruct* pcEstBitsSbac );
+  Void estSignificantCoeffGroupMapBit( estBitsSbacStruct* pcEstBitsSbac, ChannelType chType );
+  Void estSignificantMapBit          ( estBitsSbacStruct* pcEstBitsSbac, Int width, Int height, ChannelType chType );
+  Void estLastSignificantPositionBit ( estBitsSbacStruct* pcEstBitsSbac, Int width, Int height, ChannelType chType, COEFF_SCAN_TYPE scanType );
+  Void estSignificantCoefficientsBit ( estBitsSbacStruct* pcEstBitsSbac, ChannelType chType );
+
+  Void codeExplicitRdpcmMode            ( TComTU &rTu, const ComponentID compID );
+
+
+  TEncBinIf* getEncBinIf()  { return m_pcBinIf; }
+private:
+  ContextModel         m_contextModels[MAX_NUM_CTX_MOD];
+  Int                  m_numContextModels;
+  ContextModel3DBuffer m_cCUSplitFlagSCModel;
+  ContextModel3DBuffer m_cCUSkipFlagSCModel;
+  ContextModel3DBuffer m_cCUMergeFlagExtSCModel;
+  ContextModel3DBuffer m_cCUMergeIdxExtSCModel;
+  ContextModel3DBuffer m_cCUPartSizeSCModel;
+  ContextModel3DBuffer m_cCUPredModeSCModel;
+  ContextModel3DBuffer m_cCUIntraPredSCModel;
+  ContextModel3DBuffer m_cCUChromaPredSCModel;
+  ContextModel3DBuffer m_cCUDeltaQpSCModel;
+  ContextModel3DBuffer m_cCUInterDirSCModel;
+  ContextModel3DBuffer m_cCURefPicSCModel;
+  ContextModel3DBuffer m_cCUMvdSCModel;
+  ContextModel3DBuffer m_cCUQtCbfSCModel;
+  ContextModel3DBuffer m_cCUTransSubdivFlagSCModel;
+  ContextModel3DBuffer m_cCUQtRootCbfSCModel;
+
+  ContextModel3DBuffer m_cCUSigCoeffGroupSCModel;
+  ContextModel3DBuffer m_cCUSigSCModel;
+  ContextModel3DBuffer m_cCuCtxLastX;
+  ContextModel3DBuffer m_cCuCtxLastY;
+  ContextModel3DBuffer m_cCUOneSCModel;
+  ContextModel3DBuffer m_cCUAbsSCModel;
+
+  ContextModel3DBuffer m_cMVPIdxSCModel;
+
+  ContextModel3DBuffer m_cSaoMergeSCModel;
+  ContextModel3DBuffer m_cSaoTypeIdxSCModel;
