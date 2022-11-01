@@ -698,3 +698,7 @@ Int TEncEntropy::countNonZeroCoeffs( TCoeff* pcCoef, UInt uiSize )
     count += pcCoef[i] != 0;
   }
 
+  return count;
+}
+
+//! \}
