@@ -198,3 +198,18 @@ private:
 
   ContextModel3DBuffer m_cSaoMergeSCModel;
   ContextModel3DBuffer m_cSaoTypeIdxSCModel;
+  ContextModel3DBuffer m_cTransformSkipSCModel;
+  ContextModel3DBuffer m_CUTransquantBypassFlagSCModel;
+  ContextModel3DBuffer m_explicitRdpcmFlagSCModel;
+  ContextModel3DBuffer m_explicitRdpcmDirSCModel;
+  ContextModel3DBuffer m_cCrossComponentPredictionSCModel;
+
+  ContextModel3DBuffer m_ChromaQpAdjFlagSCModel;
+  ContextModel3DBuffer m_ChromaQpAdjIdcSCModel;
+
+  UInt m_golombRiceAdaptationStatistics[RExt__GOLOMB_RICE_ADAPTATION_STATISTICS_SETS];
+};
+
+//! \}
+
+#endif // !defined(AFX_TENCSBAC_H__DDA7CDC4_EDE3_4015_9D32_2156249C82AA__INCLUDED_)
