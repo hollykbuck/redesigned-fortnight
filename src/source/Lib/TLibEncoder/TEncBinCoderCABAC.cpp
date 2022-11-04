@@ -198,3 +198,103 @@ Void TEncBinCABAC::encodeBin( UInt binValue, ContextModel &rcCtxModel )
 #if DEBUG_CABAC_BINS
   const UInt startingRange = m_uiRange;
 #endif
+
+  m_uiBinsCoded += m_binCountIncrement;
+  rcCtxModel.setBinsCoded( 1 );
+
+  UInt  uiLPS   = TComCABACTables::sm_aucLPSTable[ rcCtxModel.getState() ][ ( m_uiRange >> 6 ) & 3 ];
+  m_uiRange    -= uiLPS;
+
+  if( binValue != rcCtxModel.getMps() )
+  {
+    Int numBits = TComCABACTables::sm_aucRenormTable[ uiLPS >> 3 ];
+    m_uiLow     = ( m_uiLow + m_uiRange ) << numBits;
+    m_uiRange   = uiLPS << numBits;
+    rcCtxModel.updateLPS();
+    m_bitsLeft -= numBits;
+    testAndWriteOut();
+  }
+  else
+  {
+    rcCtxModel.updateMPS();
+
+    if ( m_uiRange < 256 )
+    {
+      m_uiLow <<= 1;
+      m_uiRange <<= 1;
+      m_bitsLeft--;
+      testAndWriteOut();
+    }
+  }
+
+#if DEBUG_CABAC_BINS
+  if ((g_debugCounter + debugCabacBinWindow) >= debugCabacBinTargetLine)
+  {
+    std::cout << g_debugCounter << ": coding bin value " << binValue << ", range = [" << startingRange << "->" << m_uiRange << "]\n";
+  }
+
+  if (g_debugCounter >= debugCabacBinTargetLine)
+  {
+    UChar breakPointThis;
+    breakPointThis = 7;
+  }
+  if (g_debugCounter >= (debugCabacBinTargetLine + debugCabacBinWindow))
+  {
+    exit(0);
+  }
+
+  g_debugCounter++;
+#endif
+}
+
+/**
+ * \brief Encode equiprobable bin
+ *
+ * \param binValue bin value
+ */
+Void TEncBinCABAC::encodeBinEP( UInt binValue )
+{
+  if (false)
+  {
+    DTRACE_CABAC_VL( g_nSymbolCounter++ )
+    DTRACE_CABAC_T( "\tEPsymbol=" )
+    DTRACE_CABAC_V( binValue )
+    DTRACE_CABAC_T( "\n" )
+  }
+
+  m_uiBinsCoded += m_binCountIncrement;
+
+  if (m_uiRange == 256)
+  {
+    encodeAlignedBinsEP(binValue, 1);
+    return;
+  }
+
+  m_uiLow <<= 1;
+  if( binValue )
+  {
+    m_uiLow += m_uiRange;
+  }
+  m_bitsLeft--;
+
+  testAndWriteOut();
+}
+
+/**
+ * \brief Encode equiprobable bins
+ *
+ * \param binValues bin values
+ * \param numBins number of bins
+ */
+Void TEncBinCABAC::encodeBinsEP( UInt binValues, Int numBins )
+{
+  m_uiBinsCoded += numBins & -m_binCountIncrement;
+
+  if (false)
+  {
+    for ( Int i = 0; i < numBins; i++ )
+    {
+      DTRACE_CABAC_VL( g_nSymbolCounter++ )
+      DTRACE_CABAC_T( "\tEPsymbol=" )
+      DTRACE_CABAC_V( ( binValues >> ( numBins - 1 - i ) ) & 1 )
+      DTRACE_CABAC_T( "\n" )
