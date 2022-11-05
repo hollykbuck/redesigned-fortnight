@@ -298,3 +298,103 @@ Void TEncBinCABAC::encodeBinsEP( UInt binValues, Int numBins )
       DTRACE_CABAC_T( "\tEPsymbol=" )
       DTRACE_CABAC_V( ( binValues >> ( numBins - 1 - i ) ) & 1 )
       DTRACE_CABAC_T( "\n" )
+    }
+  }
+
+  if (m_uiRange == 256)
+  {
+    encodeAlignedBinsEP(binValues, numBins);
+    return;
+  }
+
+  while ( numBins > 8 )
+  {
+    numBins -= 8;
+    UInt pattern = binValues >> numBins;
+    m_uiLow <<= 8;
+    m_uiLow += m_uiRange * pattern;
+    binValues -= pattern << numBins;
+    m_bitsLeft -= 8;
+
+    testAndWriteOut();
+  }
+
+  m_uiLow <<= numBins;
+  m_uiLow += m_uiRange * binValues;
+  m_bitsLeft -= numBins;
+
+  testAndWriteOut();
+}
+
+Void TEncBinCABAC::align()
+{
+  m_uiRange = 256;
+}
+
+Void TEncBinCABAC::encodeAlignedBinsEP( UInt binValues, Int numBins )
+{
+  Int binsRemaining = numBins;
+
+  assert(m_uiRange == 256); //aligned encode only works when range = 256
+
+  while (binsRemaining > 0)
+  {
+    const UInt binsToCode = std::min<UInt>(binsRemaining, 8); //code bytes if able to take advantage of the system's byte-write function
+    const UInt binMask    = (1 << binsToCode) - 1;
+
+    const UInt newBins = (binValues >> (binsRemaining - binsToCode)) & binMask;
+
+    //The process of encoding an EP bin is the same as that of coding a normal
+    //bin where the symbol ranges for 1 and 0 are both half the range:
+    //
+    //  low = (low + range/2) << 1       (to encode a 1)
+    //  low =  low            << 1       (to encode a 0)
+    //
+    //  i.e.
+    //  low = (low + (bin * range/2)) << 1
+    //
+    //  which is equivalent to:
+    //
+    //  low = (low << 1) + (bin * range)
+    //
+    //  this can be generalised for multiple bins, producing the following expression:
+    //
+    m_uiLow = (m_uiLow << binsToCode) + (newBins << 8); //range is known to be 256
+
+    binsRemaining -= binsToCode;
+    m_bitsLeft    -= binsToCode;
+
+    testAndWriteOut();
+  }
+}
+
+/**
+ * \brief Encode terminating bin
+ *
+ * \param binValue bin value
+ */
+Void TEncBinCABAC::encodeBinTrm( UInt binValue )
+{
+  m_uiBinsCoded += m_binCountIncrement;
+  m_uiRange -= 2;
+  if( binValue )
+  {
+    m_uiLow  += m_uiRange;
+    m_uiLow <<= 7;
+    m_uiRange = 2 << 7;
+    m_bitsLeft -= 7;
+  }
+  else if ( m_uiRange >= 256 )
+  {
+    return;
+  }
+  else
+  {
+    m_uiLow   <<= 1;
+    m_uiRange <<= 1;
+    m_bitsLeft--;
+  }
+
+  testAndWriteOut();
+}
+
