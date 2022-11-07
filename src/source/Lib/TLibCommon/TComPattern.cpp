@@ -198,3 +198,103 @@ Void TComPrediction::initIntraPatternChType( TComTU &rTu, const ComponentID comp
 #endif
 
     if (bFilterRefSamples)
+    {
+      // generate filtered intra prediction samples
+
+            Int          stride    = uiROIWidth;
+      const Pel         *piSrcPtr  = piIntraTemp                           + (stride * uiTuHeight2); // bottom left
+            Pel         *piDestPtr = m_piYuvExt[compID][PRED_BUF_FILTERED] + (stride * uiTuHeight2); // bottom left
+
+      //------------------------------------------------
+
+      Bool useStrongIntraSmoothing = isLuma(chType) && sps.getUseStrongIntraSmoothing();
+
+      const Pel bottomLeft = piIntraTemp[stride * uiTuHeight2];
+      const Pel topLeft    = piIntraTemp[0];
+      const Pel topRight   = piIntraTemp[uiTuWidth2];
+
+      if (useStrongIntraSmoothing)
+      {
+#if O0043_BEST_EFFORT_DECODING
+        const Int  threshold     = 1 << (bitDepthForChannelInStream - 5);
+#else
+        const Int  threshold     = 1 << (bitDepthForChannel - 5);
+#endif
+        const Bool bilinearLeft  = abs((bottomLeft + topLeft ) - (2 * piIntraTemp[stride * uiTuHeight])) < threshold; //difference between the
+        const Bool bilinearAbove = abs((topLeft    + topRight) - (2 * piIntraTemp[         uiTuWidth ])) < threshold; //ends and the middle
+        if ((uiTuWidth < 32) || (!bilinearLeft) || (!bilinearAbove))
+        {
+          useStrongIntraSmoothing = false;
+        }
+      }
+
+      *piDestPtr = *piSrcPtr; // bottom left is not filtered
+      piDestPtr -= stride;
+      piSrcPtr  -= stride;
+
+      //------------------------------------------------
+
+      //left column (bottom to top)
+
+      if (useStrongIntraSmoothing)
+      {
+        const Int shift = g_aucConvertToBit[uiTuHeight] + 3; //log2(uiTuHeight2)
+
+        for(UInt i=1; i<uiTuHeight2; i++, piDestPtr-=stride)
+        {
+          *piDestPtr = (((uiTuHeight2 - i) * bottomLeft) + (i * topLeft) + uiTuHeight) >> shift;
+        }
+
+        piSrcPtr -= stride * (uiTuHeight2 - 1);
+      }
+      else
+      {
+        for(UInt i=1; i<uiTuHeight2; i++, piDestPtr-=stride, piSrcPtr-=stride)
+        {
+          *piDestPtr = ( piSrcPtr[stride] + 2*piSrcPtr[0] + piSrcPtr[-stride] + 2 ) >> 2;
+        }
+      }
+
+      //------------------------------------------------
+
+      //top-left
+
+      if (useStrongIntraSmoothing)
+      {
+        *piDestPtr = piSrcPtr[0];
+      }
+      else
+      {
+        *piDestPtr = ( piSrcPtr[stride] + 2*piSrcPtr[0] + piSrcPtr[1] + 2 ) >> 2;
+      }
+      piDestPtr += 1;
+      piSrcPtr  += 1;
+
+      //------------------------------------------------
+
+      //top row (left-to-right)
+
+      if (useStrongIntraSmoothing)
+      {
+        const Int shift = g_aucConvertToBit[uiTuWidth] + 3; //log2(uiTuWidth2)
+
+        for(UInt i=1; i<uiTuWidth2; i++, piDestPtr++)
+        {
+          *piDestPtr = (((uiTuWidth2 - i) * topLeft) + (i * topRight) + uiTuWidth) >> shift;
+        }
+
+        piSrcPtr += uiTuWidth2 - 1;
+      }
+      else
+      {
+        for(UInt i=1; i<uiTuWidth2; i++, piDestPtr++, piSrcPtr++)
+        {
+          *piDestPtr = ( piSrcPtr[1] + 2*piSrcPtr[0] + piSrcPtr[-1] + 2 ) >> 2;
+        }
+      }
+
+      //------------------------------------------------
+
+      *piDestPtr=*piSrcPtr; // far right is not filtered
+
+#if DEBUG_STRING
