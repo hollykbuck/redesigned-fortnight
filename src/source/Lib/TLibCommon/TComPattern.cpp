@@ -98,3 +98,103 @@ Void TComPattern::initPattern (Pel* piY,
   m_roiHeight = roiHeight;
   m_patternStride = stride;
   m_bitDepth = bitDepthLuma;
+#if MCTS_ENC_CHECK
+  m_roiPosX       = roiPosX;
+  m_roiPosY       = roiPosY;
+#endif
+}
+
+#if MCTS_ENC_CHECK
+Void TComPattern::setTileBorders(Int tileLeftTopPelPosX, Int tileLeftTopPelPosY, Int tileRightBottomPelPosX, Int tileRightBottomPelPosY)
+{
+  m_tileLeftTopPelPosX = tileLeftTopPelPosX;
+  m_tileLeftTopPelPosY = tileLeftTopPelPosY;
+  m_tileRightBottomPelPosX = tileRightBottomPelPosX;
+  m_tileRightBottomPelPosY = tileRightBottomPelPosY;
+}
+#endif
+
+
+// TODO: move this function to TComPrediction.cpp.
+Void TComPrediction::initIntraPatternChType( TComTU &rTu, const ComponentID compID, const Bool bFilterRefSamples DEBUG_STRING_FN_DECLARE(sDebug))
+{
+  const ChannelType chType    = toChannelType(compID);
+
+  TComDataCU *pcCU=rTu.getCU();
+  const TComSPS &sps = *(pcCU->getSlice()->getSPS());
+  const UInt uiZorderIdxInPart=rTu.GetAbsPartIdxTU();
+  const UInt uiTuWidth        = rTu.getRect(compID).width;
+  const UInt uiTuHeight       = rTu.getRect(compID).height;
+  const UInt uiTuWidth2       = uiTuWidth  << 1;
+  const UInt uiTuHeight2      = uiTuHeight << 1;
+
+  const Int  iBaseUnitSize    = sps.getMaxCUWidth() >> sps.getMaxTotalCUDepth();
+  const Int  iUnitWidth       = iBaseUnitSize  >> pcCU->getPic()->getPicYuvRec()->getComponentScaleX(compID);
+  const Int  iUnitHeight      = iBaseUnitSize  >> pcCU->getPic()->getPicYuvRec()->getComponentScaleY(compID);
+  const Int  iTUWidthInUnits  = uiTuWidth  / iUnitWidth;
+  const Int  iTUHeightInUnits = uiTuHeight / iUnitHeight;
+  const Int  iAboveUnits      = iTUWidthInUnits  << 1;
+  const Int  iLeftUnits       = iTUHeightInUnits << 1;
+  const Int  bitDepthForChannel = sps.getBitDepth(chType);
+
+  assert(iTUHeightInUnits > 0 && iTUWidthInUnits > 0);
+
+  const Int  iPartIdxStride   = pcCU->getPic()->getNumPartInCtuWidth();
+  const UInt uiPartIdxLT      = pcCU->getZorderIdxInCtu() + uiZorderIdxInPart;
+  const UInt uiPartIdxRT      = g_auiRasterToZscan[ g_auiZscanToRaster[ uiPartIdxLT ] +   iTUWidthInUnits  - 1                   ];
+  const UInt uiPartIdxLB      = g_auiRasterToZscan[ g_auiZscanToRaster[ uiPartIdxLT ] + ((iTUHeightInUnits - 1) * iPartIdxStride)];
+
+  Int   iPicStride = pcCU->getPic()->getStride(compID);
+  Bool  bNeighborFlags[4 * MAX_NUM_PART_IDXS_IN_CTU_WIDTH + 1];
+  Int   iNumIntraNeighbor = 0;
+
+  bNeighborFlags[iLeftUnits] = isAboveLeftAvailable( pcCU, uiPartIdxLT );
+  iNumIntraNeighbor += bNeighborFlags[iLeftUnits] ? 1 : 0;
+  iNumIntraNeighbor  += isAboveAvailable     ( pcCU, uiPartIdxLT, uiPartIdxRT, (bNeighborFlags + iLeftUnits + 1)                    );
+  iNumIntraNeighbor  += isAboveRightAvailable( pcCU, uiPartIdxLT, uiPartIdxRT, (bNeighborFlags + iLeftUnits + 1 + iTUWidthInUnits ) );
+  iNumIntraNeighbor  += isLeftAvailable      ( pcCU, uiPartIdxLT, uiPartIdxLB, (bNeighborFlags + iLeftUnits - 1)                    );
+  iNumIntraNeighbor  += isBelowLeftAvailable ( pcCU, uiPartIdxLT, uiPartIdxLB, (bNeighborFlags + iLeftUnits - 1 - iTUHeightInUnits) );
+
+  const UInt         uiROIWidth  = uiTuWidth2+1;
+  const UInt         uiROIHeight = uiTuHeight2+1;
+
+  assert(uiROIWidth*uiROIHeight <= m_iYuvExtSize);
+
+#if DEBUG_STRING
+  std::stringstream ss(stringstream::out);
+#endif
+
+  {
+    Pel *piIntraTemp   = m_piYuvExt[compID][PRED_BUF_UNFILTERED];
+    Pel *piRoiOrigin = pcCU->getPic()->getPicYuvRec()->getAddr(compID, pcCU->getCtuRsAddr(), pcCU->getZorderIdxInCtu()+uiZorderIdxInPart);
+#if O0043_BEST_EFFORT_DECODING
+    const Int  bitDepthForChannelInStream = sps.getStreamBitDepth(chType);
+    fillReferenceSamples (bitDepthForChannelInStream, bitDepthForChannelInStream - bitDepthForChannel,
+#else
+    fillReferenceSamples (bitDepthForChannel,
+#endif
+                          piRoiOrigin, piIntraTemp, bNeighborFlags, iNumIntraNeighbor,  iUnitWidth, iUnitHeight, iAboveUnits, iLeftUnits,
+                          uiROIWidth, uiROIHeight, iPicStride);
+
+
+#if DEBUG_STRING
+    if (DebugOptionList::DebugString_Pred.getInt()&DebugStringGetPredModeMask(MODE_INTRA))
+    {
+      ss << "###: generating Ref Samples for channel " << compID << " and " << rTu.getRect(compID).width << " x " << rTu.getRect(compID).height << "\n";
+      for (UInt y=0; y<uiROIHeight; y++)
+      {
+        ss << "###: - ";
+        for (UInt x=0; x<uiROIWidth; x++)
+        {
+          if (x==0 || y==0)
+          {
+            ss << piIntraTemp[y*uiROIWidth + x] << ", ";
+//          if (x%16==15) ss << "\nPart size: ~ ";
+          }
+        }
+        ss << "\n";
+      }
+    }
+#endif
+
+    if (bFilterRefSamples)
