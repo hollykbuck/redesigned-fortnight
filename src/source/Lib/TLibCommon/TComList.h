@@ -98,3 +98,18 @@ public:
   Void pushFront( const C& rcT )
   {
     /*assert( sizeof(C) == 4);*/
+    if( rcT != NULL )
+    {
+      this->push_front( rcT);
+    }
+  }
+
+  TComIterator find( const C& rcT ) // leszek
+  {
+    return std::list< C >::find( this->begin(), this->end(), rcT );
+  }
+};
+
+//! \}
+
+#endif
