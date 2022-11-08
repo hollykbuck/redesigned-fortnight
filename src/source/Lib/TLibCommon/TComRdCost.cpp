@@ -1098,3 +1098,103 @@ Distortion TComRdCost::xGetSAD48( DistParam* pcDtParam )
   if( pcDtParam->bitDepth <= 10 )
   {
     for( ; iRows != 0; iRows-=iSubStep )
+    {
+      uiSum += simdSADLine8n16b( piOrg , piCur , 48 );
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+  else
+  {
+#endif
+  for( ; iRows != 0; iRows-=iSubStep )
+  {
+    uiSum += abs( piOrg[0] - piCur[0] );
+    uiSum += abs( piOrg[1] - piCur[1] );
+    uiSum += abs( piOrg[2] - piCur[2] );
+    uiSum += abs( piOrg[3] - piCur[3] );
+    uiSum += abs( piOrg[4] - piCur[4] );
+    uiSum += abs( piOrg[5] - piCur[5] );
+    uiSum += abs( piOrg[6] - piCur[6] );
+    uiSum += abs( piOrg[7] - piCur[7] );
+    uiSum += abs( piOrg[8] - piCur[8] );
+    uiSum += abs( piOrg[9] - piCur[9] );
+    uiSum += abs( piOrg[10] - piCur[10] );
+    uiSum += abs( piOrg[11] - piCur[11] );
+    uiSum += abs( piOrg[12] - piCur[12] );
+    uiSum += abs( piOrg[13] - piCur[13] );
+    uiSum += abs( piOrg[14] - piCur[14] );
+    uiSum += abs( piOrg[15] - piCur[15] );
+    uiSum += abs( piOrg[16] - piCur[16] );
+    uiSum += abs( piOrg[17] - piCur[17] );
+    uiSum += abs( piOrg[18] - piCur[18] );
+    uiSum += abs( piOrg[19] - piCur[19] );
+    uiSum += abs( piOrg[20] - piCur[20] );
+    uiSum += abs( piOrg[21] - piCur[21] );
+    uiSum += abs( piOrg[22] - piCur[22] );
+    uiSum += abs( piOrg[23] - piCur[23] );
+    uiSum += abs( piOrg[24] - piCur[24] );
+    uiSum += abs( piOrg[25] - piCur[25] );
+    uiSum += abs( piOrg[26] - piCur[26] );
+    uiSum += abs( piOrg[27] - piCur[27] );
+    uiSum += abs( piOrg[28] - piCur[28] );
+    uiSum += abs( piOrg[29] - piCur[29] );
+    uiSum += abs( piOrg[30] - piCur[30] );
+    uiSum += abs( piOrg[31] - piCur[31] );
+    uiSum += abs( piOrg[32] - piCur[32] );
+    uiSum += abs( piOrg[33] - piCur[33] );
+    uiSum += abs( piOrg[34] - piCur[34] );
+    uiSum += abs( piOrg[35] - piCur[35] );
+    uiSum += abs( piOrg[36] - piCur[36] );
+    uiSum += abs( piOrg[37] - piCur[37] );
+    uiSum += abs( piOrg[38] - piCur[38] );
+    uiSum += abs( piOrg[39] - piCur[39] );
+    uiSum += abs( piOrg[40] - piCur[40] );
+    uiSum += abs( piOrg[41] - piCur[41] );
+    uiSum += abs( piOrg[42] - piCur[42] );
+    uiSum += abs( piOrg[43] - piCur[43] );
+    uiSum += abs( piOrg[44] - piCur[44] );
+    uiSum += abs( piOrg[45] - piCur[45] );
+    uiSum += abs( piOrg[46] - piCur[46] );
+    uiSum += abs( piOrg[47] - piCur[47] );
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
+#endif
+
+  uiSum <<= iSubShift;
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8) );
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// SSE
+// --------------------------------------------------------------------------------------------------------------------
+
+Distortion TComRdCost::xGetSSE( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSSEw( pcDtParam );
+  }
+  const Pel* piOrg   = pcDtParam->pOrg;
+  const Pel* piCur   = pcDtParam->pCur;
+  Int  iRows   = pcDtParam->iRows;
+  Int  iCols   = pcDtParam->iCols;
+  Int  iStrideOrg = pcDtParam->iStrideOrg;
+  Int  iStrideCur = pcDtParam->iStrideCur;
+
+  Distortion uiSum   = 0;
+  UInt       uiShift = DISTORTION_PRECISION_ADJUSTMENT((pcDtParam->bitDepth-8) << 1);
+
+  Intermediate_Int iTemp;
+
+  for( ; iRows != 0; iRows-- )
+  {
+    for (Int n = 0; n < iCols; n++ )
+    {
+      iTemp = piOrg[n  ] - piCur[n  ];
+      uiSum += Distortion(( iTemp * iTemp ) >> uiShift);
+    }
