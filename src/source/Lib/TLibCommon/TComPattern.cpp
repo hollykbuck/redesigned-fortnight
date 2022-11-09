@@ -298,3 +298,103 @@ Void TComPrediction::initIntraPatternChType( TComTU &rTu, const ComponentID comp
       *piDestPtr=*piSrcPtr; // far right is not filtered
 
 #if DEBUG_STRING
+    if (DebugOptionList::DebugString_Pred.getInt()&DebugStringGetPredModeMask(MODE_INTRA))
+    {
+      ss << "###: filtered result for channel " << compID <<"\n";
+      for (UInt y=0; y<uiROIHeight; y++)
+      {
+        ss << "###: - ";
+        for (UInt x=0; x<uiROIWidth; x++)
+        {
+          if (x==0 || y==0)
+          {
+            ss << m_piYuvExt[compID][PRED_BUF_FILTERED][y*uiROIWidth + x] << ", ";
+//          if (x%16==15) ss << "\nPart size: ~ ";
+          }
+        }
+        ss << "\n";
+      }
+    }
+#endif
+
+
+    }
+  }
+  DEBUG_STRING_APPEND(sDebug, ss.str())
+}
+
+Void fillReferenceSamples( const Int bitDepth, 
+#if O0043_BEST_EFFORT_DECODING
+                           const Int bitDepthDelta, 
+#endif
+                           const Pel* piRoiOrigin, 
+                                 Pel* piIntraTemp,
+                           const Bool* bNeighborFlags,
+                           const Int iNumIntraNeighbor, 
+                           const Int unitWidth, 
+                           const Int unitHeight, 
+                           const Int iAboveUnits, 
+                           const Int iLeftUnits,
+                           const UInt uiWidth, 
+                           const UInt uiHeight, 
+                           const Int iPicStride )
+{
+  const Pel* piRoiTemp;
+  Int  i, j;
+  Int  iDCValue = 1 << (bitDepth - 1);
+  const Int iTotalUnits = iAboveUnits + iLeftUnits + 1; //+1 for top-left
+
+  if (iNumIntraNeighbor == 0)
+  {
+    // Fill border with DC value
+    for (i=0; i<uiWidth; i++)
+    {
+      piIntraTemp[i] = iDCValue;
+    }
+    for (i=1; i<uiHeight; i++)
+    {
+      piIntraTemp[i*uiWidth] = iDCValue;
+    }
+  }
+  else if (iNumIntraNeighbor == iTotalUnits)
+  {
+    // Fill top-left border and top and top right with rec. samples
+    piRoiTemp = piRoiOrigin - iPicStride - 1;
+
+    for (i=0; i<uiWidth; i++)
+    {
+#if O0043_BEST_EFFORT_DECODING
+      piIntraTemp[i] = piRoiTemp[i] << bitDepthDelta;
+#else
+      piIntraTemp[i] = piRoiTemp[i];
+#endif
+    }
+
+    // Fill left and below left border with rec. samples
+    piRoiTemp = piRoiOrigin - 1;
+
+    for (i=1; i<uiHeight; i++)
+    {
+#if O0043_BEST_EFFORT_DECODING
+      piIntraTemp[i*uiWidth] = (*(piRoiTemp)) << bitDepthDelta;
+#else
+      piIntraTemp[i*uiWidth] = *(piRoiTemp);
+#endif
+      piRoiTemp += iPicStride;
+    }
+  }
+  else // reference samples are partially available
+  {
+    // all above units have "unitWidth" samples each, all left/below-left units have "unitHeight" samples each
+    const Int  iTotalSamples = (iLeftUnits * unitHeight) + ((iAboveUnits + 1) * unitWidth);
+    Pel  piIntraLine[5 * MAX_CU_SIZE];
+    Pel  *piIntraLineTemp;
+    const Bool *pbNeighborFlags;
+
+
+    // Initialize
+    for (i=0; i<iTotalSamples; i++)
+    {
+      piIntraLine[i] = iDCValue;
+    }
+
