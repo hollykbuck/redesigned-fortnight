@@ -398,3 +398,103 @@ Void fillReferenceSamples( const Int bitDepth,
       piIntraLine[i] = iDCValue;
     }
 
+    // Fill top-left sample
+    piRoiTemp = piRoiOrigin - iPicStride - 1;
+    piIntraLineTemp = piIntraLine + (iLeftUnits * unitHeight);
+    pbNeighborFlags = bNeighborFlags + iLeftUnits;
+    if (*pbNeighborFlags)
+    {
+#if O0043_BEST_EFFORT_DECODING
+      Pel topLeftVal=piRoiTemp[0] << bitDepthDelta;
+#else
+      Pel topLeftVal=piRoiTemp[0];
+#endif
+      for (i=0; i<unitWidth; i++)
+      {
+        piIntraLineTemp[i] = topLeftVal;
+      }
+    }
+
+    // Fill left & below-left samples (downwards)
+    piRoiTemp += iPicStride;
+    piIntraLineTemp--;
+    pbNeighborFlags--;
+
+    for (j=0; j<iLeftUnits; j++)
+    {
+      if (*pbNeighborFlags)
+      {
+        for (i=0; i<unitHeight; i++)
+        {
+#if O0043_BEST_EFFORT_DECODING
+          piIntraLineTemp[-i] = piRoiTemp[i*iPicStride] << bitDepthDelta;
+#else
+          piIntraLineTemp[-i] = piRoiTemp[i*iPicStride];
+#endif
+        }
+      }
+      piRoiTemp += unitHeight*iPicStride;
+      piIntraLineTemp -= unitHeight;
+      pbNeighborFlags--;
+    }
+
+    // Fill above & above-right samples (left-to-right) (each unit has "unitWidth" samples)
+    piRoiTemp = piRoiOrigin - iPicStride;
+    // offset line buffer by iNumUints2*unitHeight (for left/below-left) + unitWidth (for above-left)
+    piIntraLineTemp = piIntraLine + (iLeftUnits * unitHeight) + unitWidth;
+    pbNeighborFlags = bNeighborFlags + iLeftUnits + 1;
+    for (j=0; j<iAboveUnits; j++)
+    {
+      if (*pbNeighborFlags)
+      {
+        for (i=0; i<unitWidth; i++)
+        {
+#if O0043_BEST_EFFORT_DECODING
+          piIntraLineTemp[i] = piRoiTemp[i] << bitDepthDelta;
+#else
+          piIntraLineTemp[i] = piRoiTemp[i];
+#endif
+        }
+      }
+      piRoiTemp += unitWidth;
+      piIntraLineTemp += unitWidth;
+      pbNeighborFlags++;
+    }
+
+    // Pad reference samples when necessary
+    Int iCurrJnit = 0;
+    Pel  *piIntraLineCur   = piIntraLine;
+    const UInt piIntraLineTopRowOffset = iLeftUnits * (unitHeight - unitWidth);
+
+    if (!bNeighborFlags[0])
+    {
+      // very bottom unit of bottom-left; at least one unit will be valid.
+      {
+        Int   iNext = 1;
+        while (iNext < iTotalUnits && !bNeighborFlags[iNext])
+        {
+          iNext++;
+        }
+        Pel *piIntraLineNext = piIntraLine + ((iNext < iLeftUnits) ? (iNext * unitHeight) : (piIntraLineTopRowOffset + (iNext * unitWidth)));
+        const Pel refSample = *piIntraLineNext;
+        // Pad unavailable samples with new value
+        Int iNextOrTop = std::min<Int>(iNext, iLeftUnits);
+        // fill left column
+        while (iCurrJnit < iNextOrTop)
+        {
+          for (i=0; i<unitHeight; i++)
+          {
+            piIntraLineCur[i] = refSample;
+          }
+          piIntraLineCur += unitHeight;
+          iCurrJnit++;
+        }
+        // fill top row
+        while (iCurrJnit < iNext)
+        {
+          for (i=0; i<unitWidth; i++)
+          {
+            piIntraLineCur[i] = refSample;
+          }
+          piIntraLineCur += unitWidth;
+          iCurrJnit++;
