@@ -498,3 +498,103 @@ Void fillReferenceSamples( const Int bitDepth,
           }
           piIntraLineCur += unitWidth;
           iCurrJnit++;
+        }
+      }
+    }
+
+    // pad all other reference samples.
+    while (iCurrJnit < iTotalUnits)
+    {
+      if (!bNeighborFlags[iCurrJnit]) // samples not available
+      {
+        {
+          const Int numSamplesInCurrUnit = (iCurrJnit >= iLeftUnits) ? unitWidth : unitHeight;
+          const Pel refSample = *(piIntraLineCur-1);
+          for (i=0; i<numSamplesInCurrUnit; i++)
+          {
+            piIntraLineCur[i] = refSample;
+          }
+          piIntraLineCur += numSamplesInCurrUnit;
+          iCurrJnit++;
+        }
+      }
+      else
+      {
+        piIntraLineCur += (iCurrJnit >= iLeftUnits) ? unitWidth : unitHeight;
+        iCurrJnit++;
+      }
+    }
+
+    // Copy processed samples
+
+    piIntraLineTemp = piIntraLine + uiHeight + unitWidth - 2;
+    // top left, top and top right samples
+    for (i=0; i<uiWidth; i++)
+    {
+      piIntraTemp[i] = piIntraLineTemp[i];
+    }
+
+    piIntraLineTemp = piIntraLine + uiHeight - 1;
+    for (i=1; i<uiHeight; i++)
+    {
+      piIntraTemp[i*uiWidth] = piIntraLineTemp[-i];
+    }
+  }
+}
+
+Bool TComPrediction::filteringIntraReferenceSamples(const ComponentID compID, UInt uiDirMode, UInt uiTuChWidth, UInt uiTuChHeight, const ChromaFormat chFmt, const Bool intraReferenceSmoothingDisabled)
+{
+  Bool bFilter;
+
+  if (!filterIntraReferenceSamples(toChannelType(compID), chFmt, intraReferenceSmoothingDisabled))
+  {
+    bFilter=false;
+  }
+  else
+  {
+    assert(uiTuChWidth>=4 && uiTuChHeight>=4 && uiTuChWidth<128 && uiTuChHeight<128);
+
+    if (uiDirMode == DC_IDX)
+    {
+      bFilter=false; //no smoothing for DC or LM chroma
+    }
+    else
+    {
+      Int diff = min<Int>(abs((Int) uiDirMode - HOR_IDX), abs((Int)uiDirMode - VER_IDX));
+      UInt sizeIndex=g_aucConvertToBit[uiTuChWidth];
+      assert(sizeIndex < MAX_INTRA_FILTER_DEPTHS);
+      bFilter = diff > m_aucIntraFilter[toChannelType(compID)][sizeIndex];
+    }
+  }
+  return bFilter;
+}
+
+Bool isAboveLeftAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT )
+{
+  Bool bAboveLeftFlag;
+  UInt uiPartAboveLeft;
+  const TComDataCU* pcCUAboveLeft = pcCU->getPUAboveLeft( uiPartAboveLeft, uiPartIdxLT );
+  if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
+  {
+    bAboveLeftFlag = ( pcCUAboveLeft && pcCUAboveLeft->isIntra( uiPartAboveLeft ) );
+  }
+  else
+  {
+    bAboveLeftFlag = (pcCUAboveLeft ? true : false);
+  }
+  return bAboveLeftFlag;
+}
+
+Int isAboveAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPartIdxRT, Bool *bValidFlags )
+{
+  const UInt uiRasterPartBegin = g_auiZscanToRaster[uiPartIdxLT];
+  const UInt uiRasterPartEnd = g_auiZscanToRaster[uiPartIdxRT]+1;
+  const UInt uiIdxStep = 1;
+  Bool *pbValidFlags = bValidFlags;
+  Int iNumIntra = 0;
+
+  for ( UInt uiRasterPart = uiRasterPartBegin; uiRasterPart < uiRasterPartEnd; uiRasterPart += uiIdxStep )
+  {
+    UInt uiPartAbove;
+    const TComDataCU* pcCUAbove = pcCU->getPUAbove( uiPartAbove, g_auiRasterToZscan[uiRasterPart] );
+    if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
