@@ -598,3 +598,103 @@ Int isAboveAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPartIdxRT
     UInt uiPartAbove;
     const TComDataCU* pcCUAbove = pcCU->getPUAbove( uiPartAbove, g_auiRasterToZscan[uiRasterPart] );
     if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
+    {
+      if ( pcCUAbove && pcCUAbove->isIntra( uiPartAbove ) )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    else
+    {
+      if (pcCUAbove)
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    pbValidFlags++;
+  }
+  return iNumIntra;
+}
+
+Int isLeftAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPartIdxLB, Bool *bValidFlags )
+{
+  const UInt uiRasterPartBegin = g_auiZscanToRaster[uiPartIdxLT];
+  const UInt uiRasterPartEnd = g_auiZscanToRaster[uiPartIdxLB]+1;
+  const UInt uiIdxStep = pcCU->getPic()->getNumPartInCtuWidth();
+  Bool *pbValidFlags = bValidFlags;
+  Int iNumIntra = 0;
+
+  for ( UInt uiRasterPart = uiRasterPartBegin; uiRasterPart < uiRasterPartEnd; uiRasterPart += uiIdxStep )
+  {
+    UInt uiPartLeft;
+    const TComDataCU* pcCULeft = pcCU->getPULeft( uiPartLeft, g_auiRasterToZscan[uiRasterPart] );
+    if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
+    {
+      if ( pcCULeft && pcCULeft->isIntra( uiPartLeft ) )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    else
+    {
+      if ( pcCULeft )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    pbValidFlags--; // opposite direction
+  }
+
+  return iNumIntra;
+}
+
+Int isAboveRightAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPartIdxRT, Bool *bValidFlags )
+{
+  const UInt uiNumUnitsInPU = g_auiZscanToRaster[uiPartIdxRT] - g_auiZscanToRaster[uiPartIdxLT] + 1;
+  Bool *pbValidFlags = bValidFlags;
+  Int iNumIntra = 0;
+
+  for ( UInt uiOffset = 1; uiOffset <= uiNumUnitsInPU; uiOffset++ )
+  {
+    UInt uiPartAboveRight;
+    const TComDataCU* pcCUAboveRight = pcCU->getPUAboveRight( uiPartAboveRight, uiPartIdxRT, uiOffset );
+    if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
+    {
+      if ( pcCUAboveRight && pcCUAboveRight->isIntra( uiPartAboveRight ) )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    else
+    {
+      if ( pcCUAboveRight )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
