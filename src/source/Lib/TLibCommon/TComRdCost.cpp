@@ -1598,3 +1598,103 @@ Distortion TComRdCost::xCalcHADs4x4( const Pel *piOrg, const Pel *piCur, Int iSt
   d[13] = m[13] - m[ 9];
   d[14] = m[14] - m[10];
   d[15] = m[15] - m[11];
+
+  m[ 0] = d[ 0] + d[ 3];
+  m[ 1] = d[ 1] + d[ 2];
+  m[ 2] = d[ 1] - d[ 2];
+  m[ 3] = d[ 0] - d[ 3];
+  m[ 4] = d[ 4] + d[ 7];
+  m[ 5] = d[ 5] + d[ 6];
+  m[ 6] = d[ 5] - d[ 6];
+  m[ 7] = d[ 4] - d[ 7];
+  m[ 8] = d[ 8] + d[11];
+  m[ 9] = d[ 9] + d[10];
+  m[10] = d[ 9] - d[10];
+  m[11] = d[ 8] - d[11];
+  m[12] = d[12] + d[15];
+  m[13] = d[13] + d[14];
+  m[14] = d[13] - d[14];
+  m[15] = d[12] - d[15];
+
+  d[ 0] = m[ 0] + m[ 1];
+  d[ 1] = m[ 0] - m[ 1];
+  d[ 2] = m[ 2] + m[ 3];
+  d[ 3] = m[ 3] - m[ 2];
+  d[ 4] = m[ 4] + m[ 5];
+  d[ 5] = m[ 4] - m[ 5];
+  d[ 6] = m[ 6] + m[ 7];
+  d[ 7] = m[ 7] - m[ 6];
+  d[ 8] = m[ 8] + m[ 9];
+  d[ 9] = m[ 8] - m[ 9];
+  d[10] = m[10] + m[11];
+  d[11] = m[11] - m[10];
+  d[12] = m[12] + m[13];
+  d[13] = m[12] - m[13];
+  d[14] = m[14] + m[15];
+  d[15] = m[15] - m[14];
+
+  for (k=0; k<16; ++k)
+  {
+    satd += abs(d[k]);
+  }
+  satd = ((satd+1)>>1);
+
+  return satd;
+}
+
+Distortion TComRdCost::xCalcHADs8x8( const Pel *piOrg, const Pel *piCur, Int iStrideOrg, Int iStrideCur, Int iStep
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  , Int bitDepth
+#endif
+  )
+{
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( bitDepth <= 10 )
+  {
+    return( simdHADs8x8( piOrg , piCur , iStrideOrg , iStrideCur ) );
+  }
+#endif
+  Int k, i, j, jj;
+  Distortion sad = 0;
+  TCoeff diff[64], m1[8][8], m2[8][8], m3[8][8];
+  assert( iStep == 1 );
+  for( k = 0; k < 64; k += 8 )
+  {
+    diff[k+0] = piOrg[0] - piCur[0];
+    diff[k+1] = piOrg[1] - piCur[1];
+    diff[k+2] = piOrg[2] - piCur[2];
+    diff[k+3] = piOrg[3] - piCur[3];
+    diff[k+4] = piOrg[4] - piCur[4];
+    diff[k+5] = piOrg[5] - piCur[5];
+    diff[k+6] = piOrg[6] - piCur[6];
+    diff[k+7] = piOrg[7] - piCur[7];
+
+    piCur += iStrideCur;
+    piOrg += iStrideOrg;
+  }
+
+  //horizontal
+  for (j=0; j < 8; j++)
+  {
+    jj = j << 3;
+    m2[j][0] = diff[jj  ] + diff[jj+4];
+    m2[j][1] = diff[jj+1] + diff[jj+5];
+    m2[j][2] = diff[jj+2] + diff[jj+6];
+    m2[j][3] = diff[jj+3] + diff[jj+7];
+    m2[j][4] = diff[jj  ] - diff[jj+4];
+    m2[j][5] = diff[jj+1] - diff[jj+5];
+    m2[j][6] = diff[jj+2] - diff[jj+6];
+    m2[j][7] = diff[jj+3] - diff[jj+7];
+
+    m1[j][0] = m2[j][0] + m2[j][2];
+    m1[j][1] = m2[j][1] + m2[j][3];
+    m1[j][2] = m2[j][0] - m2[j][2];
+    m1[j][3] = m2[j][1] - m2[j][3];
+    m1[j][4] = m2[j][4] + m2[j][6];
+    m1[j][5] = m2[j][5] + m2[j][7];
+    m1[j][6] = m2[j][4] - m2[j][6];
+    m1[j][7] = m2[j][5] - m2[j][7];
+
+    m2[j][0] = m1[j][0] + m1[j][1];
+    m2[j][1] = m1[j][0] - m1[j][1];
+    m2[j][2] = m1[j][2] + m1[j][3];
