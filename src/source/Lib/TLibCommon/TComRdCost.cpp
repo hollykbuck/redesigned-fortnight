@@ -1798,3 +1798,29 @@ Distortion TComRdCost::xGetHADs( DistParam* pcDtParam )
         uiSum += xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
       }
       piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else if( ( iRows % 2 == 0) && (iCols % 2 == 0) )
+  {
+    Int  iOffsetOrg = iStrideOrg<<1;
+    Int  iOffsetCur = iStrideCur<<1;
+    for ( y=0; y<iRows; y+=2 )
+    {
+      for ( x=0; x<iCols; x+=2 )
+      {
+        uiSum += xCalcHADs2x2( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else
+  {
+    assert(false);
+  }
+
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8) );
+}
+
+//! \}
