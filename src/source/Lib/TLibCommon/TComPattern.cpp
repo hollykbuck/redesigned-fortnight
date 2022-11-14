@@ -698,3 +698,53 @@ Int isAboveRightAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPart
         *pbValidFlags = true;
       }
       else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    pbValidFlags++;
+  }
+
+  return iNumIntra;
+}
+
+Int isBelowLeftAvailable( const TComDataCU* pcCU, UInt uiPartIdxLT, UInt uiPartIdxLB, Bool *bValidFlags )
+{
+  const UInt uiNumUnitsInPU = (g_auiZscanToRaster[uiPartIdxLB] - g_auiZscanToRaster[uiPartIdxLT]) / pcCU->getPic()->getNumPartInCtuWidth() + 1;
+  Bool *pbValidFlags = bValidFlags;
+  Int iNumIntra = 0;
+
+  for ( UInt uiOffset = 1; uiOffset <= uiNumUnitsInPU; uiOffset++ )
+  {
+    UInt uiPartBelowLeft;
+    const TComDataCU* pcCUBelowLeft = pcCU->getPUBelowLeft( uiPartBelowLeft, uiPartIdxLB, uiOffset );
+    if(pcCU->getSlice()->getPPS()->getConstrainedIntraPred())
+    {
+      if ( pcCUBelowLeft && pcCUBelowLeft->isIntra( uiPartBelowLeft ) )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    else
+    {
+      if ( pcCUBelowLeft )
+      {
+        iNumIntra++;
+        *pbValidFlags = true;
+      }
+      else
+      {
+        *pbValidFlags = false;
+      }
+    }
+    pbValidFlags--; // opposite direction
+  }
+
+  return iNumIntra;
+}
+//! \}
