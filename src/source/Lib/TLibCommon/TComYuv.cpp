@@ -98,3 +98,103 @@ Void TComYuv::clear()
       ::memset( m_apiBuf[comp], 0, ( getWidth(ComponentID(comp)) * getHeight(ComponentID(comp))  )*sizeof(Pel) );
     }
   }
+}
+
+
+
+
+Void TComYuv::copyToPicYuv   ( TComPicYuv* pcPicYuvDst, const UInt ctuRsAddr, const UInt uiAbsZorderIdx, const UInt uiPartDepth, const UInt uiPartIdx ) const
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    copyToPicComponent  ( ComponentID(comp), pcPicYuvDst, ctuRsAddr, uiAbsZorderIdx, uiPartDepth, uiPartIdx );
+  }
+}
+
+Void TComYuv::copyToPicComponent  ( const ComponentID compID, TComPicYuv* pcPicYuvDst, const UInt ctuRsAddr, const UInt uiAbsZorderIdx, const UInt uiPartDepth, const UInt uiPartIdx ) const
+{
+  const Int iWidth  = getWidth(compID) >>uiPartDepth;
+  const Int iHeight = getHeight(compID)>>uiPartDepth;
+
+  const Pel* pSrc     = getAddr(compID, uiPartIdx, iWidth);
+        Pel* pDst     = pcPicYuvDst->getAddr ( compID, ctuRsAddr, uiAbsZorderIdx );
+
+  const UInt  iSrcStride  = getStride(compID);
+  const UInt  iDstStride  = pcPicYuvDst->getStride(compID);
+
+  for ( Int y = iHeight; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, sizeof(Pel)*iWidth);
+    pDst += iDstStride;
+    pSrc += iSrcStride;
+  }
+}
+
+
+
+
+Void TComYuv::copyFromPicYuv   ( const TComPicYuv* pcPicYuvSrc, const UInt ctuRsAddr, const UInt uiAbsZorderIdx )
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    copyFromPicComponent  ( ComponentID(comp), pcPicYuvSrc, ctuRsAddr, uiAbsZorderIdx );
+  }
+}
+
+Void TComYuv::copyFromPicComponent  ( const ComponentID compID, const TComPicYuv* pcPicYuvSrc, const UInt ctuRsAddr, const UInt uiAbsZorderIdx )
+{
+        Pel* pDst     = getAddr(compID);
+  const Pel* pSrc     = pcPicYuvSrc->getAddr ( compID, ctuRsAddr, uiAbsZorderIdx );
+
+  const UInt iDstStride  = getStride(compID);
+  const UInt iSrcStride  = pcPicYuvSrc->getStride(compID);
+  const Int  iWidth=getWidth(compID);
+  const Int  iHeight=getHeight(compID);
+
+  for (Int y = iHeight; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, sizeof(Pel)*iWidth);
+    pDst += iDstStride;
+    pSrc += iSrcStride;
+  }
+}
+
+
+
+
+Void TComYuv::copyToPartYuv( TComYuv* pcYuvDst, const UInt uiDstPartIdx ) const
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    copyToPartComponent  ( ComponentID(comp), pcYuvDst, uiDstPartIdx );
+  }
+}
+
+Void TComYuv::copyToPartComponent( const ComponentID compID, TComYuv* pcYuvDst, const UInt uiDstPartIdx ) const
+{
+  const Pel* pSrc     = getAddr(compID);
+        Pel* pDst     = pcYuvDst->getAddr( compID, uiDstPartIdx );
+
+  const UInt iSrcStride  = getStride(compID);
+  const UInt iDstStride  = pcYuvDst->getStride(compID);
+  const Int  iWidth=getWidth(compID);
+  const Int  iHeight=getHeight(compID);
+
+  for (Int y = iHeight; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, sizeof(Pel)*iWidth);
+    pDst += iDstStride;
+    pSrc += iSrcStride;
+  }
+}
+
+
+
+
+Void TComYuv::copyPartToYuv( TComYuv* pcYuvDst, const UInt uiSrcPartIdx ) const
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    copyPartToComponent  ( ComponentID(comp), pcYuvDst, uiSrcPartIdx );
+  }
+}
