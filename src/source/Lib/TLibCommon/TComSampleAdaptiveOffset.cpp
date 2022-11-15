@@ -98,3 +98,103 @@ const SAOBlkParam& SAOBlkParam::operator= (const SAOBlkParam& src)
     offsetParam[compIdx] = src.offsetParam[compIdx];
   }
   return *this;
+
+}
+
+TComSampleAdaptiveOffset::TComSampleAdaptiveOffset()
+{
+  m_tempPicYuv = NULL;
+  m_lineBufWidth = 0;
+  m_signLineBuf1 = NULL;
+  m_signLineBuf2 = NULL;
+}
+
+
+TComSampleAdaptiveOffset::~TComSampleAdaptiveOffset()
+{
+  destroy();
+
+  if (m_signLineBuf1)
+  {
+    delete[] m_signLineBuf1;
+    m_signLineBuf1 = NULL;
+  }
+  if (m_signLineBuf2)
+  {
+    delete[] m_signLineBuf2;
+    m_signLineBuf2 = NULL;
+  }
+}
+
+Void TComSampleAdaptiveOffset::create( Int picWidth, Int picHeight, ChromaFormat format, UInt maxCUWidth, UInt maxCUHeight, UInt maxCUDepth, UInt lumaBitShift, UInt chromaBitShift )
+{
+  destroy();
+
+  m_picWidth        = picWidth;
+  m_picHeight       = picHeight;
+  m_chromaFormatIDC = format;
+  m_maxCUWidth      = maxCUWidth;
+  m_maxCUHeight     = maxCUHeight;
+
+  m_numCTUInWidth   = (m_picWidth/m_maxCUWidth) + ((m_picWidth % m_maxCUWidth)?1:0);
+  m_numCTUInHeight  = (m_picHeight/m_maxCUHeight) + ((m_picHeight % m_maxCUHeight)?1:0);
+  m_numCTUsPic      = m_numCTUInHeight*m_numCTUInWidth;
+
+  //temporary picture buffer
+  if ( !m_tempPicYuv )
+  {
+    m_tempPicYuv = new TComPicYuv;
+    m_tempPicYuv->create( m_picWidth, m_picHeight, m_chromaFormatIDC, m_maxCUWidth, m_maxCUHeight, maxCUDepth, true );
+  }
+
+  //bit-depth related
+  for(Int compIdx = 0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+  {
+    m_offsetStepLog2  [compIdx] = isLuma(ComponentID(compIdx))? lumaBitShift : chromaBitShift;
+  }
+}
+
+Void TComSampleAdaptiveOffset::destroy()
+{
+  if ( m_tempPicYuv )
+  {
+    m_tempPicYuv->destroy();
+    delete m_tempPicYuv;
+    m_tempPicYuv = NULL;
+  }
+}
+
+Void TComSampleAdaptiveOffset::invertQuantOffsets(ComponentID compIdx, Int typeIdc, Int typeAuxInfo, Int* dstOffsets, Int* srcOffsets)
+{
+  Int codedOffset[MAX_NUM_SAO_CLASSES];
+
+  ::memcpy(codedOffset, srcOffsets, sizeof(Int)*MAX_NUM_SAO_CLASSES);
+  ::memset(dstOffsets, 0, sizeof(Int)*MAX_NUM_SAO_CLASSES);
+
+  if(typeIdc == SAO_TYPE_START_BO)
+  {
+    for(Int i=0; i< 4; i++)
+    {
+      dstOffsets[(typeAuxInfo+ i)%NUM_SAO_BO_CLASSES] = codedOffset[(typeAuxInfo+ i)%NUM_SAO_BO_CLASSES]*(1<<m_offsetStepLog2[compIdx]);
+    }
+  }
+  else //EO
+  {
+    for(Int i=0; i< NUM_SAO_EO_CLASSES; i++)
+    {
+      dstOffsets[i] = codedOffset[i] *(1<<m_offsetStepLog2[compIdx]);
+    }
+    assert(dstOffsets[SAO_CLASS_EO_PLAIN] == 0); //keep EO plain offset as zero
+  }
+
+}
+
+Int TComSampleAdaptiveOffset::getMergeList(TComPic* pic, Int ctuRsAddr, SAOBlkParam* blkParams, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES])
+{
+  Int ctuX = ctuRsAddr % m_numCTUInWidth;
+  Int ctuY = ctuRsAddr / m_numCTUInWidth;
+  Int mergedCTUPos;
+  Int numValidMergeCandidates = 0;
+
+  for(Int mergeType=0; mergeType< NUM_SAO_MERGE_TYPES; mergeType++)
+  {
