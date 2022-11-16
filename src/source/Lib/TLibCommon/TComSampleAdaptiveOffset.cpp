@@ -198,3 +198,103 @@ Int TComSampleAdaptiveOffset::getMergeList(TComPic* pic, Int ctuRsAddr, SAOBlkPa
 
   for(Int mergeType=0; mergeType< NUM_SAO_MERGE_TYPES; mergeType++)
   {
+    SAOBlkParam* mergeCandidate = NULL;
+
+    switch(mergeType)
+    {
+    case SAO_MERGE_ABOVE:
+      {
+        if(ctuY > 0)
+        {
+          mergedCTUPos = ctuRsAddr- m_numCTUInWidth;
+          if( pic->getSAOMergeAvailability(ctuRsAddr, mergedCTUPos) )
+          {
+            mergeCandidate = &(blkParams[mergedCTUPos]);
+          }
+        }
+      }
+      break;
+    case SAO_MERGE_LEFT:
+      {
+        if(ctuX > 0)
+        {
+          mergedCTUPos = ctuRsAddr- 1;
+          if( pic->getSAOMergeAvailability(ctuRsAddr, mergedCTUPos) )
+          {
+            mergeCandidate = &(blkParams[mergedCTUPos]);
+          }
+        }
+      }
+      break;
+    default:
+      {
+        printf("not a supported merge type");
+        assert(0);
+        exit(-1);
+      }
+    }
+
+    mergeList[mergeType]=mergeCandidate;
+    if (mergeCandidate != NULL)
+    {
+      numValidMergeCandidates++;
+    }
+  }
+
+  return numValidMergeCandidates;
+}
+
+
+Void TComSampleAdaptiveOffset::reconstructBlkSAOParam(SAOBlkParam& recParam, SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES])
+{
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+  for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+  {
+    const ComponentID component = ComponentID(compIdx);
+    SAOOffset& offsetParam = recParam[component];
+
+    if(offsetParam.modeIdc == SAO_MODE_OFF)
+    {
+      continue;
+    }
+
+    switch(offsetParam.modeIdc)
+    {
+    case SAO_MODE_NEW:
+      {
+        invertQuantOffsets(component, offsetParam.typeIdc, offsetParam.typeAuxInfo, offsetParam.offset, offsetParam.offset);
+      }
+      break;
+    case SAO_MODE_MERGE:
+      {
+        SAOBlkParam* mergeTarget = mergeList[offsetParam.typeIdc];
+        assert(mergeTarget != NULL);
+
+        offsetParam = (*mergeTarget)[component];
+      }
+      break;
+    default:
+      {
+        printf("Not a supported mode");
+        assert(0);
+        exit(-1);
+      }
+    }
+  }
+}
+
+Void TComSampleAdaptiveOffset::reconstructBlkSAOParams(TComPic* pic, SAOBlkParam* saoBlkParams)
+{
+  for(Int compIdx = 0; compIdx < MAX_NUM_COMPONENT; compIdx++)
+  {
+    m_picSAOEnabled[compIdx] = false;
+  }
+
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+
+  for(Int ctuRsAddr=0; ctuRsAddr< m_numCTUsPic; ctuRsAddr++)
+  {
+    SAOBlkParam* mergeList[NUM_SAO_MERGE_TYPES] = { NULL };
+    getMergeList(pic, ctuRsAddr, saoBlkParams, mergeList);
+
+    reconstructBlkSAOParam(saoBlkParams[ctuRsAddr], mergeList);
