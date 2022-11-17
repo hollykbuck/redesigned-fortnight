@@ -298,3 +298,103 @@ Void TComSampleAdaptiveOffset::reconstructBlkSAOParams(TComPic* pic, SAOBlkParam
     getMergeList(pic, ctuRsAddr, saoBlkParams, mergeList);
 
     reconstructBlkSAOParam(saoBlkParams[ctuRsAddr], mergeList);
+
+    for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+    {
+      if(saoBlkParams[ctuRsAddr][compIdx].modeIdc != SAO_MODE_OFF)
+      {
+        m_picSAOEnabled[compIdx] = true;
+      }
+    }
+  }
+}
+
+
+Void TComSampleAdaptiveOffset::offsetBlock(const Int channelBitDepth, Int typeIdx, Int* offset
+                                          , Pel* srcBlk, Pel* resBlk, Int srcStride, Int resStride,  Int width, Int height
+                                          , Bool isLeftAvail,  Bool isRightAvail, Bool isAboveAvail, Bool isBelowAvail, Bool isAboveLeftAvail, Bool isAboveRightAvail, Bool isBelowLeftAvail, Bool isBelowRightAvail)
+{
+  if(m_lineBufWidth != m_maxCUWidth)
+  {
+    m_lineBufWidth = m_maxCUWidth;
+
+    if (m_signLineBuf1)
+    {
+      delete[] m_signLineBuf1;
+      m_signLineBuf1 = NULL;
+    }
+    m_signLineBuf1 = new SChar[m_lineBufWidth+1];
+
+    if (m_signLineBuf2)
+    {
+      delete[] m_signLineBuf2;
+      m_signLineBuf2 = NULL;
+    }
+    m_signLineBuf2 = new SChar[m_lineBufWidth+1];
+  }
+
+  const Int maxSampleValueIncl = (1<< channelBitDepth )-1;
+
+  Int x,y, startX, startY, endX, endY, edgeType;
+  Int firstLineStartX, firstLineEndX, lastLineStartX, lastLineEndX;
+  SChar signLeft, signRight, signDown;
+
+  Pel* srcLine = srcBlk;
+  Pel* resLine = resBlk;
+
+  switch(typeIdx)
+  {
+  case SAO_TYPE_EO_0:
+    {
+      offset += 2;
+      startX = isLeftAvail ? 0 : 1;
+      endX   = isRightAvail ? width : (width -1);
+      for (y=0; y< height; y++)
+      {
+        signLeft = (SChar)sgn(srcLine[startX] - srcLine[startX-1]);
+        for (x=startX; x< endX; x++)
+        {
+          signRight = (SChar)sgn(srcLine[x] - srcLine[x+1]);
+          edgeType =  signRight + signLeft;
+          signLeft  = -signRight;
+
+          resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+        }
+        srcLine  += srcStride;
+        resLine += resStride;
+      }
+
+    }
+    break;
+  case SAO_TYPE_EO_90:
+    {
+      offset += 2;
+      SChar *signUpLine = m_signLineBuf1;
+
+      startY = isAboveAvail ? 0 : 1;
+      endY   = isBelowAvail ? height : height-1;
+      if (!isAboveAvail)
+      {
+        srcLine += srcStride;
+        resLine += resStride;
+      }
+
+      Pel* srcLineAbove= srcLine- srcStride;
+      for (x=0; x< width; x++)
+      {
+        signUpLine[x] = (SChar)sgn(srcLine[x] - srcLineAbove[x]);
+      }
+
+      Pel* srcLineBelow;
+      for (y=startY; y<endY; y++)
+      {
+        srcLineBelow= srcLine+ srcStride;
+
+        for (x=0; x< width; x++)
+        {
+          signDown  = (SChar)sgn(srcLine[x] - srcLineBelow[x]);
+          edgeType = signDown + signUpLine[x];
+          signUpLine[x]= -signDown;
+
+          resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+        }
