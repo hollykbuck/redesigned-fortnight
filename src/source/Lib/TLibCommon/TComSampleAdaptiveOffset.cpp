@@ -398,3 +398,103 @@ Void TComSampleAdaptiveOffset::offsetBlock(const Int channelBitDepth, Int typeId
 
           resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
         }
+        srcLine += srcStride;
+        resLine += resStride;
+      }
+
+    }
+    break;
+  case SAO_TYPE_EO_135:
+    {
+      offset += 2;
+      SChar *signUpLine, *signDownLine, *signTmpLine;
+
+      signUpLine  = m_signLineBuf1;
+      signDownLine= m_signLineBuf2;
+
+      startX = isLeftAvail ? 0 : 1 ;
+      endX   = isRightAvail ? width : (width-1);
+
+      //prepare 2nd line's upper sign
+      Pel* srcLineBelow= srcLine+ srcStride;
+      for (x=startX; x< endX+1; x++)
+      {
+        signUpLine[x] = (SChar)sgn(srcLineBelow[x] - srcLine[x- 1]);
+      }
+
+      //1st line
+      Pel* srcLineAbove= srcLine- srcStride;
+      firstLineStartX = isAboveLeftAvail ? 0 : 1;
+      firstLineEndX   = isAboveAvail? endX: 1;
+      for(x= firstLineStartX; x< firstLineEndX; x++)
+      {
+        edgeType  =  sgn(srcLine[x] - srcLineAbove[x- 1]) - signUpLine[x+1];
+
+        resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+      }
+      srcLine  += srcStride;
+      resLine  += resStride;
+
+
+      //middle lines
+      for (y= 1; y< height-1; y++)
+      {
+        srcLineBelow= srcLine+ srcStride;
+
+        for (x=startX; x<endX; x++)
+        {
+          signDown =  (SChar)sgn(srcLine[x] - srcLineBelow[x+ 1]);
+          edgeType =  signDown + signUpLine[x];
+          resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+
+          signDownLine[x+1] = -signDown;
+        }
+        signDownLine[startX] = (SChar)sgn(srcLineBelow[startX] - srcLine[startX-1]);
+
+        signTmpLine  = signUpLine;
+        signUpLine   = signDownLine;
+        signDownLine = signTmpLine;
+
+        srcLine += srcStride;
+        resLine += resStride;
+      }
+
+      //last line
+      srcLineBelow= srcLine+ srcStride;
+      lastLineStartX = isBelowAvail ? startX : (width -1);
+      lastLineEndX   = isBelowRightAvail ? width : (width -1);
+      for(x= lastLineStartX; x< lastLineEndX; x++)
+      {
+        edgeType =  sgn(srcLine[x] - srcLineBelow[x+ 1]) + signUpLine[x];
+        resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+
+      }
+    }
+    break;
+  case SAO_TYPE_EO_45:
+    {
+      offset += 2;
+      SChar *signUpLine = m_signLineBuf1+1;
+
+      startX = isLeftAvail ? 0 : 1;
+      endX   = isRightAvail ? width : (width -1);
+
+      //prepare 2nd line upper sign
+      Pel* srcLineBelow= srcLine+ srcStride;
+      for (x=startX-1; x< endX; x++)
+      {
+        signUpLine[x] = (SChar)sgn(srcLineBelow[x] - srcLine[x+1]);
+      }
+
+
+      //first line
+      Pel* srcLineAbove= srcLine- srcStride;
+      firstLineStartX = isAboveAvail ? startX : (width -1 );
+      firstLineEndX   = isAboveRightAvail ? width : (width-1);
+      for(x= firstLineStartX; x< firstLineEndX; x++)
+      {
+        edgeType = sgn(srcLine[x] - srcLineAbove[x+1]) -signUpLine[x-1];
+        resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+      }
+      srcLine += srcStride;
+      resLine += resStride;
