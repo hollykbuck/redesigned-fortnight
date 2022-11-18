@@ -398,3 +398,60 @@ Void TComYuv::addAvg( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const 
           pDst[ x + 0 ] = ClipBD( rightShift(( pSrc0[ x + 0 ] + pSrc1[ x + 0 ] + offset ), shiftNum), clipbd );
           pDst[ x + 1 ] = ClipBD( rightShift(( pSrc0[ x + 1 ] + pSrc1[ x + 1 ] + offset ), shiftNum), clipbd );
           pDst[ x + 2 ] = ClipBD( rightShift(( pSrc0[ x + 2 ] + pSrc1[ x + 2 ] + offset ), shiftNum), clipbd );
+          pDst[ x + 3 ] = ClipBD( rightShift(( pSrc0[ x + 3 ] + pSrc1[ x + 3 ] + offset ), shiftNum), clipbd );
+        }
+        pSrc0 += iSrc0Stride;
+        pSrc1 += iSrc1Stride;
+        pDst  += iDstStride;
+      }
+    }
+  }
+}
+
+Void TComYuv::removeHighFreq( const TComYuv* pcYuvSrc,
+                              const UInt uiPartIdx,
+                              const UInt uiWidth,
+                              const UInt uiHeight,
+                              const Int bitDepths[MAX_NUM_CHANNEL_TYPE],
+                              const Bool bClipToBitDepths
+                              )
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    const Pel* pSrc  = pcYuvSrc->getAddr(compID, uiPartIdx);
+    Pel* pDst  = getAddr(compID, uiPartIdx);
+
+    const Int iSrcStride = pcYuvSrc->getStride(compID);
+    const Int iDstStride = getStride(compID);
+    const Int iWidth  = uiWidth >>getComponentScaleX(compID);
+    const Int iHeight = uiHeight>>getComponentScaleY(compID);
+    if (bClipToBitDepths)
+    {
+      const Int clipBd=bitDepths[toChannelType(compID)];
+      for ( Int y = iHeight-1; y >= 0; y-- )
+      {
+        for ( Int x = iWidth-1; x >= 0; x-- )
+        {
+          pDst[x ] = ClipBD((2 * pDst[x]) - pSrc[x], clipBd);
+        }
+        pSrc += iSrcStride;
+        pDst += iDstStride;
+      }
+    }
+    else
+    {
+      for ( Int y = iHeight-1; y >= 0; y-- )
+      {
+        for ( Int x = iWidth-1; x >= 0; x-- )
+        {
+          pDst[x ] = (2 * pDst[x]) - pSrc[x];
+        }
+        pSrc += iSrcStride;
+        pDst += iDstStride;
+      }
+    }
+  }
+}
+
+//! \}
