@@ -98,3 +98,35 @@ private:
   TEncPicQPAdaptationLayer* m_acAQLayer;
   UInt                      m_uiMaxAQDepth;
 
+public:
+  TEncPic();
+  virtual ~TEncPic();
+
+#if REDUCED_ENCODER_MEMORY
+  Void          create( const TComSPS &sps, const TComPPS &pps, UInt uiMaxAdaptiveQPDepth
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                      , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                      , const Bool bCreateFilteredSourcePicYuv
+#endif
+                      );
+#else
+  Void          create( const TComSPS &sps, const TComPPS &pps, UInt uiMaxAdaptiveQPDepth, Bool bIsVirtual /* = false*/
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                      , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                      , const Bool bCreateFilteredSourcePicYuv
+#endif
+                      );
+#endif
+  virtual Void  destroy();
+
+  TEncPicQPAdaptationLayer* getAQLayer( UInt uiDepth )  { return &m_acAQLayer[uiDepth]; }
+  UInt                      getMaxAQDepth()             { return m_uiMaxAQDepth;        }
+};
+
+//! \}
+
+#endif // __TENCPIC__
