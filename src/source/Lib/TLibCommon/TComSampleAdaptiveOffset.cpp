@@ -498,3 +498,103 @@ Void TComSampleAdaptiveOffset::offsetBlock(const Int channelBitDepth, Int typeId
       }
       srcLine += srcStride;
       resLine += resStride;
+
+      //middle lines
+      for (y= 1; y< height-1; y++)
+      {
+        srcLineBelow= srcLine+ srcStride;
+
+        for(x= startX; x< endX; x++)
+        {
+          signDown =  (SChar)sgn(srcLine[x] - srcLineBelow[x-1]);
+          edgeType =  signDown + signUpLine[x];
+          resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+          signUpLine[x-1] = -signDown;
+        }
+        signUpLine[endX-1] = (SChar)sgn(srcLineBelow[endX-1] - srcLine[endX]);
+        srcLine  += srcStride;
+        resLine += resStride;
+      }
+
+      //last line
+      srcLineBelow= srcLine+ srcStride;
+      lastLineStartX = isBelowLeftAvail ? 0 : 1;
+      lastLineEndX   = isBelowAvail ? endX : 1;
+      for(x= lastLineStartX; x< lastLineEndX; x++)
+      {
+        edgeType = sgn(srcLine[x] - srcLineBelow[x-1]) + signUpLine[x];
+        resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[edgeType]);
+
+      }
+    }
+    break;
+  case SAO_TYPE_BO:
+    {
+      const Int shiftBits = channelBitDepth - NUM_SAO_BO_CLASSES_LOG2;
+      for (y=0; y< height; y++)
+      {
+        for (x=0; x< width; x++)
+        {
+          resLine[x] = Clip3<Int>(0, maxSampleValueIncl, srcLine[x] + offset[srcLine[x] >> shiftBits] );
+        }
+        srcLine += srcStride;
+        resLine += resStride;
+      }
+    }
+    break;
+  default:
+    {
+      printf("Not a supported SAO types\n");
+      assert(0);
+      exit(-1);
+    }
+  }
+}
+
+Void TComSampleAdaptiveOffset::offsetCTU(Int ctuRsAddr, TComPicYuv* srcYuv, TComPicYuv* resYuv, SAOBlkParam& saoblkParam, TComPic* pPic)
+{
+  Bool isLeftAvail,isRightAvail,isAboveAvail,isBelowAvail,isAboveLeftAvail,isAboveRightAvail,isBelowLeftAvail,isBelowRightAvail;
+
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+  Bool bAllOff=true;
+  for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+  {
+    if (saoblkParam[compIdx].modeIdc != SAO_MODE_OFF)
+    {
+      bAllOff=false;
+    }
+  }
+  if (bAllOff)
+  {
+    return;
+  }
+
+  //block boundary availability
+  pPic->getPicSym()->deriveLoopFilterBoundaryAvailibility(ctuRsAddr, isLeftAvail,isRightAvail,isAboveAvail,isBelowAvail,isAboveLeftAvail,isAboveRightAvail,isBelowLeftAvail,isBelowRightAvail);
+
+  Int yPos   = (ctuRsAddr / m_numCTUInWidth)*m_maxCUHeight;
+  Int xPos   = (ctuRsAddr % m_numCTUInWidth)*m_maxCUWidth;
+  Int height = (yPos + m_maxCUHeight > m_picHeight)?(m_picHeight- yPos):m_maxCUHeight;
+  Int width  = (xPos + m_maxCUWidth  > m_picWidth )?(m_picWidth - xPos):m_maxCUWidth;
+
+  for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+  {
+    const ComponentID component = ComponentID(compIdx);
+    SAOOffset& ctbOffset = saoblkParam[compIdx];
+
+    if(ctbOffset.modeIdc != SAO_MODE_OFF)
+    {
+      const UInt componentScaleX = getComponentScaleX(component, pPic->getChromaFormat());
+      const UInt componentScaleY = getComponentScaleY(component, pPic->getChromaFormat());
+
+      Int  blkWidth   = (width  >> componentScaleX);
+      Int  blkHeight  = (height >> componentScaleY);
+      Int  blkXPos    = (xPos   >> componentScaleX);
+      Int  blkYPos    = (yPos   >> componentScaleY);
+
+      Int  srcStride  = srcYuv->getStride(component);
+      Pel* srcBlk     = srcYuv->getAddr(component) + blkYPos*srcStride + blkXPos;
+
+      Int  resStride  = resYuv->getStride(component);
+      Pel* resBlk     = resYuv->getAddr(component) + blkYPos*resStride + blkXPos;
+
