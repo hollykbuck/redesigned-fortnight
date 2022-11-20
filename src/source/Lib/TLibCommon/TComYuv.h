@@ -198,3 +198,14 @@ public:
   //  Get stride value of YUV buffer
   UInt         getStride                  (const ComponentID id) const { return m_iWidth >> getComponentScaleX(id);   }
   UInt         getHeight                  (const ComponentID id) const { return m_iHeight >> getComponentScaleY(id);  }
+  UInt         getWidth                   (const ComponentID id) const { return m_iWidth >> getComponentScaleX(id);   }
+  ChromaFormat getChromaFormat            ()                     const { return m_chromaFormatIDC; }
+  UInt         getNumberValidComponents   ()                     const { return ::getNumberValidComponents(m_chromaFormatIDC); }
+  UInt         getComponentScaleX         (const ComponentID id) const { return ::getComponentScaleX(id, m_chromaFormatIDC); }
+  UInt         getComponentScaleY         (const ComponentID id) const { return ::getComponentScaleY(id, m_chromaFormatIDC); }
+
+};// END CLASS DEFINITION TComYuv
+
+//! \}
+
+#endif // __TCOMYUV__
