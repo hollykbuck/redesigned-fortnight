@@ -598,3 +598,103 @@ Void TComSampleAdaptiveOffset::offsetCTU(Int ctuRsAddr, TComPicYuv* srcYuv, TCom
       Int  resStride  = resYuv->getStride(component);
       Pel* resBlk     = resYuv->getAddr(component) + blkYPos*resStride + blkXPos;
 
+      offsetBlock( pPic->getPicSym()->getSPS().getBitDepth(toChannelType(component)), ctbOffset.typeIdc, ctbOffset.offset
+                  , srcBlk, resBlk, srcStride, resStride, blkWidth, blkHeight
+                  , isLeftAvail, isRightAvail
+                  , isAboveAvail, isBelowAvail
+                  , isAboveLeftAvail, isAboveRightAvail
+                  , isBelowLeftAvail, isBelowRightAvail
+                  );
+    }
+  } //compIdx
+
+}
+
+
+Void TComSampleAdaptiveOffset::SAOProcess(TComPic* pDecPic)
+{
+  const Int numberOfComponents = getNumberValidComponents(m_chromaFormatIDC);
+  Bool bAllDisabled=true;
+  for(Int compIdx = 0; compIdx < numberOfComponents; compIdx++)
+  {
+    if (m_picSAOEnabled[compIdx])
+    {
+      bAllDisabled=false;
+    }
+  }
+  if (bAllDisabled)
+  {
+    return;
+  }
+
+  TComPicYuv* resYuv = pDecPic->getPicYuvRec();
+  TComPicYuv* srcYuv = m_tempPicYuv;
+  resYuv->copyToPic(srcYuv);
+  for(Int ctuRsAddr= 0; ctuRsAddr < m_numCTUsPic; ctuRsAddr++)
+  {
+    offsetCTU(ctuRsAddr, srcYuv, resYuv, (pDecPic->getPicSym()->getSAOBlkParam())[ctuRsAddr], pDecPic);
+  } //ctu
+}
+
+
+/** PCM LF disable process.
+ * \param pcPic picture (TComPic) pointer
+ *
+ * \note Replace filtered sample values of PCM mode blocks with the transmitted and reconstructed ones.
+ */
+Void TComSampleAdaptiveOffset::PCMLFDisableProcess (TComPic* pcPic)
+{
+  xPCMRestoration(pcPic);
+}
+
+/** Picture-level PCM restoration.
+ * \param pcPic picture (TComPic) pointer
+ */
+Void TComSampleAdaptiveOffset::xPCMRestoration(TComPic* pcPic)
+{
+  Bool  bPCMFilter = (pcPic->getSlice(0)->getSPS()->getUsePCM() && pcPic->getSlice(0)->getSPS()->getPCMFilterDisableFlag())? true : false;
+
+  if(bPCMFilter || pcPic->getSlice(0)->getPPS()->getTransquantBypassEnabledFlag())
+  {
+    for( UInt ctuRsAddr = 0; ctuRsAddr < pcPic->getNumberOfCtusInFrame() ; ctuRsAddr++ )
+    {
+      TComDataCU* pcCU = pcPic->getCtu(ctuRsAddr);
+
+      xPCMCURestoration(pcCU, 0, 0);
+    }
+  }
+}
+
+/** PCM CU restoration.
+ * \param pcCU            pointer to current CU
+ * \param uiAbsZorderIdx  part index
+ * \param uiDepth         CU depth
+ */
+Void TComSampleAdaptiveOffset::xPCMCURestoration ( TComDataCU* pcCU, UInt uiAbsZorderIdx, UInt uiDepth )
+{
+  TComPic* pcPic     = pcCU->getPic();
+  UInt uiCurNumParts = pcPic->getNumPartitionsInCtu() >> (uiDepth<<1);
+  UInt uiQNumParts   = uiCurNumParts>>2;
+
+  // go to sub-CU
+  if( pcCU->getDepth(uiAbsZorderIdx) > uiDepth )
+  {
+    for ( UInt uiPartIdx = 0; uiPartIdx < 4; uiPartIdx++, uiAbsZorderIdx+=uiQNumParts )
+    {
+      UInt uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsZorderIdx] ];
+      UInt uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsZorderIdx] ];
+      if( ( uiLPelX < pcCU->getSlice()->getSPS()->getPicWidthInLumaSamples() ) && ( uiTPelY < pcCU->getSlice()->getSPS()->getPicHeightInLumaSamples() ) )
+      {
+        xPCMCURestoration( pcCU, uiAbsZorderIdx, uiDepth+1 );
+      }
+    }
+    return;
+  }
+
+  // restore PCM samples
+  if ((pcCU->getIPCMFlag(uiAbsZorderIdx)&& pcPic->getSlice(0)->getSPS()->getPCMFilterDisableFlag()) || pcCU->isLosslessCoded( uiAbsZorderIdx))
+  {
+    const UInt numComponents=pcPic->getNumberValidComponents();
+    for(UInt comp=0; comp<numComponents; comp++)
+    {
+      xPCMSampleRestoration (pcCU, uiAbsZorderIdx, uiDepth, ComponentID(comp));
