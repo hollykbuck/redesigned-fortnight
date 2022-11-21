@@ -698,3 +698,50 @@ Void TComSampleAdaptiveOffset::xPCMCURestoration ( TComDataCU* pcCU, UInt uiAbsZ
     for(UInt comp=0; comp<numComponents; comp++)
     {
       xPCMSampleRestoration (pcCU, uiAbsZorderIdx, uiDepth, ComponentID(comp));
+    }
+  }
+}
+
+/** PCM sample restoration.
+ * \param pcCU           pointer to current CU
+ * \param uiAbsZorderIdx part index
+ * \param uiDepth        CU depth
+ * \param compID         texture component type
+ */
+Void TComSampleAdaptiveOffset::xPCMSampleRestoration (TComDataCU* pcCU, UInt uiAbsZorderIdx, UInt uiDepth, const ComponentID compID)
+{
+        TComPicYuv* pcPicYuvRec = pcCU->getPic()->getPicYuvRec();
+        UInt uiPcmLeftShiftBit;
+  const UInt uiMinCoeffSize = pcCU->getPic()->getMinCUWidth()*pcCU->getPic()->getMinCUHeight();
+  const UInt csx=pcPicYuvRec->getComponentScaleX(compID);
+  const UInt csy=pcPicYuvRec->getComponentScaleY(compID);
+  const UInt uiOffset   = (uiMinCoeffSize*uiAbsZorderIdx)>>(csx+csy);
+
+        Pel *piSrc = pcPicYuvRec->getAddr(compID, pcCU->getCtuRsAddr(), uiAbsZorderIdx);
+  const Pel *piPcm = pcCU->getPCMSample(compID) + uiOffset;
+  const UInt uiStride  = pcPicYuvRec->getStride(compID);
+  const TComSPS &sps = *(pcCU->getSlice()->getSPS());
+  const UInt uiWidth  = ((sps.getMaxCUWidth()  >> uiDepth) >> csx);
+  const UInt uiHeight = ((sps.getMaxCUHeight() >> uiDepth) >> csy);
+
+  if ( pcCU->isLosslessCoded(uiAbsZorderIdx) && !pcCU->getIPCMFlag(uiAbsZorderIdx) )
+  {
+    uiPcmLeftShiftBit = 0;
+  }
+  else
+  {
+    uiPcmLeftShiftBit = sps.getBitDepth(toChannelType(compID)) - sps.getPCMBitDepth(toChannelType(compID));
+  }
+
+  for(UInt uiY = 0; uiY < uiHeight; uiY++ )
+  {
+    for(UInt uiX = 0; uiX < uiWidth; uiX++ )
+    {
+      piSrc[uiX] = (piPcm[uiX] << uiPcmLeftShiftBit);
+    }
+    piPcm += uiWidth;
+    piSrc += uiStride;
+  }
+}
+
+//! \}
