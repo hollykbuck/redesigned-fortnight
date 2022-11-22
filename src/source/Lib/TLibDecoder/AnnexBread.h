@@ -98,3 +98,102 @@ public:
       for (UInt i = 0; i < n; i++)
       {
         m_FutureBytes = (m_FutureBytes << 8) | m_Input.get();
+        m_NumFutureBytes++;
+      }
+    }
+    catch (...)
+    {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * return the next n bytes in the stream without advancing
+   * the stream pointer.
+   *
+   * Returns: an unsigned integer representing an n byte bigendian
+   * word.
+   *
+   * If an attempt is made to read past EOF, an n-byte word is
+   * returned, but the portion that required input bytes beyond EOF
+   * is undefined.
+   *
+   */
+  uint32_t peekBytes(UInt n)
+  {
+    eofBeforeNBytes(n);
+    return m_FutureBytes >> 8*(m_NumFutureBytes - n);
+  }
+
+  /**
+   * consume and return one byte from the input.
+   *
+   * If bytestream is already at EOF prior to a call to readByte(),
+   * an exception std::ios_base::failure is thrown.
+   */
+  uint8_t readByte()
+  {
+    if (!m_NumFutureBytes)
+    {
+      uint8_t byte = m_Input.get();
+      return byte;
+    }
+    m_NumFutureBytes--;
+    uint8_t wanted_byte = m_FutureBytes >> 8*m_NumFutureBytes;
+    m_FutureBytes &= ~(0xff << 8*m_NumFutureBytes);
+    return wanted_byte;
+  }
+
+  /**
+   * consume and return n bytes from the input.  n bytes from
+   * bytestream are interpreted as bigendian when assembling
+   * the return value.
+   */
+  uint32_t readBytes(UInt n)
+  {
+    uint32_t val = 0;
+    for (UInt i = 0; i < n; i++)
+    {
+      val = (val << 8) | readByte();
+    }
+    return val;
+  }
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  UInt GetNumBufferedBytes() const { return m_NumFutureBytes; }
+#endif
+
+private:
+  UInt m_NumFutureBytes; /* number of valid bytes in m_FutureBytes */
+  uint32_t m_FutureBytes; /* bytes that have been peeked */
+  std::istream& m_Input; /* Input stream to read from */
+};
+
+/**
+ * Statistics associated with AnnexB bytestreams
+ */
+struct AnnexBStats
+{
+  UInt m_numLeadingZero8BitsBytes;
+  UInt m_numZeroByteBytes;
+  UInt m_numStartCodePrefixBytes;
+  UInt m_numBytesInNALUnit;
+  UInt m_numTrailingZero8BitsBytes;
+
+  AnnexBStats& operator+=(const AnnexBStats& rhs)
+  {
+    this->m_numLeadingZero8BitsBytes += rhs.m_numLeadingZero8BitsBytes;
+    this->m_numZeroByteBytes += rhs.m_numZeroByteBytes;
+    this->m_numStartCodePrefixBytes += rhs.m_numStartCodePrefixBytes;
+    this->m_numBytesInNALUnit += rhs.m_numBytesInNALUnit;
+    this->m_numTrailingZero8BitsBytes += rhs.m_numTrailingZero8BitsBytes;
+    return *this;
+  }
+};
+
+Bool byteStreamNALUnit(InputByteStream& bs, std::vector<uint8_t>& nalUnit, AnnexBStats& stats);
+
+//! \}
+
+#endif
