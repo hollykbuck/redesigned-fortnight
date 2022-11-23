@@ -98,3 +98,90 @@ Void TEncPicQPAdaptationLayer::destroy()
     delete[] m_acTEncAQU;
     m_acTEncAQU = NULL;
   }
+}
+
+/** Constructor
+ */
+TEncPic::TEncPic()
+: m_acAQLayer(NULL)
+, m_uiMaxAQDepth(0)
+{
+}
+
+/** Destructor
+ */
+TEncPic::~TEncPic()
+{
+  destroy();
+}
+
+/** Initialize member variables
+ * \param sps reference to used SPS
+ * \param pps reference to used PPS
+ * \param uiMaxAdaptiveQPDepth Maximum depth of unit block for assigning QP adaptive to local image characteristics
+ * \param bIsVirtual
+ */
+#if REDUCED_ENCODER_MEMORY
+Void TEncPic::create( const TComSPS &sps, const TComPPS &pps, UInt uiMaxAdaptiveQPDepth
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , const Bool bCreateFilteredSourcePicYuv
+#endif
+                    )
+{
+  TComPic::create( sps, pps, true, false
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                  , bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                  , bCreateFilteredSourcePicYuv
+#endif
+                  );
+#else
+Void TEncPic::create( const TComSPS &sps, const TComPPS &pps, UInt uiMaxAdaptiveQPDepth, Bool bIsVirtual
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , const Bool bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , const Bool bCreateFilteredSourcePicYuv
+#endif
+                    )
+{
+  TComPic::create( sps, pps, bIsVirtual
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                  , bCreateForProcessedReconstruction
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                  , bCreateFilteredSourcePicYuv
+#endif
+                  );
+#endif
+  const Int  iWidth      = sps.getPicWidthInLumaSamples();
+  const Int  iHeight     = sps.getPicHeightInLumaSamples();
+  const UInt uiMaxWidth  = sps.getMaxCUWidth();
+  const UInt uiMaxHeight = sps.getMaxCUHeight();
+  m_uiMaxAQDepth = uiMaxAdaptiveQPDepth;
+  if ( uiMaxAdaptiveQPDepth > 0 )
+  {
+    m_acAQLayer = new TEncPicQPAdaptationLayer[ m_uiMaxAQDepth ];
+    for (UInt d = 0; d < m_uiMaxAQDepth; d++)
+    {
+      m_acAQLayer[d].create( iWidth, iHeight, uiMaxWidth>>d, uiMaxHeight>>d );
+    }
+  }
+}
+
+//! Clean up
+Void TEncPic::destroy()
+{
+  if (m_acAQLayer)
+  {
+    delete[] m_acAQLayer;
+    m_acAQLayer = NULL;
+  }
+  TComPic::destroy();
+}
+//! \}
+
