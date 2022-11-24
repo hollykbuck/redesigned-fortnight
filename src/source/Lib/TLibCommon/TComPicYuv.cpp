@@ -98,3 +98,103 @@ Void TComPicYuv::createWithPadding ( const Int picWidth,                 ///< pi
   // assign the picture arrays and set up the ptr to the top left of the original picture
   for (UInt comp = 0; comp<getNumberValidComponents(); comp++)
   {
+    const ComponentID ch = ComponentID(comp);
+    UInt componentScaleX = getComponentScaleX(ch);
+    UInt componentScaleY = getComponentScaleY(ch);
+
+    UInt scaledWidth = picWidth >> componentScaleX;
+    UInt scaledHeight = picHeight >> componentScaleY;
+
+    unsigned xmargin = m_marginX >> (bScaleMarginChroma ? componentScaleX : 0);
+    unsigned ymargin = m_marginY >> (bScaleMarginChroma ? componentScaleY : 0);
+
+    Int  stride          = scaledWidth + 2 * xmargin;
+    Int  totalHeight     = scaledHeight + 2 * ymargin;
+
+    m_apiPicBuf[comp] = (Pel*)xMalloc(Pel, stride * totalHeight);
+    m_piPicOrg[comp] = m_apiPicBuf[comp] + ymargin * stride + xmargin;
+  }
+  // initialize pointers for unused components to NULL
+  for (UInt comp = getNumberValidComponents(); comp<MAX_NUM_COMPONENT; comp++)
+  {
+    m_apiPicBuf[comp] = NULL;
+    m_piPicOrg[comp] = NULL;
+  }
+
+  for (Int chan = 0; chan<MAX_NUM_CHANNEL_TYPE; chan++)
+  {
+    m_ctuOffsetInBuffer[chan] = NULL;
+    m_subCuOffsetInBuffer[chan] = NULL;
+  }
+}
+#endif
+
+Void TComPicYuv::createWithoutCUInfo ( const Int picWidth,                 ///< picture width
+                                       const Int picHeight,                ///< picture height
+                                       const ChromaFormat chromaFormatIDC, ///< chroma format
+                                       const Bool bUseMargin,              ///< if true, then a margin of uiMaxCUWidth+16 and uiMaxCUHeight+16 is created around the image.
+                                       const UInt maxCUWidth,              ///< used for margin only
+                                       const UInt maxCUHeight)             ///< used for margin only
+
+{
+  destroy();
+
+  m_picWidth          = picWidth;
+  m_picHeight         = picHeight;
+  m_chromaFormatIDC   = chromaFormatIDC;
+  m_marginX          = (bUseMargin?maxCUWidth:0) + 16;   // for 16-byte alignment
+  m_marginY          = (bUseMargin?maxCUHeight:0) + 16;  // margin for 8-tap filter and infinite padding
+  m_bIsBorderExtended = false;
+
+  // assign the picture arrays and set up the ptr to the top left of the original picture
+  for(UInt comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID ch=ComponentID(comp);
+    m_apiPicBuf[comp] = (Pel*)xMalloc( Pel, getStride(ch) * getTotalHeight(ch));
+    m_piPicOrg[comp]  = m_apiPicBuf[comp] + (m_marginY >> getComponentScaleY(ch)) * getStride(ch) + (m_marginX >> getComponentScaleX(ch));
+  }
+  // initialize pointers for unused components to NULL
+  for(UInt comp=getNumberValidComponents();comp<MAX_NUM_COMPONENT; comp++)
+  {
+    m_apiPicBuf[comp] = NULL;
+    m_piPicOrg[comp]  = NULL;
+  }
+
+  for(Int chan=0; chan<MAX_NUM_CHANNEL_TYPE; chan++)
+  {
+    m_ctuOffsetInBuffer[chan]   = NULL;
+    m_subCuOffsetInBuffer[chan] = NULL;
+  }
+}
+
+
+
+Void TComPicYuv::create ( const Int picWidth,                 ///< picture width
+                          const Int picHeight,                ///< picture height
+                          const ChromaFormat chromaFormatIDC, ///< chroma format
+                          const UInt maxCUWidth,              ///< used for generating offsets to CUs.
+                          const UInt maxCUHeight,             ///< used for generating offsets to CUs.
+                          const UInt maxCUDepth,              ///< used for generating offsets to CUs.
+                          const Bool bUseMargin)              ///< if true, then a margin of uiMaxCUWidth+16 and uiMaxCUHeight+16 is created around the image.
+
+{
+  createWithoutCUInfo(picWidth, picHeight, chromaFormatIDC, bUseMargin, maxCUWidth, maxCUHeight);
+
+
+  const Int numCuInWidth  = m_picWidth  / maxCUWidth  + (m_picWidth  % maxCUWidth  != 0);
+  const Int numCuInHeight = m_picHeight / maxCUHeight + (m_picHeight % maxCUHeight != 0);
+  for(Int chan=0; chan<MAX_NUM_CHANNEL_TYPE; chan++)
+  {
+    const ChannelType ch= ChannelType(chan);
+    const Int ctuHeight = maxCUHeight>>getChannelTypeScaleY(ch);
+    const Int ctuWidth  = maxCUWidth>>getChannelTypeScaleX(ch);
+    const Int stride    = getStride(ch);
+
+    m_ctuOffsetInBuffer[chan] = new Int[numCuInWidth * numCuInHeight];
+
+    for (Int cuRow = 0; cuRow < numCuInHeight; cuRow++)
+    {
+      for (Int cuCol = 0; cuCol < numCuInWidth; cuCol++)
+      {
+        m_ctuOffsetInBuffer[chan][cuRow * numCuInWidth + cuCol] = stride * cuRow * ctuHeight + cuCol * ctuWidth;
+      }
