@@ -198,3 +198,103 @@ Void TComPicYuv::create ( const Int picWidth,                 ///< picture width
       {
         m_ctuOffsetInBuffer[chan][cuRow * numCuInWidth + cuCol] = stride * cuRow * ctuHeight + cuCol * ctuWidth;
       }
+    }
+
+    m_subCuOffsetInBuffer[chan] = new Int[(size_t)1 << (2 * maxCUDepth)];
+
+    const Int numSubBlockPartitions=(1<<maxCUDepth);
+    const Int minSubBlockHeight    =(ctuHeight >> maxCUDepth);
+    const Int minSubBlockWidth     =(ctuWidth  >> maxCUDepth);
+
+    for (Int buRow = 0; buRow < numSubBlockPartitions; buRow++)
+    {
+      for (Int buCol = 0; buCol < numSubBlockPartitions; buCol++)
+      {
+        m_subCuOffsetInBuffer[chan][(buRow << maxCUDepth) + buCol] = stride  * buRow * minSubBlockHeight + buCol * minSubBlockWidth;
+      }
+    }
+  }
+}
+
+Void TComPicYuv::destroy()
+{
+  for(Int comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    m_piPicOrg[comp] = NULL;
+
+    if( m_apiPicBuf[comp] )
+    {
+      xFree( m_apiPicBuf[comp] );
+      m_apiPicBuf[comp] = NULL;
+    }
+  }
+
+  for(UInt chan=0; chan<MAX_NUM_CHANNEL_TYPE; chan++)
+  {
+    if (m_ctuOffsetInBuffer[chan])
+    {
+      delete[] m_ctuOffsetInBuffer[chan];
+      m_ctuOffsetInBuffer[chan] = NULL;
+    }
+    if (m_subCuOffsetInBuffer[chan])
+    {
+      delete[] m_subCuOffsetInBuffer[chan];
+      m_subCuOffsetInBuffer[chan] = NULL;
+    }
+  }
+}
+
+
+
+Void  TComPicYuv::copyToPic (TComPicYuv*  pcPicYuvDst) const
+{
+  assert( m_chromaFormatIDC == pcPicYuvDst->getChromaFormat() );
+
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compId=ComponentID(comp);
+    const Int width     = getWidth(compId);
+    const Int height    = getHeight(compId);
+    const Int strideSrc = getStride(compId);
+    assert(pcPicYuvDst->getWidth(compId) == width);
+    assert(pcPicYuvDst->getHeight(compId) == height);
+    if (strideSrc==pcPicYuvDst->getStride(compId))
+    {
+      ::memcpy ( pcPicYuvDst->getBuf(compId), getBuf(compId), sizeof(Pel)*strideSrc*getTotalHeight(compId));
+    }
+    else
+    {
+      const Pel *pSrc       = getAddr(compId);
+            Pel *pDest      = pcPicYuvDst->getAddr(compId);
+      const UInt strideDest = pcPicYuvDst->getStride(compId);
+
+      for(Int y=0; y<height; y++, pSrc+=strideSrc, pDest+=strideDest)
+      {
+        ::memcpy(pDest, pSrc, width*sizeof(Pel));
+      }
+    }
+  }
+}
+
+#if JVET_X0048_X0103_FILM_GRAIN
+Void  TComPicYuv::copyToPic(TComPicYuv* pcPicYuvDst, const Bool bScaleMarginChromaSrc, const Bool bScaleMarginChromaDst) const
+{
+  assert(m_chromaFormatIDC == pcPicYuvDst->getChromaFormat());
+
+  for (Int comp = 0; comp < getNumberValidComponents(); comp++)
+  {
+    const ComponentID compId = ComponentID(comp);
+    const Int width = getWidth(compId);
+    const Int height = getHeight(compId);
+    const Int strideSrc = getStride(compId, bScaleMarginChromaSrc);
+    assert(pcPicYuvDst->getWidth(compId) == width);
+    assert(pcPicYuvDst->getHeight(compId) == height);
+    if (strideSrc == pcPicYuvDst->getStride(compId, bScaleMarginChromaDst))
+    {
+      ::memcpy(pcPicYuvDst->getBuf(compId), getBuf(compId), sizeof(Pel) * strideSrc * getTotalHeight(compId, bScaleMarginChromaSrc));
+    }
+    else
+    {
+      const Pel* pSrc = getAddr(compId);
+      Pel* pDest = pcPicYuvDst->getAddr(compId);
+      const UInt strideDest = pcPicYuvDst->getStride(compId, bScaleMarginChromaDst);
