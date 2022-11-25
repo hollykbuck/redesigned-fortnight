@@ -198,3 +198,103 @@ class ProfileTierLevel
   ChromaFormat      m_chromaFormatConstraintValue;
   Bool              m_intraConstraintFlag;
   Bool              m_onePictureOnlyConstraintFlag;
+  Bool              m_lowerBitRateConstraintFlag;
+
+public:
+                ProfileTierLevel();
+
+  Int           getProfileSpace() const                     { return m_profileSpace;                }
+  Void          setProfileSpace(Int x)                      { m_profileSpace = x;                   }
+
+  Level::Tier   getTierFlag() const                         { return m_tierFlag;                    }
+  Void          setTierFlag(Level::Tier x)                  { m_tierFlag = x;                       }
+
+  Profile::Name getProfileIdc() const                       { return m_profileIdc;                  }
+  Void          setProfileIdc(Profile::Name x)              { m_profileIdc = x;                     }
+
+  Bool          getProfileCompatibilityFlag(Int i) const    { return m_profileCompatibilityFlag[i]; }
+  Void          setProfileCompatibilityFlag(Int i, Bool x)  { m_profileCompatibilityFlag[i] = x;    }
+
+  Level::Name   getLevelIdc() const                         { return m_levelIdc;                    }
+  Void          setLevelIdc(Level::Name x)                  { m_levelIdc = x;                       }
+
+  Bool          getProgressiveSourceFlag() const            { return m_progressiveSourceFlag;       }
+  Void          setProgressiveSourceFlag(Bool b)            { m_progressiveSourceFlag = b;          }
+
+  Bool          getInterlacedSourceFlag() const             { return m_interlacedSourceFlag;        }
+  Void          setInterlacedSourceFlag(Bool b)             { m_interlacedSourceFlag = b;           }
+
+  Bool          getNonPackedConstraintFlag() const          { return m_nonPackedConstraintFlag;     }
+  Void          setNonPackedConstraintFlag(Bool b)          { m_nonPackedConstraintFlag = b;        }
+
+  Bool          getFrameOnlyConstraintFlag() const          { return m_frameOnlyConstraintFlag;     }
+  Void          setFrameOnlyConstraintFlag(Bool b)          { m_frameOnlyConstraintFlag = b;        }
+
+  UInt          getBitDepthConstraint() const               { return m_bitDepthConstraintValue;     }
+  Void          setBitDepthConstraint(UInt bitDepth)        { m_bitDepthConstraintValue=bitDepth;   }
+
+  ChromaFormat  getChromaFormatConstraint() const           { return m_chromaFormatConstraintValue; }
+  Void          setChromaFormatConstraint(ChromaFormat fmt) { m_chromaFormatConstraintValue=fmt;    }
+
+  Bool          getIntraConstraintFlag() const              { return m_intraConstraintFlag;         }
+  Void          setIntraConstraintFlag(Bool b)              { m_intraConstraintFlag = b;            }
+
+  Bool          getOnePictureOnlyConstraintFlag() const     { return m_onePictureOnlyConstraintFlag;}
+  Void          setOnePictureOnlyConstraintFlag(Bool b)     { m_onePictureOnlyConstraintFlag = b;   }
+
+  Bool          getLowerBitRateConstraintFlag() const       { return m_lowerBitRateConstraintFlag;  }
+  Void          setLowerBitRateConstraintFlag(Bool b)       { m_lowerBitRateConstraintFlag = b;     }
+};
+
+
+class TComPTL
+{
+  ProfileTierLevel m_generalPTL;
+  ProfileTierLevel m_subLayerPTL    [MAX_TLAYER-1];      // max. value of max_sub_layers_minus1 is MAX_TLAYER-1 (= 6)
+  Bool m_subLayerProfilePresentFlag [MAX_TLAYER-1];
+  Bool m_subLayerLevelPresentFlag   [MAX_TLAYER-1];
+
+public:
+                          TComPTL();
+  Bool                    getSubLayerProfilePresentFlag(Int i) const   { return m_subLayerProfilePresentFlag[i]; }
+  Void                    setSubLayerProfilePresentFlag(Int i, Bool x) { m_subLayerProfilePresentFlag[i] = x;    }
+
+  Bool                    getSubLayerLevelPresentFlag(Int i) const     { return m_subLayerLevelPresentFlag[i];   }
+  Void                    setSubLayerLevelPresentFlag(Int i, Bool x)   { m_subLayerLevelPresentFlag[i] = x;      }
+
+  ProfileTierLevel*       getGeneralPTL()                              { return &m_generalPTL;                   }
+  const ProfileTierLevel* getGeneralPTL() const                        { return &m_generalPTL;                   }
+  ProfileTierLevel*       getSubLayerPTL(Int i)                        { return &m_subLayerPTL[i];               }
+  const ProfileTierLevel* getSubLayerPTL(Int i) const                  { return &m_subLayerPTL[i];               }
+};
+
+/// VPS class
+
+struct HrdSubLayerInfo
+{
+  Bool fixedPicRateFlag;
+  Bool fixedPicRateWithinCvsFlag;
+  UInt picDurationInTcMinus1;
+  Bool lowDelayHrdFlag;
+  UInt cpbCntMinus1;
+  UInt bitRateValueMinus1[MAX_CPB_CNT][2];
+  UInt cpbSizeValue      [MAX_CPB_CNT][2];
+  UInt ducpbSizeValue    [MAX_CPB_CNT][2];
+  Bool cbrFlag           [MAX_CPB_CNT][2];
+  UInt duBitRateValue    [MAX_CPB_CNT][2];
+};
+
+class TComHRD
+{
+private:
+  Bool m_nalHrdParametersPresentFlag;
+  Bool m_vclHrdParametersPresentFlag;
+  Bool m_subPicCpbParamsPresentFlag;
+  UInt m_tickDivisorMinus2;
+  UInt m_duCpbRemovalDelayLengthMinus1;
+  Bool m_subPicCpbParamsInPicTimingSEIFlag;
+  UInt m_dpbOutputDelayDuLengthMinus1;
+  UInt m_bitRateScale;
+  UInt m_cpbSizeScale;
+  UInt m_ducpbSizeScale;
+  UInt m_initialCpbRemovalDelayLengthMinus1;
