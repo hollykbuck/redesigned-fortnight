@@ -298,3 +298,103 @@ Void  TComPicYuv::copyToPic(TComPicYuv* pcPicYuvDst, const Bool bScaleMarginChro
       const Pel* pSrc = getAddr(compId);
       Pel* pDest = pcPicYuvDst->getAddr(compId);
       const UInt strideDest = pcPicYuvDst->getStride(compId, bScaleMarginChromaDst);
+      for (Int y = 0; y < height; y++, pSrc += strideSrc, pDest += strideDest)
+      {
+        ::memcpy(pDest, pSrc, width * sizeof(Pel));
+      }
+    }
+  }
+}
+
+Void  TComPicYuv::copyTo(TComPicYuv* pcPicYuvDst, ComponentID compIdSrc, ComponentID compIdDst, const Bool bScaleMarginChromaSrc, const Bool bScaleMarginChromaDst) const
+{
+  const Int width = getWidth(compIdSrc); // source
+  const Int height = getHeight(compIdSrc);
+  const Int strideSrc = getStride(compIdSrc, bScaleMarginChromaSrc);
+  assert(pcPicYuvDst->getWidth(compIdDst) == width);
+  assert(pcPicYuvDst->getHeight(compIdDst) == height);
+  if (strideSrc == pcPicYuvDst->getStride(compIdDst, bScaleMarginChromaDst))
+  {
+    ::memcpy(pcPicYuvDst->getBuf(compIdDst), getBuf(compIdSrc), sizeof(Pel) * strideSrc * getTotalHeight(compIdSrc,false));
+  }
+  else
+  {
+    const Pel* pSrc = getAddr(compIdSrc);
+    Pel* pDest = pcPicYuvDst->getAddr(compIdDst);
+    const UInt strideDest = pcPicYuvDst->getStride(compIdDst, bScaleMarginChromaDst);
+    for (Int y = 0; y < height; y++, pSrc += strideSrc, pDest += strideDest)
+    {
+      ::memcpy(pDest, pSrc, width * sizeof(Pel));
+    }
+  }
+}
+#endif
+
+
+Void TComPicYuv::extendPicBorder ()
+{
+  if ( m_bIsBorderExtended )
+  {
+    return;
+  }
+
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compId=ComponentID(comp);
+    Pel *piTxt=getAddr(compId); // piTxt = point to (0,0) of image within bigger picture.
+    const Int stride=getStride(compId);
+    const Int width=getWidth(compId);
+    const Int height=getHeight(compId);
+    const Int marginX=getMarginX(compId);
+    const Int marginY=getMarginY(compId);
+
+    Pel*  pi = piTxt;
+    // do left and right margins
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < marginX; x++ )
+      {
+        pi[ -marginX + x ] = pi[0];
+        pi[    width + x ] = pi[width-1];
+      }
+      pi += stride;
+    }
+
+    // pi is now the (0,height) (bottom left of image within bigger picture
+    pi -= (stride + marginX);
+    // pi is now the (-marginX, height-1)
+    for (Int y = 0; y < marginY; y++ )
+    {
+      ::memcpy( pi + (y+1)*stride, pi, sizeof(Pel)*(width + (marginX<<1)) );
+    }
+
+    // pi is still (-marginX, height-1)
+    pi -= ((height-1) * stride);
+    // pi is now (-marginX, 0)
+    for (Int y = 0; y < marginY; y++ )
+    {
+      ::memcpy( pi - (y+1)*stride, pi, sizeof(Pel)*(width + (marginX<<1)) );
+    }
+  }
+
+  m_bIsBorderExtended = true;
+}
+
+#if JVET_X0048_X0103_FILM_GRAIN
+Void TComPicYuv::extendPicBorder(const ComponentID compId, const Int marginX, const Int marginY, const Bool bScaleMarginChroma)
+{
+  Pel* piTxt = getAddr(compId); // piTxt = point to (0,0) of image within bigger picture.
+  const Int stride = getStride(compId, bScaleMarginChroma);
+  const Int width = getWidth(compId);
+  const Int height = getHeight(compId);
+
+  Pel* pi = piTxt;
+  // do left and right margins
+  for (Int y = 0; y < height; y++)
+  {
+    for (Int x = 0; x < marginX; x++)
+    {
+      pi[-marginX + x] = pi[0];
+      pi[width + x] = pi[width - 1];
+    }
+    pi += stride;
