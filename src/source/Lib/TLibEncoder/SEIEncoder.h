@@ -98,3 +98,41 @@ public:
   Void initSEIFisheyeVideoInfo(SEIFisheyeVideoInfo *sei);
   Void initSEIChromaResamplingFilterHint(SEIChromaResamplingFilterHint *sei, Int iHorFilterIndex, Int iVerFilterIndex);
   Void initSEITimeCode(SEITimeCode *sei);
+  Bool initSEIColourRemappingInfo(SEIColourRemappingInfo *sei, Int currPOC); // returns true on success, false on failure.
+  Void initSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics *sei);
+  Void readToneMappingInfoSEI(std::istream &fic, SEIToneMappingInfo *seiToneMappingInfo , Bool &failed );
+  Void readChromaResamplingFilterHintSEI(std::istream &fic, SEIChromaResamplingFilterHint *seiChromaResamplingFilterHint, Bool &failed );
+  Void readKneeFunctionInfoSEI(std::istream &fic, SEIKneeFunctionInfo *seiKneeFunctionInfo, Bool &failed );
+  Void readColourRemapSEI(std::istream &fic, SEIColourRemappingInfo *seiColorRemappingInfo, Bool &failed );
+  Void readContentColourVolumeSEI(std::istream &fic, SEIContentColourVolume *seiContentColourVolume, Bool &failed );
+  Bool initSEIRegionalNesting(SEIRegionalNesting *sei, Int currPOC); // returns true on success, false on failure.
+  Void readRNSEIWindow(std::istream &fic, RNSEIWindowVec::iterator regionIter, Bool &failed );
+  Bool initSEIAnnotatedRegions(SEIAnnotatedRegions *sei, Int currPOC);
+  Void readAnnotatedRegionSEI(std::istream &fic, SEIAnnotatedRegions *seiAnnoRegion, Bool &failed);
+#if JCTVC_AD0021_SEI_MANIFEST
+  Void initSEISEIManifest(SEIManifest* seiSeiManifest, const SEIMessages& seiMessage);
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  Void initSEISEIPrefixIndication(SEIPrefixIndication* seiSeiPrefixIndications, const SEI* sei);
+#endif
+  // trailing SEIs
+  Void initDecodedPictureHashSEI(SEIDecodedPictureHash *sei, TComPic *pcPic, std::string &rHashString, const BitDepths &bitDepths);
+  Void initTemporalLevel0IndexSEI(SEITemporalLevel0Index *sei, TComSlice *slice);
+  Void initSEIGreenMetadataInfo(SEIGreenMetadataInfo *sei, UInt u);
+
+private:
+  TEncCfg* m_pcCfg;
+  TEncTop* m_pcEncTop;
+  TEncGOP* m_pcEncGOP;
+
+  // for temporal level 0 index SEI
+  UInt m_tl0Idx;
+  UInt m_rapIdx;
+
+  Bool m_isInitialized;
+};
+
+
+//! \}
+
+#endif // __SEIENCODER__
