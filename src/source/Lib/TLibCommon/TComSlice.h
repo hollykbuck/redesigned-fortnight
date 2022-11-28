@@ -498,3 +498,103 @@ public:
   UInt              getNumHrdParameters() const                          { return m_numHrdParameters;                                       }
   Void              setNumHrdParameters(UInt v)                          { m_numHrdParameters = v;                                          }
 
+  UInt              getMaxNuhReservedZeroLayerId() const                 { return m_maxNuhReservedZeroLayerId;                              }
+  Void              setMaxNuhReservedZeroLayerId(UInt v)                 { m_maxNuhReservedZeroLayerId = v;                                 }
+
+  UInt              getMaxOpSets() const                                 { return m_numOpSets;                                              }
+  Void              setMaxOpSets(UInt v)                                 { m_numOpSets = v;                                                 }
+  Bool              getLayerIdIncludedFlag(UInt opsIdx, UInt id) const   { return m_layerIdIncludedFlag[opsIdx][id];                        }
+  Void              setLayerIdIncludedFlag(Bool v, UInt opsIdx, UInt id) { m_layerIdIncludedFlag[opsIdx][id] = v;                           }
+
+  TComPTL*          getPTL()                                             { return &m_pcPTL;                                                 }
+  const TComPTL*    getPTL() const                                       { return &m_pcPTL;                                                 }
+  TimingInfo*       getTimingInfo()                                      { return &m_timingInfo;                                            }
+  const TimingInfo* getTimingInfo() const                                { return &m_timingInfo;                                            }
+};
+
+class TComVUI
+{
+private:
+  Bool       m_aspectRatioInfoPresentFlag;
+  Int        m_aspectRatioIdc;
+  Int        m_sarWidth;
+  Int        m_sarHeight;
+  Bool       m_overscanInfoPresentFlag;
+  Bool       m_overscanAppropriateFlag;
+  Bool       m_videoSignalTypePresentFlag;
+  Int        m_videoFormat;
+  Bool       m_videoFullRangeFlag;
+  Bool       m_colourDescriptionPresentFlag;
+  Int        m_colourPrimaries;
+  Int        m_transferCharacteristics;
+  Int        m_matrixCoefficients;
+  Bool       m_chromaLocInfoPresentFlag;
+  Int        m_chromaSampleLocTypeTopField;
+  Int        m_chromaSampleLocTypeBottomField;
+  Bool       m_neutralChromaIndicationFlag;
+  Bool       m_fieldSeqFlag;
+  Window     m_defaultDisplayWindow;
+  Bool       m_frameFieldInfoPresentFlag;
+  Bool       m_hrdParametersPresentFlag;
+  Bool       m_bitstreamRestrictionFlag;
+  Bool       m_tilesFixedStructureFlag;
+  Bool       m_motionVectorsOverPicBoundariesFlag;
+  Bool       m_restrictedRefPicListsFlag;
+  Int        m_minSpatialSegmentationIdc;
+  Int        m_maxBytesPerPicDenom;
+  Int        m_maxBitsPerMinCuDenom;
+  Int        m_log2MaxMvLengthHorizontal;
+  Int        m_log2MaxMvLengthVertical;
+  TComHRD    m_hrdParameters;
+  TimingInfo m_timingInfo;
+
+public:
+  TComVUI()
+    : m_aspectRatioInfoPresentFlag        (false) //TODO: This initialiser list contains magic numbers
+    , m_aspectRatioIdc                    (0)
+    , m_sarWidth                          (0)
+    , m_sarHeight                         (0)
+    , m_overscanInfoPresentFlag           (false)
+    , m_overscanAppropriateFlag           (false)
+    , m_videoSignalTypePresentFlag        (false)
+    , m_videoFormat                       (5)
+    , m_videoFullRangeFlag                (false)
+    , m_colourDescriptionPresentFlag      (false)
+    , m_colourPrimaries                   (2)
+    , m_transferCharacteristics           (2)
+    , m_matrixCoefficients                (2)
+    , m_chromaLocInfoPresentFlag          (false)
+    , m_chromaSampleLocTypeTopField       (0)
+    , m_chromaSampleLocTypeBottomField    (0)
+    , m_neutralChromaIndicationFlag       (false)
+    , m_fieldSeqFlag                      (false)
+    , m_frameFieldInfoPresentFlag         (false)
+    , m_hrdParametersPresentFlag          (false)
+    , m_bitstreamRestrictionFlag          (false)
+    , m_tilesFixedStructureFlag           (false)
+    , m_motionVectorsOverPicBoundariesFlag(true)
+    , m_restrictedRefPicListsFlag         (1)
+    , m_minSpatialSegmentationIdc         (0)
+    , m_maxBytesPerPicDenom               (2)
+    , m_maxBitsPerMinCuDenom              (1)
+    , m_log2MaxMvLengthHorizontal         (15)
+    , m_log2MaxMvLengthVertical           (15)
+  {}
+
+  virtual           ~TComVUI() {}
+
+  Bool              getAspectRatioInfoPresentFlag() const                  { return m_aspectRatioInfoPresentFlag;           }
+  Void              setAspectRatioInfoPresentFlag(Bool i)                  { m_aspectRatioInfoPresentFlag = i;              }
+
+  Int               getAspectRatioIdc() const                              { return m_aspectRatioIdc;                       }
+  Void              setAspectRatioIdc(Int i)                               { m_aspectRatioIdc = i;                          }
+
+  Int               getSarWidth() const                                    { return m_sarWidth;                             }
+  Void              setSarWidth(Int i)                                     { m_sarWidth = i;                                }
+
+  Int               getSarHeight() const                                   { return m_sarHeight;                            }
+  Void              setSarHeight(Int i)                                    { m_sarHeight = i;                               }
+
+  Bool              getOverscanInfoPresentFlag() const                     { return m_overscanInfoPresentFlag;              }
+  Void              setOverscanInfoPresentFlag(Bool i)                     { m_overscanInfoPresentFlag = i;                 }
+
