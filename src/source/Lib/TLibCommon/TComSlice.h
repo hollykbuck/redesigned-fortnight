@@ -598,3 +598,103 @@ public:
   Bool              getOverscanInfoPresentFlag() const                     { return m_overscanInfoPresentFlag;              }
   Void              setOverscanInfoPresentFlag(Bool i)                     { m_overscanInfoPresentFlag = i;                 }
 
+  Bool              getOverscanAppropriateFlag() const                     { return m_overscanAppropriateFlag;              }
+  Void              setOverscanAppropriateFlag(Bool i)                     { m_overscanAppropriateFlag = i;                 }
+
+  Bool              getVideoSignalTypePresentFlag() const                  { return m_videoSignalTypePresentFlag;           }
+  Void              setVideoSignalTypePresentFlag(Bool i)                  { m_videoSignalTypePresentFlag = i;              }
+
+  Int               getVideoFormat() const                                 { return m_videoFormat;                          }
+  Void              setVideoFormat(Int i)                                  { m_videoFormat = i;                             }
+
+  Bool              getVideoFullRangeFlag() const                          { return m_videoFullRangeFlag;                   }
+  Void              setVideoFullRangeFlag(Bool i)                          { m_videoFullRangeFlag = i;                      }
+
+  Bool              getColourDescriptionPresentFlag() const                { return m_colourDescriptionPresentFlag;         }
+  Void              setColourDescriptionPresentFlag(Bool i)                { m_colourDescriptionPresentFlag = i;            }
+
+  Int               getColourPrimaries() const                             { return m_colourPrimaries;                      }
+  Void              setColourPrimaries(Int i)                              { m_colourPrimaries = i;                         }
+
+  Int               getTransferCharacteristics() const                     { return m_transferCharacteristics;              }
+  Void              setTransferCharacteristics(Int i)                      { m_transferCharacteristics = i;                 }
+
+  Int               getMatrixCoefficients() const                          { return m_matrixCoefficients;                   }
+  Void              setMatrixCoefficients(Int i)                           { m_matrixCoefficients = i;                      }
+
+  Bool              getChromaLocInfoPresentFlag() const                    { return m_chromaLocInfoPresentFlag;             }
+  Void              setChromaLocInfoPresentFlag(Bool i)                    { m_chromaLocInfoPresentFlag = i;                }
+
+  Int               getChromaSampleLocTypeTopField() const                 { return m_chromaSampleLocTypeTopField;          }
+  Void              setChromaSampleLocTypeTopField(Int i)                  { m_chromaSampleLocTypeTopField = i;             }
+
+  Int               getChromaSampleLocTypeBottomField() const              { return m_chromaSampleLocTypeBottomField;       }
+  Void              setChromaSampleLocTypeBottomField(Int i)               { m_chromaSampleLocTypeBottomField = i;          }
+
+  Bool              getNeutralChromaIndicationFlag() const                 { return m_neutralChromaIndicationFlag;          }
+  Void              setNeutralChromaIndicationFlag(Bool i)                 { m_neutralChromaIndicationFlag = i;             }
+
+  Bool              getFieldSeqFlag() const                                { return m_fieldSeqFlag;                         }
+  Void              setFieldSeqFlag(Bool i)                                { m_fieldSeqFlag = i;                            }
+
+  Bool              getFrameFieldInfoPresentFlag() const                   { return m_frameFieldInfoPresentFlag;            }
+  Void              setFrameFieldInfoPresentFlag(Bool i)                   { m_frameFieldInfoPresentFlag = i;               }
+
+  Window&           getDefaultDisplayWindow()                              { return m_defaultDisplayWindow;                 }
+  const Window&     getDefaultDisplayWindow() const                        { return m_defaultDisplayWindow;                 }
+  Void              setDefaultDisplayWindow(Window& defaultDisplayWindow ) { m_defaultDisplayWindow = defaultDisplayWindow; }
+
+  Bool              getHrdParametersPresentFlag() const                    { return m_hrdParametersPresentFlag;             }
+  Void              setHrdParametersPresentFlag(Bool i)                    { m_hrdParametersPresentFlag = i;                }
+
+  Bool              getBitstreamRestrictionFlag() const                    { return m_bitstreamRestrictionFlag;             }
+  Void              setBitstreamRestrictionFlag(Bool i)                    { m_bitstreamRestrictionFlag = i;                }
+
+  Bool              getTilesFixedStructureFlag() const                     { return m_tilesFixedStructureFlag;              }
+  Void              setTilesFixedStructureFlag(Bool i)                     { m_tilesFixedStructureFlag = i;                 }
+
+  Bool              getMotionVectorsOverPicBoundariesFlag() const          { return m_motionVectorsOverPicBoundariesFlag;   }
+  Void              setMotionVectorsOverPicBoundariesFlag(Bool i)          { m_motionVectorsOverPicBoundariesFlag = i;      }
+
+  Bool              getRestrictedRefPicListsFlag() const                   { return m_restrictedRefPicListsFlag;            }
+  Void              setRestrictedRefPicListsFlag(Bool b)                   { m_restrictedRefPicListsFlag = b;               }
+
+  Int               getMinSpatialSegmentationIdc() const                   { return m_minSpatialSegmentationIdc;            }
+  Void              setMinSpatialSegmentationIdc(Int i)                    { m_minSpatialSegmentationIdc = i;               }
+
+  Int               getMaxBytesPerPicDenom() const                         { return m_maxBytesPerPicDenom;                  }
+  Void              setMaxBytesPerPicDenom(Int i)                          { m_maxBytesPerPicDenom = i;                     }
+
+  Int               getMaxBitsPerMinCuDenom() const                        { return m_maxBitsPerMinCuDenom;                 }
+  Void              setMaxBitsPerMinCuDenom(Int i)                         { m_maxBitsPerMinCuDenom = i;                    }
+
+  Int               getLog2MaxMvLengthHorizontal() const                   { return m_log2MaxMvLengthHorizontal;            }
+  Void              setLog2MaxMvLengthHorizontal(Int i)                    { m_log2MaxMvLengthHorizontal = i;               }
+
+  Int               getLog2MaxMvLengthVertical() const                     { return m_log2MaxMvLengthVertical;              }
+  Void              setLog2MaxMvLengthVertical(Int i)                      { m_log2MaxMvLengthVertical = i;                 }
+
+  TComHRD*          getHrdParameters()                                     { return &m_hrdParameters;                       }
+  const TComHRD*    getHrdParameters()  const                              { return &m_hrdParameters;                       }
+
+  TimingInfo*       getTimingInfo()                                        { return &m_timingInfo;                          }
+  const TimingInfo* getTimingInfo() const                                  { return &m_timingInfo;                          }
+};
+
+/// SPS RExt class
+class TComSPSRExt // Names aligned to text specification
+{
+private:
+  Bool             m_transformSkipRotationEnabledFlag;
+  Bool             m_transformSkipContextEnabledFlag;
+  Bool             m_rdpcmEnabledFlag[NUMBER_OF_RDPCM_SIGNALLING_MODES];
+  Bool             m_extendedPrecisionProcessingFlag;
+  Bool             m_intraSmoothingDisabledFlag;
+  Bool             m_highPrecisionOffsetsEnabledFlag;
+  Bool             m_persistentRiceAdaptationEnabledFlag;
+  Bool             m_cabacBypassAlignmentEnabledFlag;
+
+public:
+  TComSPSRExt();
+
+  Bool settingsDifferFromDefaults() const
