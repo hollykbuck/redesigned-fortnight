@@ -698,3 +698,103 @@ public:
   TComSPSRExt();
 
   Bool settingsDifferFromDefaults() const
+  {
+    return getTransformSkipRotationEnabledFlag()
+        || getTransformSkipContextEnabledFlag()
+        || getRdpcmEnabledFlag(RDPCM_SIGNAL_IMPLICIT)
+        || getRdpcmEnabledFlag(RDPCM_SIGNAL_EXPLICIT)
+        || getExtendedPrecisionProcessingFlag()
+        || getIntraSmoothingDisabledFlag()
+        || getHighPrecisionOffsetsEnabledFlag()
+        || getPersistentRiceAdaptationEnabledFlag()
+        || getCabacBypassAlignmentEnabledFlag();
+  }
+
+
+  Bool getTransformSkipRotationEnabledFlag() const                                     { return m_transformSkipRotationEnabledFlag;     }
+  Void setTransformSkipRotationEnabledFlag(const Bool value)                           { m_transformSkipRotationEnabledFlag = value;    }
+
+  Bool getTransformSkipContextEnabledFlag() const                                      { return m_transformSkipContextEnabledFlag;      }
+  Void setTransformSkipContextEnabledFlag(const Bool value)                            { m_transformSkipContextEnabledFlag = value;     }
+
+  Bool getRdpcmEnabledFlag(const RDPCMSignallingMode signallingMode) const             { return m_rdpcmEnabledFlag[signallingMode];     }
+  Void setRdpcmEnabledFlag(const RDPCMSignallingMode signallingMode, const Bool value) { m_rdpcmEnabledFlag[signallingMode] = value;    }
+
+  Bool getExtendedPrecisionProcessingFlag() const                                      { return m_extendedPrecisionProcessingFlag;      }
+  Void setExtendedPrecisionProcessingFlag(Bool value)                                  { m_extendedPrecisionProcessingFlag = value;     }
+
+  Bool getIntraSmoothingDisabledFlag() const                                           { return m_intraSmoothingDisabledFlag;           }
+  Void setIntraSmoothingDisabledFlag(Bool bValue)                                      { m_intraSmoothingDisabledFlag=bValue;           }
+
+  Bool getHighPrecisionOffsetsEnabledFlag() const                                      { return m_highPrecisionOffsetsEnabledFlag;      }
+  Void setHighPrecisionOffsetsEnabledFlag(Bool value)                                  { m_highPrecisionOffsetsEnabledFlag = value;     }
+
+  Bool getPersistentRiceAdaptationEnabledFlag() const                                  { return m_persistentRiceAdaptationEnabledFlag;  }
+  Void setPersistentRiceAdaptationEnabledFlag(const Bool value)                        { m_persistentRiceAdaptationEnabledFlag = value; }
+
+  Bool getCabacBypassAlignmentEnabledFlag() const                                      { return m_cabacBypassAlignmentEnabledFlag;      }
+  Void setCabacBypassAlignmentEnabledFlag(const Bool value)                            { m_cabacBypassAlignmentEnabledFlag = value;     }
+};
+
+/// SPS class
+class TComSPS
+{
+private:
+  Int              m_SPSId;
+  Int              m_VPSId;
+  ChromaFormat     m_chromaFormatIdc;
+
+  UInt             m_uiMaxTLayers;           // maximum number of temporal layers
+
+  // Structure
+  UInt             m_picWidthInLumaSamples;
+  UInt             m_picHeightInLumaSamples;
+
+  Int              m_log2MinCodingBlockSize;
+  Int              m_log2DiffMaxMinCodingBlockSize;
+  UInt             m_uiMaxCUWidth;
+  UInt             m_uiMaxCUHeight;
+  UInt             m_uiMaxTotalCUDepth; ///< Total CU depth, relative to the smallest possible transform block size.
+
+  Window           m_conformanceWindow;
+
+  TComRPSList      m_RPSList;
+  Bool             m_bLongTermRefsPresent;
+  Bool             m_SPSTemporalMVPEnabledFlag;
+  Int              m_numReorderPics[MAX_TLAYER];
+
+  // Tool list
+  UInt             m_uiQuadtreeTULog2MaxSize;
+  UInt             m_uiQuadtreeTULog2MinSize;
+  UInt             m_uiQuadtreeTUMaxDepthInter;
+  UInt             m_uiQuadtreeTUMaxDepthIntra;
+  Bool             m_usePCM;
+  UInt             m_pcmLog2MaxSize;
+  UInt             m_uiPCMLog2MinSize;
+  Bool             m_useAMP;
+
+  // Parameter
+  BitDepths        m_bitDepths;
+  Int              m_qpBDOffset[MAX_NUM_CHANNEL_TYPE];
+  Int              m_pcmBitDepths[MAX_NUM_CHANNEL_TYPE];
+  Bool             m_bPCMFilterDisableFlag;
+
+  UInt             m_uiBitsForPOC;
+  UInt             m_numLongTermRefPicSPS;
+  UInt             m_ltRefPicPocLsbSps[MAX_NUM_LONG_TERM_REF_PICS];
+  Bool             m_usedByCurrPicLtSPSFlag[MAX_NUM_LONG_TERM_REF_PICS];
+  // Max physical transform size
+  UInt             m_uiMaxTrSize;
+
+  Bool             m_bUseSAO;
+
+  Bool             m_bTemporalIdNestingFlag; // temporal_id_nesting_flag
+
+  Bool             m_scalingListEnabledFlag;
+  Bool             m_scalingListPresentFlag;
+  TComScalingList  m_scalingList;
+  UInt             m_uiMaxDecPicBuffering[MAX_TLAYER];
+  UInt             m_uiMaxLatencyIncreasePlus1[MAX_TLAYER];
+
+  Bool             m_useStrongIntraSmoothing;
+
