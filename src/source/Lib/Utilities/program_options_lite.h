@@ -198,3 +198,75 @@ namespace df
     {
       ~Options();
 
+      OptionSpecific addOptions();
+
+      struct Names
+      {
+        Names() : opt(0) {};
+        ~Names()
+        {
+          if (opt)
+          {
+            delete opt;
+          }
+        }
+        std::list<std::string> opt_long;
+        std::list<std::string> opt_prefix;
+        std::list<std::string> opt_short;
+        OptionBase* opt;
+      };
+
+      void addOption(OptionBase *opt);
+
+      typedef std::list<Names*> NamesPtrList;
+      NamesPtrList opt_list;
+
+      typedef std::map<std::string, NamesPtrList> NamesMap;
+      NamesMap opt_long_map;
+      NamesMap opt_short_map;
+      NamesMap opt_prefix_map;
+    };
+
+    /* Class with templated overloaded operator(), for use by Options::addOptions() */
+    class OptionSpecific
+    {
+    public:
+      OptionSpecific(Options& parent_) : parent(parent_) {}
+
+      /**
+       * Add option described by name to the parent Options list,
+       *   with storage for the option's value
+       *   with default_val as the default value
+       *   with desc as an optional help description
+       */
+      template<typename T>
+      OptionSpecific&
+      operator()(const std::string& name, T& storage, T default_val, const std::string& desc = "")
+      {
+        parent.addOption(new Option<T>(name, storage, default_val, desc));
+        return *this;
+      }
+
+      /**
+       * Add option described by name to the parent Options list,
+       *   with desc as an optional help description
+       * instead of storing the value somewhere, a function of type
+       * OptionFunc::Func is called.  It is upto this function to correctly
+       * handle evaluating the option's value.
+       */
+      OptionSpecific&
+      operator()(const std::string& name, OptionFunc::Func *func, const std::string& desc = "")
+      {
+        parent.addOption(new OptionFunc(name, parent, func, desc));
+        return *this;
+      }
+    private:
+      Options& parent;
+    };
+
+  } /* namespace: program_options_lite */
+} /* namespace: df */
+
+//! \}
+
+#endif
