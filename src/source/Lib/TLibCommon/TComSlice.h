@@ -798,3 +798,103 @@ private:
 
   Bool             m_useStrongIntraSmoothing;
 
+  Bool             m_vuiParametersPresentFlag;
+  TComVUI          m_vuiParameters;
+
+  TComSPSRExt      m_spsRangeExtension;
+
+  static const Int m_winUnitX[NUM_CHROMA_FORMAT];
+  static const Int m_winUnitY[NUM_CHROMA_FORMAT];
+  TComPTL          m_pcPTL;
+
+#if O0043_BEST_EFFORT_DECODING
+  UInt             m_forceDecodeBitDepth; // 0 = do not force the decoder's bit depth, other = force the decoder's bit depth to this value (best effort decoding)
+#endif
+
+public:
+                         TComSPS();
+  virtual                ~TComSPS();
+#if O0043_BEST_EFFORT_DECODING
+  Void                   setForceDecodeBitDepth(UInt bitDepth)                                           { m_forceDecodeBitDepth = bitDepth;                                    }
+  UInt                   getForceDecodeBitDepth()        const                                           { return m_forceDecodeBitDepth;                                        }
+#endif
+
+  Int                    getVPSId() const                                                                { return m_VPSId;                                                      }
+  Void                   setVPSId(Int i)                                                                 { m_VPSId = i;                                                         }
+  Int                    getSPSId() const                                                                { return m_SPSId;                                                      }
+  Void                   setSPSId(Int i)                                                                 { m_SPSId = i;                                                         }
+  ChromaFormat           getChromaFormatIdc () const                                                     { return m_chromaFormatIdc;                                            }
+  Void                   setChromaFormatIdc (ChromaFormat i)                                             { m_chromaFormatIdc = i;                                               }
+
+  static Int             getWinUnitX (Int chromaFormatIdc)                                               { assert (chromaFormatIdc >= 0 && chromaFormatIdc < NUM_CHROMA_FORMAT); return m_winUnitX[chromaFormatIdc]; }
+  static Int             getWinUnitY (Int chromaFormatIdc)                                               { assert (chromaFormatIdc >= 0 && chromaFormatIdc < NUM_CHROMA_FORMAT); return m_winUnitY[chromaFormatIdc]; }
+
+  // structure
+  Void                   setPicWidthInLumaSamples( UInt u )                                              { m_picWidthInLumaSamples = u;                                         }
+  UInt                   getPicWidthInLumaSamples() const                                                { return  m_picWidthInLumaSamples;                                     }
+  Void                   setPicHeightInLumaSamples( UInt u )                                             { m_picHeightInLumaSamples = u;                                        }
+  UInt                   getPicHeightInLumaSamples() const                                               { return  m_picHeightInLumaSamples;                                    }
+
+  Window&                getConformanceWindow()                                                          { return  m_conformanceWindow;                                         }
+  const Window&          getConformanceWindow() const                                                    { return  m_conformanceWindow;                                         }
+  Void                   setConformanceWindow(Window& conformanceWindow )                                { m_conformanceWindow = conformanceWindow;                             }
+
+  UInt                   getNumLongTermRefPicSPS() const                                                 { return m_numLongTermRefPicSPS;                                       }
+  Void                   setNumLongTermRefPicSPS(UInt val)                                               { m_numLongTermRefPicSPS = val;                                        }
+
+  UInt                   getLtRefPicPocLsbSps(UInt index) const                                          { assert( index < MAX_NUM_LONG_TERM_REF_PICS ); return m_ltRefPicPocLsbSps[index]; }
+  Void                   setLtRefPicPocLsbSps(UInt index, UInt val)                                      { assert( index < MAX_NUM_LONG_TERM_REF_PICS ); m_ltRefPicPocLsbSps[index] = val;  }
+
+  Bool                   getUsedByCurrPicLtSPSFlag(Int i) const                                          { assert( i < MAX_NUM_LONG_TERM_REF_PICS ); return m_usedByCurrPicLtSPSFlag[i];    }
+  Void                   setUsedByCurrPicLtSPSFlag(Int i, Bool x)                                        { assert( i < MAX_NUM_LONG_TERM_REF_PICS ); m_usedByCurrPicLtSPSFlag[i] = x;       }
+
+  Int                    getLog2MinCodingBlockSize() const                                               { return m_log2MinCodingBlockSize;                                     }
+  Void                   setLog2MinCodingBlockSize(Int val)                                              { m_log2MinCodingBlockSize = val;                                      }
+  Int                    getLog2DiffMaxMinCodingBlockSize() const                                        { return m_log2DiffMaxMinCodingBlockSize;                              }
+  Void                   setLog2DiffMaxMinCodingBlockSize(Int val)                                       { m_log2DiffMaxMinCodingBlockSize = val;                               }
+
+  Void                   setMaxCUWidth( UInt u )                                                         { m_uiMaxCUWidth = u;                                                  }
+  UInt                   getMaxCUWidth() const                                                           { return  m_uiMaxCUWidth;                                              }
+  Void                   setMaxCUHeight( UInt u )                                                        { m_uiMaxCUHeight = u;                                                 }
+  UInt                   getMaxCUHeight() const                                                          { return  m_uiMaxCUHeight;                                             }
+  Void                   setMaxTotalCUDepth( UInt u )                                                    { m_uiMaxTotalCUDepth = u;                                             }
+  UInt                   getMaxTotalCUDepth() const                                                      { return  m_uiMaxTotalCUDepth;                                         }
+  Void                   setUsePCM( Bool b )                                                             { m_usePCM = b;                                                        }
+  Bool                   getUsePCM() const                                                               { return m_usePCM;                                                     }
+  Void                   setPCMLog2MaxSize( UInt u )                                                     { m_pcmLog2MaxSize = u;                                                }
+  UInt                   getPCMLog2MaxSize() const                                                       { return  m_pcmLog2MaxSize;                                            }
+  Void                   setPCMLog2MinSize( UInt u )                                                     { m_uiPCMLog2MinSize = u;                                              }
+  UInt                   getPCMLog2MinSize() const                                                       { return  m_uiPCMLog2MinSize;                                          }
+  Void                   setBitsForPOC( UInt u )                                                         { m_uiBitsForPOC = u;                                                  }
+  UInt                   getBitsForPOC() const                                                           { return m_uiBitsForPOC;                                               }
+  Bool                   getUseAMP() const                                                               { return m_useAMP;                                                     }
+  Void                   setUseAMP( Bool b )                                                             { m_useAMP = b;                                                        }
+  Void                   setQuadtreeTULog2MaxSize( UInt u )                                              { m_uiQuadtreeTULog2MaxSize = u;                                       }
+  UInt                   getQuadtreeTULog2MaxSize() const                                                { return m_uiQuadtreeTULog2MaxSize;                                    }
+  Void                   setQuadtreeTULog2MinSize( UInt u )                                              { m_uiQuadtreeTULog2MinSize = u;                                       }
+  UInt                   getQuadtreeTULog2MinSize() const                                                { return m_uiQuadtreeTULog2MinSize;                                    }
+  Void                   setQuadtreeTUMaxDepthInter( UInt u )                                            { m_uiQuadtreeTUMaxDepthInter = u;                                     }
+  Void                   setQuadtreeTUMaxDepthIntra( UInt u )                                            { m_uiQuadtreeTUMaxDepthIntra = u;                                     }
+  UInt                   getQuadtreeTUMaxDepthInter() const                                              { return m_uiQuadtreeTUMaxDepthInter;                                  }
+  UInt                   getQuadtreeTUMaxDepthIntra() const                                              { return m_uiQuadtreeTUMaxDepthIntra;                                  }
+  Void                   setNumReorderPics(Int i, UInt tlayer)                                           { m_numReorderPics[tlayer] = i;                                        }
+  Int                    getNumReorderPics(UInt tlayer) const                                            { return m_numReorderPics[tlayer];                                     }
+  Void                   createRPSList( Int numRPS );
+  const TComRPSList*     getRPSList() const                                                              { return &m_RPSList;                                                   }
+  TComRPSList*           getRPSList()                                                                    { return &m_RPSList;                                                   }
+  Bool                   getLongTermRefsPresent() const                                                  { return m_bLongTermRefsPresent;                                       }
+  Void                   setLongTermRefsPresent(Bool b)                                                  { m_bLongTermRefsPresent=b;                                            }
+  Bool                   getSPSTemporalMVPEnabledFlag() const                                            { return m_SPSTemporalMVPEnabledFlag;                                  }
+  Void                   setSPSTemporalMVPEnabledFlag(Bool b)                                            { m_SPSTemporalMVPEnabledFlag=b;                                       }
+  // physical transform
+  Void                   setMaxTrSize( UInt u )                                                          { m_uiMaxTrSize = u;                                                   }
+  UInt                   getMaxTrSize() const                                                            { return  m_uiMaxTrSize;                                               }
+
+  // Bit-depth
+  Int                    getBitDepth(ChannelType type) const                                             { return m_bitDepths.recon[type];                                      }
+  Void                   setBitDepth(ChannelType type, Int u )                                           { m_bitDepths.recon[type] = u;                                         }
+#if O0043_BEST_EFFORT_DECODING
+  Int                    getStreamBitDepth(ChannelType type) const                                       { return m_bitDepths.stream[type];                                     }
+  Void                   setStreamBitDepth(ChannelType type, Int u )                                     { m_bitDepths.stream[type] = u;                                        }
+#endif
+  const BitDepths&       getBitDepths() const                                                            { return m_bitDepths;                                                  }
