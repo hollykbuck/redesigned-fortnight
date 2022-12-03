@@ -98,3 +98,103 @@ QpParam::QpParam(const Int           qpy,
   per=baseQp/6;
   rem=baseQp%6;
 }
+
+QpParam::QpParam(const TComDataCU &cu, const ComponentID compID)
+{
+  Int chromaQpOffset = 0;
+
+  if (isChroma(compID))
+  {
+    chromaQpOffset += cu.getSlice()->getPPS()->getQpOffset(compID);
+    chromaQpOffset += cu.getSlice()->getSliceChromaQpDelta(compID);
+
+    chromaQpOffset += cu.getSlice()->getPPS()->getPpsRangeExtension().getChromaQpOffsetListEntry(cu.getChromaQpAdj(0)).u.offset[Int(compID)-1];
+  }
+
+  *this = QpParam(cu.getQP( 0 ),
+                  toChannelType(compID),
+                  cu.getSlice()->getSPS()->getQpBDOffset(toChannelType(compID)),
+                  chromaQpOffset,
+                  cu.getPic()->getChromaFormat());
+}
+
+
+// ====================================================================================================================
+// TComTrQuant class member functions
+// ====================================================================================================================
+
+TComTrQuant::TComTrQuant()
+{
+  // allocate temporary buffers
+  m_plTempCoeff  = new TCoeff[ MAX_CU_SIZE*MAX_CU_SIZE ];
+
+  // allocate bit estimation class  (for RDOQ)
+  m_pcEstBitsSbac = new estBitsSbacStruct;
+  initScalingList();
+}
+
+TComTrQuant::~TComTrQuant()
+{
+  // delete temporary buffers
+  if ( m_plTempCoeff )
+  {
+    delete [] m_plTempCoeff;
+    m_plTempCoeff = NULL;
+  }
+
+  // delete bit estimation class
+  if ( m_pcEstBitsSbac )
+  {
+    delete m_pcEstBitsSbac;
+  }
+  destroyScalingList();
+}
+
+#if ADAPTIVE_QP_SELECTION
+Void TComTrQuant::storeSliceQpNext(TComSlice* pcSlice)
+{
+  // NOTE: does this work with negative QPs or when some blocks are transquant-bypass enabled?
+
+  Int qpBase = pcSlice->getSliceQpBase();
+  Int sliceQpused = pcSlice->getSliceQp();
+  Int sliceQpnext;
+  Double alpha = qpBase < 17 ? 0.5 : 1;
+
+  Int cnt=0;
+  for(Int u=1; u<=LEVEL_RANGE; u++)
+  {
+    cnt += m_sliceNsamples[u] ;
+  }
+
+  if( !m_useRDOQ )
+  {
+    sliceQpused = qpBase;
+    alpha = 0.5;
+  }
+
+  if( cnt > 120 )
+  {
+    Double sum = 0;
+    Int k = 0;
+    for(Int u=1; u<LEVEL_RANGE; u++)
+    {
+      sum += u*m_sliceSumC[u];
+      k += u*u*m_sliceNsamples[u];
+    }
+
+    Int v;
+    Double q[MAX_QP+1] ;
+    for(v=0; v<=MAX_QP; v++)
+    {
+      q[v] = (Double)(g_invQuantScales[v%6] * (1<<(v/6)))/64 ;
+    }
+
+    Double qnext = sum/k * q[sliceQpused] / (1<<ARL_C_PRECISION);
+
+    for(v=0; v<MAX_QP; v++)
+    {
+      if(qnext < alpha * q[v] + (1 - alpha) * q[v+1] )
+      {
+        break;
+      }
+    }
