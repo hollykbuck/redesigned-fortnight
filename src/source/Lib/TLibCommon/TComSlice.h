@@ -1098,3 +1098,103 @@ public:
   Void                   setPicInitQPMinus26( Int i )                                     { m_picInitQPMinus26 = i;                       }
   Bool                   getUseDQP() const                                                { return m_useDQP;                              }
   Void                   setUseDQP( Bool b )                                              { m_useDQP   = b;                               }
+  Bool                   getConstrainedIntraPred() const                                  { return  m_bConstrainedIntraPred;              }
+  Void                   setConstrainedIntraPred( Bool b )                                { m_bConstrainedIntraPred = b;                  }
+  Bool                   getSliceChromaQpFlag() const                                     { return  m_bSliceChromaQpFlag;                 }
+  Void                   setSliceChromaQpFlag( Bool b )                                   { m_bSliceChromaQpFlag = b;                     }
+
+  Void                   setMaxCuDQPDepth( UInt u )                                       { m_uiMaxCuDQPDepth = u;                        }
+  UInt                   getMaxCuDQPDepth() const                                         { return m_uiMaxCuDQPDepth;                     }
+
+  Void                   setQpOffset(ComponentID compID, Int i )
+  {
+    if      (compID==COMPONENT_Cb)
+    {
+      m_chromaCbQpOffset = i;
+    }
+    else if (compID==COMPONENT_Cr)
+    {
+      m_chromaCrQpOffset = i;
+    }
+    else
+    {
+      assert(0);
+    }
+  }
+  Int                    getQpOffset(ComponentID compID) const
+  {
+    return (compID==COMPONENT_Y) ? 0 : (compID==COMPONENT_Cb ? m_chromaCbQpOffset : m_chromaCrQpOffset );
+  }
+
+  Void                   setNumRefIdxL0DefaultActive(UInt ui)                             { m_numRefIdxL0DefaultActive=ui;                }
+  UInt                   getNumRefIdxL0DefaultActive() const                              { return m_numRefIdxL0DefaultActive;            }
+  Void                   setNumRefIdxL1DefaultActive(UInt ui)                             { m_numRefIdxL1DefaultActive=ui;                }
+  UInt                   getNumRefIdxL1DefaultActive() const                              { return m_numRefIdxL1DefaultActive;            }
+
+  Bool                   getUseWP() const                                                 { return m_bUseWeightPred;                      }
+  Bool                   getWPBiPred() const                                              { return m_useWeightedBiPred;                   }
+  Void                   setUseWP( Bool b )                                               { m_bUseWeightPred = b;                         }
+  Void                   setWPBiPred( Bool b )                                            { m_useWeightedBiPred = b;                      }
+
+  Void                   setOutputFlagPresentFlag( Bool b )                               { m_OutputFlagPresentFlag = b;                  }
+  Bool                   getOutputFlagPresentFlag() const                                 { return m_OutputFlagPresentFlag;               }
+  Void                   setTransquantBypassEnabledFlag( Bool b )                         { m_TransquantBypassEnabledFlag = b;            }
+  Bool                   getTransquantBypassEnabledFlag() const                           { return m_TransquantBypassEnabledFlag;         }
+
+  Bool                   getUseTransformSkip() const                                      { return m_useTransformSkip;                    }
+  Void                   setUseTransformSkip( Bool b )                                    { m_useTransformSkip  = b;                      }
+
+  Void                   setLoopFilterAcrossTilesEnabledFlag(Bool b)                      { m_loopFilterAcrossTilesEnabledFlag = b;       }
+  Bool                   getLoopFilterAcrossTilesEnabledFlag() const                      { return m_loopFilterAcrossTilesEnabledFlag;    }
+  Bool                   getDependentSliceSegmentsEnabledFlag() const                     { return m_dependentSliceSegmentsEnabledFlag;   }
+  Void                   setDependentSliceSegmentsEnabledFlag(Bool val)                   { m_dependentSliceSegmentsEnabledFlag = val;    }
+  Bool                   getEntropyCodingSyncEnabledFlag() const                          { return m_entropyCodingSyncEnabledFlag;        }
+  Void                   setEntropyCodingSyncEnabledFlag(Bool val)                        { m_entropyCodingSyncEnabledFlag = val;         }
+
+  Void                   setTilesEnabledFlag(Bool val)                                    { m_tilesEnabledFlag = val;                     }
+  Bool                   getTilesEnabledFlag() const                                      { return m_tilesEnabledFlag;                    }
+  Void                   setTileUniformSpacingFlag(Bool b)                                { m_uniformSpacingFlag = b;                     }
+  Bool                   getTileUniformSpacingFlag() const                                { return m_uniformSpacingFlag;                  }
+  Void                   setNumTileColumnsMinus1(Int i)                                   { m_numTileColumnsMinus1 = i;                   }
+  Int                    getNumTileColumnsMinus1() const                                  { return m_numTileColumnsMinus1;                }
+  Void                   setTileColumnWidth(const std::vector<Int>& columnWidth )         { m_tileColumnWidth = columnWidth;              }
+  UInt                   getTileColumnWidth(UInt columnIdx) const                         { return  m_tileColumnWidth[columnIdx];         }
+  Void                   setNumTileRowsMinus1(Int i)                                      { m_numTileRowsMinus1 = i;                      }
+  Int                    getNumTileRowsMinus1() const                                     { return m_numTileRowsMinus1;                   }
+  Void                   setTileRowHeight(const std::vector<Int>& rowHeight)              { m_tileRowHeight = rowHeight;                  }
+  UInt                   getTileRowHeight(UInt rowIdx) const                              { return m_tileRowHeight[rowIdx];               }
+
+  Void                   setSignDataHidingEnabledFlag( Bool b )                           { m_signDataHidingEnabledFlag = b;              }
+  Bool                   getSignDataHidingEnabledFlag() const                             { return m_signDataHidingEnabledFlag;           }
+
+  Void                   setCabacInitPresentFlag( Bool flag )                             { m_cabacInitPresentFlag = flag;                }
+  Bool                   getCabacInitPresentFlag() const                                  { return m_cabacInitPresentFlag;                }
+  Void                   setDeblockingFilterControlPresentFlag( Bool val )                { m_deblockingFilterControlPresentFlag = val;   }
+  Bool                   getDeblockingFilterControlPresentFlag() const                    { return m_deblockingFilterControlPresentFlag;  }
+  Void                   setDeblockingFilterOverrideEnabledFlag( Bool val )               { m_deblockingFilterOverrideEnabledFlag = val;  }
+  Bool                   getDeblockingFilterOverrideEnabledFlag() const                   { return m_deblockingFilterOverrideEnabledFlag; }
+  Void                   setPPSDeblockingFilterDisabledFlag(Bool val)                     { m_ppsDeblockingFilterDisabledFlag = val;      } //!< set offset for deblocking filter disabled
+  Bool                   getPPSDeblockingFilterDisabledFlag() const                       { return m_ppsDeblockingFilterDisabledFlag;     } //!< get offset for deblocking filter disabled
+  Void                   setDeblockingFilterBetaOffsetDiv2(Int val)                       { m_deblockingFilterBetaOffsetDiv2 = val;       } //!< set beta offset for deblocking filter
+  Int                    getDeblockingFilterBetaOffsetDiv2() const                        { return m_deblockingFilterBetaOffsetDiv2;      } //!< get beta offset for deblocking filter
+  Void                   setDeblockingFilterTcOffsetDiv2(Int val)                         { m_deblockingFilterTcOffsetDiv2 = val;         } //!< set tc offset for deblocking filter
+  Int                    getDeblockingFilterTcOffsetDiv2() const                          { return m_deblockingFilterTcOffsetDiv2;        } //!< get tc offset for deblocking filter
+  Bool                   getScalingListPresentFlag() const                                { return m_scalingListPresentFlag;              }
+  Void                   setScalingListPresentFlag( Bool b )                              { m_scalingListPresentFlag  = b;                }
+  TComScalingList&       getScalingList()                                                 { return m_scalingList;                         }
+  const TComScalingList& getScalingList() const                                           { return m_scalingList;                         }
+  Bool                   getListsModificationPresentFlag() const                          { return m_listsModificationPresentFlag;        }
+  Void                   setListsModificationPresentFlag( Bool b )                        { m_listsModificationPresentFlag = b;           }
+  UInt                   getLog2ParallelMergeLevelMinus2() const                          { return m_log2ParallelMergeLevelMinus2;        }
+  Void                   setLog2ParallelMergeLevelMinus2(UInt mrgLevel)                   { m_log2ParallelMergeLevelMinus2 = mrgLevel;    }
+  Int                    getNumExtraSliceHeaderBits() const                               { return m_numExtraSliceHeaderBits;             }
+  Void                   setNumExtraSliceHeaderBits(Int i)                                { m_numExtraSliceHeaderBits = i;                }
+  Void                   setLoopFilterAcrossSlicesEnabledFlag( Bool bValue )              { m_loopFilterAcrossSlicesEnabledFlag = bValue; }
+  Bool                   getLoopFilterAcrossSlicesEnabledFlag() const                     { return m_loopFilterAcrossSlicesEnabledFlag;   }
+  Bool                   getSliceHeaderExtensionPresentFlag() const                       { return m_sliceHeaderExtensionPresentFlag;     }
+  Void                   setSliceHeaderExtensionPresentFlag(Bool val)                     { m_sliceHeaderExtensionPresentFlag = val;      }
+
+  const TComPPSRExt&     getPpsRangeExtension() const                                     { return m_ppsRangeExtension;                   }
+  TComPPSRExt&           getPpsRangeExtension()                                           { return m_ppsRangeExtension;                   }
+};
+
