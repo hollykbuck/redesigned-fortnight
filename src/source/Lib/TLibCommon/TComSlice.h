@@ -998,3 +998,103 @@ public:
   UInt                   getLog2MaxTransformSkipBlockSize() const                         { return m_log2MaxTransformSkipBlockSize;         }
   Void                   setLog2MaxTransformSkipBlockSize( UInt u )                       { m_log2MaxTransformSkipBlockSize  = u;           }
 
+  Bool                   getCrossComponentPredictionEnabledFlag() const                   { return m_crossComponentPredictionEnabledFlag;   }
+  Void                   setCrossComponentPredictionEnabledFlag(Bool value)               { m_crossComponentPredictionEnabledFlag = value;  }
+
+  Void                   clearChromaQpOffsetList()                                        { m_chromaQpOffsetListLen = 0;                    }
+
+  UInt                   getDiffCuChromaQpOffsetDepth () const                            { return m_diffCuChromaQpOffsetDepth;             }
+  Void                   setDiffCuChromaQpOffsetDepth ( UInt u )                          { m_diffCuChromaQpOffsetDepth = u;                }
+
+  Bool                   getChromaQpOffsetListEnabledFlag() const                         { return getChromaQpOffsetListLen()>0;            }
+  Int                    getChromaQpOffsetListLen() const                                 { return m_chromaQpOffsetListLen;                 }
+
+  const ChromaQpAdj&     getChromaQpOffsetListEntry( Int cuChromaQpOffsetIdxPlus1 ) const
+  {
+    assert(cuChromaQpOffsetIdxPlus1 < m_chromaQpOffsetListLen+1);
+    return m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1]; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0, and entries [cu_chroma_qp_offset_idx+1...] otherwise
+  }
+
+  Void                   setChromaQpOffsetListEntry( Int cuChromaQpOffsetIdxPlus1, Int cbOffset, Int crOffset )
+  {
+    assert (cuChromaQpOffsetIdxPlus1 != 0 && cuChromaQpOffsetIdxPlus1 <= MAX_QP_OFFSET_LIST_SIZE);
+    m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1].u.comp.CbOffset = cbOffset; // Array includes entry [0] for the null offset used when cu_chroma_qp_offset_flag=0, and entries [cu_chroma_qp_offset_idx+1...] otherwise
+    m_ChromaQpAdjTableIncludingNullEntry[cuChromaQpOffsetIdxPlus1].u.comp.CrOffset = crOffset;
+    m_chromaQpOffsetListLen = max(m_chromaQpOffsetListLen, cuChromaQpOffsetIdxPlus1);
+  }
+
+  // Now: getPpsRangeExtension().getLog2SaoOffsetScale and getPpsRangeExtension().setLog2SaoOffsetScale
+  UInt                   getLog2SaoOffsetScale(ChannelType type) const                    { return m_log2SaoOffsetScale[type];             }
+  Void                   setLog2SaoOffsetScale(ChannelType type, UInt uiBitShift)         { m_log2SaoOffsetScale[type] = uiBitShift;       }
+
+};
+
+
+/// PPS class
+class TComPPS
+{
+private:
+  Int              m_PPSId;                    // pic_parameter_set_id
+  Int              m_SPSId;                    // seq_parameter_set_id
+  Int              m_picInitQPMinus26;
+  Bool             m_useDQP;
+  Bool             m_bConstrainedIntraPred;    // constrained_intra_pred_flag
+  Bool             m_bSliceChromaQpFlag;       // slicelevel_chroma_qp_flag
+
+  // access channel
+  UInt             m_uiMaxCuDQPDepth;
+
+  Int              m_chromaCbQpOffset;
+  Int              m_chromaCrQpOffset;
+
+  UInt             m_numRefIdxL0DefaultActive;
+  UInt             m_numRefIdxL1DefaultActive;
+
+  Bool             m_bUseWeightPred;                    //!< Use of Weighting Prediction (P_SLICE)
+  Bool             m_useWeightedBiPred;                 //!< Use of Weighting Bi-Prediction (B_SLICE)
+  Bool             m_OutputFlagPresentFlag;             //!< Indicates the presence of output_flag in slice header
+  Bool             m_TransquantBypassEnabledFlag;       //!< Indicates presence of cu_transquant_bypass_flag in CUs.
+  Bool             m_useTransformSkip;
+  Bool             m_dependentSliceSegmentsEnabledFlag; //!< Indicates the presence of dependent slices
+  Bool             m_tilesEnabledFlag;                  //!< Indicates the presence of tiles
+  Bool             m_entropyCodingSyncEnabledFlag;      //!< Indicates the presence of wavefronts
+
+  Bool             m_loopFilterAcrossTilesEnabledFlag;
+  Bool             m_uniformSpacingFlag;
+  Int              m_numTileColumnsMinus1;
+  Int              m_numTileRowsMinus1;
+  std::vector<Int> m_tileColumnWidth;
+  std::vector<Int> m_tileRowHeight;
+
+  Bool             m_signDataHidingEnabledFlag;
+
+  Bool             m_cabacInitPresentFlag;
+
+  Bool             m_sliceHeaderExtensionPresentFlag;
+  Bool             m_loopFilterAcrossSlicesEnabledFlag;
+  Bool             m_deblockingFilterControlPresentFlag;
+  Bool             m_deblockingFilterOverrideEnabledFlag;
+  Bool             m_ppsDeblockingFilterDisabledFlag;
+  Int              m_deblockingFilterBetaOffsetDiv2;    //< beta offset for deblocking filter
+  Int              m_deblockingFilterTcOffsetDiv2;      //< tc offset for deblocking filter
+  Bool             m_scalingListPresentFlag;
+  TComScalingList  m_scalingList;                       //!< ScalingList class
+  Bool             m_listsModificationPresentFlag;
+  UInt             m_log2ParallelMergeLevelMinus2;
+  Int              m_numExtraSliceHeaderBits;
+
+  TComPPSRExt      m_ppsRangeExtension;
+
+public:
+                         TComPPS();
+  virtual                ~TComPPS();
+
+  Int                    getPPSId() const                                                 { return m_PPSId;                               }
+  Void                   setPPSId(Int i)                                                  { m_PPSId = i;                                  }
+  Int                    getSPSId() const                                                 { return m_SPSId;                               }
+  Void                   setSPSId(Int i)                                                  { m_SPSId = i;                                  }
+
+  Int                    getPicInitQPMinus26() const                                      { return  m_picInitQPMinus26;                   }
+  Void                   setPicInitQPMinus26( Int i )                                     { m_picInitQPMinus26 = i;                       }
+  Bool                   getUseDQP() const                                                { return m_useDQP;                              }
+  Void                   setUseDQP( Bool b )                                              { m_useDQP   = b;                               }
