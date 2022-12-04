@@ -198,3 +198,103 @@ Void TComTrQuant::storeSliceQpNext(TComSlice* pcSlice)
         break;
       }
     }
+    sliceQpnext = Clip3(sliceQpused - 3, sliceQpused + 3, v);
+  }
+  else
+  {
+    sliceQpnext = sliceQpused;
+  }
+
+  m_qpDelta[qpBase] = sliceQpnext - qpBase;
+}
+
+Void TComTrQuant::initSliceQpDelta()
+{
+  for(Int qp=0; qp<=MAX_QP; qp++)
+  {
+    m_qpDelta[qp] = qp < 17 ? 0 : 1;
+  }
+}
+
+Void TComTrQuant::clearSliceARLCnt()
+{
+  memset(m_sliceSumC, 0, sizeof(Double)*(LEVEL_RANGE+1));
+  memset(m_sliceNsamples, 0, sizeof(Int)*(LEVEL_RANGE+1));
+}
+#endif
+
+
+
+#if MATRIX_MULT
+/** NxN forward transform (2D) using brute force matrix multiplication (3 nested loops)
+ *  \param block pointer to input data (residual)
+ *  \param coeff pointer to output data (transform coefficients)
+ *  \param uiStride stride of input data
+ *  \param uiTrSize transform size (uiTrSize x uiTrSize)
+ *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
+ */
+Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxLog2TrDynamicRange)
+{
+  UInt i,j,k;
+  TCoeff iSum;
+  TCoeff tmp[MAX_TU_SIZE * MAX_TU_SIZE];
+  const TMatrixCoeff *iT;
+  UInt uiLog2TrSize = g_aucConvertToBit[ uiTrSize ] + 2;
+
+  if (uiTrSize==4)
+  {
+    iT  = (useDST ? g_as_DST_MAT_4[TRANSFORM_FORWARD][0] : g_aiT4[TRANSFORM_FORWARD][0]);
+  }
+  else if (uiTrSize==8)
+  {
+    iT = g_aiT8[TRANSFORM_FORWARD][0];
+  }
+  else if (uiTrSize==16)
+  {
+    iT = g_aiT16[TRANSFORM_FORWARD][0];
+  }
+  else if (uiTrSize==32)
+  {
+    iT = g_aiT32[TRANSFORM_FORWARD][0];
+  }
+  else
+  {
+    assert(0);
+  }
+
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
+
+  const Int shift_1st = (uiLog2TrSize +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
+  const Int shift_2nd = uiLog2TrSize + TRANSFORM_MATRIX_SHIFT;
+  const Int add_1st = (shift_1st>0) ? (1<<(shift_1st-1)) : 0;
+  const Int add_2nd = 1<<(shift_2nd-1);
+
+  /* Horizontal transform */
+
+  for (i=0; i<uiTrSize; i++)
+  {
+    for (j=0; j<uiTrSize; j++)
+    {
+      iSum = 0;
+      for (k=0; k<uiTrSize; k++)
+      {
+        iSum += iT[i*uiTrSize+k]*block[j*uiStride+k];
+      }
+      tmp[i*uiTrSize+j] = (iSum + add_1st)>>shift_1st;
+    }
+  }
+
+  /* Vertical transform */
+  for (i=0; i<uiTrSize; i++)
+  {
+    for (j=0; j<uiTrSize; j++)
+    {
+      iSum = 0;
+      for (k=0; k<uiTrSize; k++)
+      {
+        iSum += iT[i*uiTrSize+k]*tmp[j*uiTrSize+k];
+      }
+      coeff[i*uiTrSize+j] = (iSum + add_2nd)>>shift_2nd;
+    }
+  }
+}
