@@ -298,3 +298,103 @@ Void xTr(Int bitDepth, Pel *block, TCoeff *coeff, UInt uiStride, UInt uiTrSize, 
     }
   }
 }
+
+/** NxN inverse transform (2D) using brute force matrix multiplication (3 nested loops)
+ *  \param coeff pointer to input data (transform coefficients)
+ *  \param block pointer to output data (residual)
+ *  \param uiStride stride of output data
+ *  \param uiTrSize transform size (uiTrSize x uiTrSize)
+ *  \param uiMode is Intra Prediction mode used in Mode-Dependent DCT/DST only
+ */
+Void xITr(Int bitDepth, TCoeff *coeff, Pel *block, UInt uiStride, UInt uiTrSize, Bool useDST, const Int maxLog2TrDynamicRange)
+{
+  UInt i,j,k;
+  TCoeff iSum;
+  TCoeff tmp[MAX_TU_SIZE * MAX_TU_SIZE];
+  const TMatrixCoeff *iT;
+
+  if (uiTrSize==4)
+  {
+    iT  = (useDST ? g_as_DST_MAT_4[TRANSFORM_INVERSE][0] : g_aiT4[TRANSFORM_INVERSE][0]);
+  }
+  else if (uiTrSize==8)
+  {
+    iT = g_aiT8[TRANSFORM_INVERSE][0];
+  }
+  else if (uiTrSize==16)
+  {
+    iT = g_aiT16[TRANSFORM_INVERSE][0];
+  }
+  else if (uiTrSize==32)
+  {
+    iT = g_aiT32[TRANSFORM_INVERSE][0];
+  }
+  else
+  {
+    assert(0);
+  }
+
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
+
+  const Int shift_1st = TRANSFORM_MATRIX_SHIFT + 1; //1 has been added to shift_1st at the expense of shift_2nd
+  const Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
+  const TCoeff clipMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff clipMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+  assert(shift_2nd>=0);
+  const Int add_1st = 1<<(shift_1st-1);
+  const Int add_2nd = (shift_2nd>0) ? (1<<(shift_2nd-1)) : 0;
+
+  /* Horizontal transform */
+  for (i=0; i<uiTrSize; i++)
+  {
+    for (j=0; j<uiTrSize; j++)
+    {
+      iSum = 0;
+      for (k=0; k<uiTrSize; k++)
+      {
+        iSum += iT[k*uiTrSize+i]*coeff[k*uiTrSize+j];
+      }
+
+      // Clipping here is not in the standard, but is used to protect the "Pel" data type into which the inverse-transformed samples will be copied
+      tmp[i*uiTrSize+j] = Clip3<TCoeff>(clipMinimum, clipMaximum, (iSum + add_1st)>>shift_1st);
+    }
+  }
+
+  /* Vertical transform */
+  for (i=0; i<uiTrSize; i++)
+  {
+    for (j=0; j<uiTrSize; j++)
+    {
+      iSum = 0;
+      for (k=0; k<uiTrSize; k++)
+      {
+        iSum += iT[k*uiTrSize+j]*tmp[i*uiTrSize+k];
+      }
+
+      block[i*uiStride+j] = Clip3<TCoeff>(std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max(), (iSum + add_2nd)>>shift_2nd);
+    }
+  }
+}
+
+#endif //MATRIX_MULT
+
+
+/** 4x4 forward transform implemented using partial butterfly structure (1D)
+ *  \param src   input data (residual)
+ *  \param dst   output data (transform coefficients)
+ *  \param shift specifies right shift after 1D transform
+ *  \param line
+ */
+Void partialButterfly4(TCoeff *src, TCoeff *dst, Int shift, Int line)
+{
+  Int j;
+  TCoeff E[2],O[2];
+  TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
+
+  for (j=0; j<line; j++)
+  {
+    /* E and O */
+    E[0] = src[0] + src[3];
+    O[0] = src[0] - src[3];
+    E[1] = src[1] + src[2];
+    O[1] = src[1] - src[2];
