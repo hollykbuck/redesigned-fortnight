@@ -398,3 +398,103 @@ Void partialButterfly4(TCoeff *src, TCoeff *dst, Int shift, Int line)
     O[0] = src[0] - src[3];
     E[1] = src[1] + src[2];
     O[1] = src[1] - src[2];
+
+    dst[0]      = (g_aiT4[TRANSFORM_FORWARD][0][0]*E[0] + g_aiT4[TRANSFORM_FORWARD][0][1]*E[1] + add)>>shift;
+    dst[2*line] = (g_aiT4[TRANSFORM_FORWARD][2][0]*E[0] + g_aiT4[TRANSFORM_FORWARD][2][1]*E[1] + add)>>shift;
+    dst[line]   = (g_aiT4[TRANSFORM_FORWARD][1][0]*O[0] + g_aiT4[TRANSFORM_FORWARD][1][1]*O[1] + add)>>shift;
+    dst[3*line] = (g_aiT4[TRANSFORM_FORWARD][3][0]*O[0] + g_aiT4[TRANSFORM_FORWARD][3][1]*O[1] + add)>>shift;
+
+    src += 4;
+    dst ++;
+  }
+}
+
+// Fast DST Algorithm. Full matrix multiplication for DST and Fast DST algorithm
+// give identical results
+Void fastForwardDst(TCoeff *block, TCoeff *coeff, Int shift)  // input block, output coeff
+{
+  Int i;
+  TCoeff c[4];
+  TCoeff rnd_factor = (shift > 0) ? (1<<(shift-1)) : 0;
+  for (i=0; i<4; i++)
+  {
+    // Intermediate Variables
+    c[0] = block[4*i+0];
+    c[1] = block[4*i+1];
+    c[2] = block[4*i+2];
+    c[3] = block[4*i+3];
+
+    for (Int row = 0; row < 4; row++)
+    {
+      TCoeff result = 0;
+      for (Int column = 0; column < 4; column++)
+      {
+        result += c[column] * g_as_DST_MAT_4[TRANSFORM_FORWARD][row][column]; // use the defined matrix, rather than hard-wired numbers
+      }
+
+      coeff[(row * 4) + i] = rightShift((result + rnd_factor), shift);
+    }
+  }
+}
+
+Void fastInverseDst(TCoeff *tmp, TCoeff *block, Int shift, const TCoeff outputMinimum, const TCoeff outputMaximum)  // input tmp, output block
+{
+  Int i;
+  TCoeff c[4];
+  TCoeff rnd_factor = (shift > 0) ? (1<<(shift-1)) : 0;
+  for (i=0; i<4; i++)
+  {
+    // Intermediate Variables
+    c[0] = tmp[   i];
+    c[1] = tmp[4 +i];
+    c[2] = tmp[8 +i];
+    c[3] = tmp[12+i];
+
+    for (Int column = 0; column < 4; column++)
+    {
+      TCoeff &result = block[(i * 4) + column];
+
+      result = 0;
+      for (Int row = 0; row < 4; row++)
+      {
+        result += c[row] * g_as_DST_MAT_4[TRANSFORM_INVERSE][row][column]; // use the defined matrix, rather than hard-wired numbers
+      }
+
+      result = Clip3( outputMinimum, outputMaximum, rightShift((result + rnd_factor), shift));
+    }
+  }
+}
+
+/** 4x4 inverse transform implemented using partial butterfly structure (1D)
+ *  \param src   input data (transform coefficients)
+ *  \param dst   output data (residual)
+ *  \param shift specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
+ */
+Void partialButterflyInverse4(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
+{
+  Int j;
+  TCoeff E[2],O[2];
+  TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
+
+  for (j=0; j<line; j++)
+  {
+    /* Utilizing symmetry properties to the maximum to minimize the number of multiplications */
+    O[0] = g_aiT4[TRANSFORM_INVERSE][1][0]*src[line] + g_aiT4[TRANSFORM_INVERSE][3][0]*src[3*line];
+    O[1] = g_aiT4[TRANSFORM_INVERSE][1][1]*src[line] + g_aiT4[TRANSFORM_INVERSE][3][1]*src[3*line];
+    E[0] = g_aiT4[TRANSFORM_INVERSE][0][0]*src[0]    + g_aiT4[TRANSFORM_INVERSE][2][0]*src[2*line];
+    E[1] = g_aiT4[TRANSFORM_INVERSE][0][1]*src[0]    + g_aiT4[TRANSFORM_INVERSE][2][1]*src[2*line];
+
+    /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
+    dst[0] = Clip3( outputMinimum, outputMaximum, (E[0] + O[0] + add)>>shift );
+    dst[1] = Clip3( outputMinimum, outputMaximum, (E[1] + O[1] + add)>>shift );
+    dst[2] = Clip3( outputMinimum, outputMaximum, (E[1] - O[1] + add)>>shift );
+    dst[3] = Clip3( outputMinimum, outputMaximum, (E[0] - O[0] + add)>>shift );
+
+    src   ++;
+    dst += 4;
+  }
+}
+
