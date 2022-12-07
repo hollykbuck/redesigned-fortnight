@@ -1398,3 +1398,103 @@ public:
   Void                        setSliceQp( Int i )                                    { m_iSliceQp          = i;                                      }
 #if ADAPTIVE_QP_SELECTION
   Void                        setSliceQpBase( Int i )                                { m_iSliceQpBase      = i;                                      }
+#endif
+  Void                        setSliceQpDelta( Int i )                               { m_iSliceQpDelta     = i;                                      }
+  Void                        setSliceChromaQpDelta( ComponentID compID, Int i )     { m_iSliceChromaQpDelta[compID] = isLuma(compID) ? 0 : i;       }
+  Void                        setUseChromaQpAdj( Bool b )                            { m_ChromaQpAdjEnabled = b;                                     }
+  Void                        setDeblockingFilterDisable( Bool b )                   { m_deblockingFilterDisable= b;                                 }
+  Void                        setDeblockingFilterOverrideFlag( Bool b )              { m_deblockingFilterOverrideFlag = b;                           }
+  Void                        setDeblockingFilterBetaOffsetDiv2( Int i )             { m_deblockingFilterBetaOffsetDiv2 = i;                         }
+  Void                        setDeblockingFilterTcOffsetDiv2( Int i )               { m_deblockingFilterTcOffsetDiv2 = i;                           }
+
+  Void                        setRefPic( TComPic* p, RefPicList e, Int iRefIdx )     { m_apcRefPicList[e][iRefIdx] = p;                              }
+  Void                        setRefPOC( Int i, RefPicList e, Int iRefIdx )          { m_aiRefPOCList[e][iRefIdx] = i;                               }
+  Void                        setNumRefIdx( RefPicList e, Int i )                    { m_aiNumRefIdx[e]    = i;                                      }
+  Void                        setPic( TComPic* p )                                   { m_pcPic             = p;                                      }
+  Void                        setDepth( Int iDepth )                                 { m_iDepth            = iDepth;                                 }
+
+  Void                        setRefPicList( TComList<TComPic*>& rcListPic, Bool checkNumPocTotalCurr = false );
+  Void                        setRefPOCList();
+  Void                        setColFromL0Flag( Bool colFromL0 )                     { m_colFromL0Flag = colFromL0;                                  }
+  Void                        setColRefIdx( UInt refIdx)                             { m_colRefIdx = refIdx;                                         }
+  Void                        setCheckLDC( Bool b )                                  { m_bCheckLDC = b;                                              }
+  Void                        setMvdL1ZeroFlag( Bool b)                              { m_bLMvdL1Zero = b;                                            }
+
+  Bool                        isIntra() const                                        { return m_eSliceType == I_SLICE;                               }
+  Bool                        isInterB() const                                       { return m_eSliceType == B_SLICE;                               }
+  Bool                        isInterP() const                                       { return m_eSliceType == P_SLICE;                               }
+
+  Void                        setLambdas( const Double lambdas[MAX_NUM_COMPONENT] )  { for (Int component = 0; component < MAX_NUM_COMPONENT; component++) m_lambdas[component] = lambdas[component]; }
+  const Double*               getLambdas() const                                     { return m_lambdas;                                             }
+
+  Void                        initEqualRef();
+  Bool                        isEqualRef( RefPicList e, Int iRefIdx1, Int iRefIdx2 )
+  {
+    assert(e<NUM_REF_PIC_LIST_01);
+    if (iRefIdx1 < 0 || iRefIdx2 < 0)
+    {
+      return false;
+    }
+    else
+    {
+      return m_abEqualRef[e][iRefIdx1][iRefIdx2];
+    }
+  }
+
+  Void                        setEqualRef( RefPicList e, Int iRefIdx1, Int iRefIdx2, Bool b)
+  {
+    assert(e<NUM_REF_PIC_LIST_01);
+    m_abEqualRef[e][iRefIdx1][iRefIdx2] = m_abEqualRef[e][iRefIdx2][iRefIdx1] = b;
+  }
+
+  static Void                 sortPicList( TComList<TComPic*>& rcListPic );
+  Void                        setList1IdxToList0Idx();
+
+  UInt                        getTLayer() const                                      { return m_uiTLayer;                                            }
+  Void                        setTLayer( UInt uiTLayer )                             { m_uiTLayer = uiTLayer;                                        }
+
+  Void                        setTLayerInfo( UInt uiTLayer );
+  Void                        decodingMarking( TComList<TComPic*>& rcListPic, Int iGOPSIze, Int& iMaxRefPicNum );
+  Void                        checkLeadingPictureRestrictions( TComList<TComPic*>& rcListPic );
+  Void                        applyReferencePictureSet( TComList<TComPic*>& rcListPic, const TComReferencePictureSet *RPSList);
+  Bool                        isTemporalLayerSwitchingPoint( TComList<TComPic*>& rcListPic );
+  Bool                        isStepwiseTemporalLayerSwitchingPointCandidate( TComList<TComPic*>& rcListPic );
+  Int                         checkThatAllRefPicsAreAvailable( TComList<TComPic*>& rcListPic, const TComReferencePictureSet *pReferencePictureSet, Bool printErrors, Int pocRandomAccess = 0, Bool bUseRecoveryPoint = false);
+  Void                        createExplicitReferencePictureSetFromReference( TComList<TComPic*>& rcListPic, const TComReferencePictureSet *pReferencePictureSet, Bool isRAP, Int pocRandomAccess, Bool bUseRecoveryPoint, const Bool bEfficientFieldIRAPEnabled);
+  Void                        setMaxNumMergeCand(UInt val )                          { m_maxNumMergeCand = val;                                      }
+  UInt                        getMaxNumMergeCand() const                             { return m_maxNumMergeCand;                                     }
+
+  Void                        setNoOutputPriorPicsFlag( Bool val )                   { m_noOutputPriorPicsFlag = val;                                }
+  Bool                        getNoOutputPriorPicsFlag() const                       { return m_noOutputPriorPicsFlag;                               }
+
+  Void                        setNoRaslOutputFlag( Bool val )                        { m_noRaslOutputFlag = val;                                     }
+  Bool                        getNoRaslOutputFlag() const                            { return m_noRaslOutputFlag;                                    }
+
+  Void                        setHandleCraAsBlaFlag( Bool val )                      { m_handleCraAsBlaFlag = val;                                   }
+  Bool                        getHandleCraAsBlaFlag() const                          { return m_handleCraAsBlaFlag;                                  }
+
+  Void                        setSliceMode( SliceConstraint mode )                   { m_sliceMode = mode;                                           }
+  SliceConstraint             getSliceMode() const                                   { return m_sliceMode;                                           }
+  Void                        setSliceArgument( UInt uiArgument )                    { m_sliceArgument = uiArgument;                                 }
+  UInt                        getSliceArgument() const                               { return m_sliceArgument;                                       }
+  Void                        setSliceCurStartCtuTsAddr( UInt ctuTsAddr )            { m_sliceCurStartCtuTsAddr = ctuTsAddr;                         } // CTU Tile-scan address (as opposed to raster-scan)
+  UInt                        getSliceCurStartCtuTsAddr() const                      { return m_sliceCurStartCtuTsAddr;                              } // CTU Tile-scan address (as opposed to raster-scan)
+  Void                        setSliceCurEndCtuTsAddr( UInt ctuTsAddr )              { m_sliceCurEndCtuTsAddr = ctuTsAddr;                           } // CTU Tile-scan address (as opposed to raster-scan)
+  UInt                        getSliceCurEndCtuTsAddr() const                        { return m_sliceCurEndCtuTsAddr;                                } // CTU Tile-scan address (as opposed to raster-scan)
+  Void                        setSliceIdx( UInt i)                                   { m_sliceIdx = i;                                               }
+  UInt                        getSliceIdx() const                                    { return  m_sliceIdx;                                           }
+  Void                        copySliceInfo(TComSlice *pcSliceSrc);
+  Void                        setSliceSegmentMode( SliceConstraint mode )            { m_sliceSegmentMode = mode;                                    }
+  SliceConstraint             getSliceSegmentMode() const                            { return m_sliceSegmentMode;                                    }
+  Void                        setSliceSegmentArgument( UInt uiArgument )             { m_sliceSegmentArgument = uiArgument;                          }
+  UInt                        getSliceSegmentArgument() const                        { return m_sliceSegmentArgument;                                }
+  Void                        setSliceSegmentCurStartCtuTsAddr( UInt ctuTsAddr )     { m_sliceSegmentCurStartCtuTsAddr = ctuTsAddr;                  } // CTU Tile-scan address (as opposed to raster-scan)
+  UInt                        getSliceSegmentCurStartCtuTsAddr() const               { return m_sliceSegmentCurStartCtuTsAddr;                       } // CTU Tile-scan address (as opposed to raster-scan)
+  Void                        setSliceSegmentCurEndCtuTsAddr( UInt ctuTsAddr )       { m_sliceSegmentCurEndCtuTsAddr = ctuTsAddr;                    } // CTU Tile-scan address (as opposed to raster-scan)
+  UInt                        getSliceSegmentCurEndCtuTsAddr() const                 { return m_sliceSegmentCurEndCtuTsAddr;                         } // CTU Tile-scan address (as opposed to raster-scan)
+  Void                        setSliceBits( UInt uiVal )                             { m_sliceBits = uiVal;                                          }
+  UInt                        getSliceBits() const                                   { return m_sliceBits;                                           }
+  Void                        setSliceSegmentBits( UInt uiVal )                      { m_sliceSegmentBits = uiVal;                                   }
+  UInt                        getSliceSegmentBits() const                            { return m_sliceSegmentBits;                                    }
+  Void                        setFinalized( Bool uiVal )                             { m_bFinalized = uiVal;                                         }
+  Bool                        getFinalized() const                                   { return m_bFinalized;                                          }
