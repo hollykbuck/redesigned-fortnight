@@ -1498,3 +1498,103 @@ public:
   UInt                        getSliceSegmentBits() const                            { return m_sliceSegmentBits;                                    }
   Void                        setFinalized( Bool uiVal )                             { m_bFinalized = uiVal;                                         }
   Bool                        getFinalized() const                                   { return m_bFinalized;                                          }
+  Bool                        testWeightPred( ) const                                { return m_bTestWeightPred;                                     }
+  Void                        setTestWeightPred( Bool bValue )                       { m_bTestWeightPred = bValue;                                   }
+  Bool                        testWeightBiPred( ) const                              { return m_bTestWeightBiPred;                                   }
+  Void                        setTestWeightBiPred( Bool bValue )                     { m_bTestWeightBiPred = bValue;                                 }
+  Void                        setWpScaling( WPScalingParam  wp[NUM_REF_PIC_LIST_01][MAX_NUM_REF][MAX_NUM_COMPONENT] )
+  {
+    memcpy(m_weightPredTable, wp, sizeof(WPScalingParam)*NUM_REF_PIC_LIST_01*MAX_NUM_REF*MAX_NUM_COMPONENT);
+  }
+
+  Void                        getWpScaling( RefPicList e, Int iRefIdx, WPScalingParam *&wp);
+
+  Void                        resetWpScaling();
+  Void                        initWpScaling(const TComSPS *sps);
+
+  Void                        setWpAcDcParam( WPACDCParam wp[MAX_NUM_COMPONENT] )
+  {
+    memcpy(m_weightACDCParam, wp, sizeof(WPACDCParam)*MAX_NUM_COMPONENT);
+  }
+
+  Void                        getWpAcDcParam( WPACDCParam *&wp );
+  Void                        initWpAcDcParam();
+
+  Void                        clearSubstreamSizes( )                                 { return m_substreamSizes.clear();                              }
+  UInt                        getNumberOfSubstreamSizes( )                           { return (UInt) m_substreamSizes.size();                        }
+  Void                        addSubstreamSize( UInt size )                          { m_substreamSizes.push_back(size);                             }
+  UInt                        getSubstreamSize( Int idx )                            { assert(idx<getNumberOfSubstreamSizes()); return m_substreamSizes[idx]; }
+
+  Void                        setCabacInitFlag( Bool val )                           { m_cabacInitFlag = val;                                        } //!< set CABAC initial flag
+  Bool                        getCabacInitFlag()                                     { return m_cabacInitFlag;                                       } //!< get CABAC initial flag
+  Bool                        getTemporalLayerNonReferenceFlag()                     { return m_temporalLayerNonReferenceFlag;                       }
+  Void                        setTemporalLayerNonReferenceFlag(Bool x)               { m_temporalLayerNonReferenceFlag = x;                          }
+  Void                        setLFCrossSliceBoundaryFlag( Bool   val )              { m_LFCrossSliceBoundaryFlag = val;                             }
+  Bool                        getLFCrossSliceBoundaryFlag()                          { return m_LFCrossSliceBoundaryFlag;                            }
+
+  Void                        setEnableTMVPFlag( Bool   b )                          { m_enableTMVPFlag = b;                                         }
+  Bool                        getEnableTMVPFlag() const                              { return m_enableTMVPFlag;                                      }
+
+  Void                        setEncCABACTableIdx( SliceType idx )                   { m_encCABACTableIdx = idx;                                     }
+  SliceType                   getEncCABACTableIdx() const                            { return m_encCABACTableIdx;                                    }
+
+protected:
+  TComPic*                    xGetRefPic        (TComList<TComPic*>& rcListPic, Int poc);
+  TComPic*                    xGetLongTermRefPic(TComList<TComPic*>& rcListPic, Int poc, Bool pocHasMsb);
+};// END CLASS DEFINITION TComSlice
+
+
+Void calculateParameterSetChangedFlag(Bool &bChanged, const std::vector<UChar> *pOldData, const std::vector<UChar> *pNewData);
+
+template <class T> class ParameterSetMap
+{
+public:
+  template <class Tm>
+  struct MapData
+  {
+    Bool                  bChanged;
+    std::vector<UChar>   *pNaluData; // Can be null
+    Tm*                   parameterSet;
+  };
+
+  ParameterSetMap(Int maxId)
+  :m_maxId (maxId)
+  {}
+
+  ~ParameterSetMap()
+  {
+    for (typename std::map<Int,MapData<T> >::iterator i = m_paramsetMap.begin(); i!= m_paramsetMap.end(); i++)
+    {
+      delete (*i).second.pNaluData;
+      delete (*i).second.parameterSet;
+    }
+  }
+
+  T *allocatePS(const Int psId)
+  {
+    assert ( psId < m_maxId );
+    if ( m_paramsetMap.find(psId) == m_paramsetMap.end() )
+    {
+      m_paramsetMap[psId].bChanged = true;
+      m_paramsetMap[psId].pNaluData=0;
+      m_paramsetMap[psId].parameterSet = new T;
+      setID(m_paramsetMap[psId].parameterSet, psId);
+    }
+    return m_paramsetMap[psId].parameterSet;
+  }
+
+  Void storePS(Int psId, T *ps, const std::vector<UChar> *pNaluData)
+  {
+    assert ( psId < m_maxId );
+    if ( m_paramsetMap.find(psId) != m_paramsetMap.end() )
+    {
+      MapData<T> &mapData=m_paramsetMap[psId];
+
+      // work out changed flag
+      calculateParameterSetChangedFlag(mapData.bChanged, mapData.pNaluData, pNaluData);
+      delete m_paramsetMap[psId].pNaluData;
+      delete m_paramsetMap[psId].parameterSet;
+
+      m_paramsetMap[psId].parameterSet = ps;
+    }
+    else
