@@ -1598,3 +1598,103 @@ public:
       m_paramsetMap[psId].parameterSet = ps;
     }
     else
+    {
+      m_paramsetMap[psId].parameterSet = ps;
+      m_paramsetMap[psId].bChanged = false;
+    }
+    if (pNaluData != 0)
+    {
+      m_paramsetMap[psId].pNaluData=new std::vector<UChar>;
+      *(m_paramsetMap[psId].pNaluData) = *pNaluData;
+    }
+    else
+    {
+      m_paramsetMap[psId].pNaluData=0;
+    }
+  }
+
+  Void setChangedFlag(Int psId, Bool bChanged=true)
+  {
+    if ( m_paramsetMap.find(psId) != m_paramsetMap.end() )
+    {
+      m_paramsetMap[psId].bChanged=bChanged;
+    }
+  }
+
+  Void clearChangedFlag(Int psId)
+  {
+    if ( m_paramsetMap.find(psId) != m_paramsetMap.end() )
+    {
+      m_paramsetMap[psId].bChanged=false;
+    }
+  }
+
+  Bool getChangedFlag(Int psId) const
+  {
+    const typename std::map<Int,MapData<T> >::const_iterator constit=m_paramsetMap.find(psId);
+    if ( constit != m_paramsetMap.end() )
+    {
+      return constit->second.bChanged;
+    }
+    return false;
+  }
+
+  T* getPS(Int psId)
+  {
+    typename std::map<Int,MapData<T> >::iterator it=m_paramsetMap.find(psId);
+    return ( it == m_paramsetMap.end() ) ? NULL : (it)->second.parameterSet;
+  }
+
+  const T* getPS(Int psId) const
+  {
+    typename std::map<Int,MapData<T> >::const_iterator it=m_paramsetMap.find(psId);
+    return ( it == m_paramsetMap.end() ) ? NULL : (it)->second.parameterSet;
+  }
+
+  T* getFirstPS()
+  {
+    return (m_paramsetMap.begin() == m_paramsetMap.end() ) ? NULL : m_paramsetMap.begin()->second.parameterSet;
+  }
+
+private:
+  std::map<Int,MapData<T> > m_paramsetMap;
+  Int                       m_maxId;
+
+  static Void setID(T* parameterSet, const Int psId);
+};
+
+
+class ParameterSetManager
+{
+public:
+                 ParameterSetManager();
+  virtual        ~ParameterSetManager();
+
+  //! store sequence parameter set and take ownership of it
+  Void           storeVPS(TComVPS *vps, const std::vector<UChar> &naluData) { m_vpsMap.storePS( vps->getVPSId(), vps, &naluData); };
+  //! get pointer to existing video parameter set
+  TComVPS*       getVPS(Int vpsId)                                           { return m_vpsMap.getPS(vpsId); };
+  Bool           getVPSChangedFlag(Int vpsId) const                          { return m_vpsMap.getChangedFlag(vpsId); }
+  Void           clearVPSChangedFlag(Int vpsId)                              { m_vpsMap.clearChangedFlag(vpsId); }
+  TComVPS*       getFirstVPS()                                               { return m_vpsMap.getFirstPS(); };
+
+  //! store sequence parameter set and take ownership of it
+  Void           storeSPS(TComSPS *sps, const std::vector<UChar> &naluData) { m_spsMap.storePS( sps->getSPSId(), sps, &naluData); };
+  //! get pointer to existing sequence parameter set
+  TComSPS*       getSPS(Int spsId)                                           { return m_spsMap.getPS(spsId); };
+  Bool           getSPSChangedFlag(Int spsId) const                          { return m_spsMap.getChangedFlag(spsId); }
+  Void           clearSPSChangedFlag(Int spsId)                              { m_spsMap.clearChangedFlag(spsId); }
+  TComSPS*       getFirstSPS()                                               { return m_spsMap.getFirstPS(); };
+
+  //! store picture parameter set and take ownership of it
+  Void           storePPS(TComPPS *pps, const std::vector<UChar> &naluData) { m_ppsMap.storePS( pps->getPPSId(), pps, &naluData); };
+  //! get pointer to existing picture parameter set
+  TComPPS*       getPPS(Int ppsId)                                           { return m_ppsMap.getPS(ppsId); };
+  Bool           getPPSChangedFlag(Int ppsId) const                          { return m_ppsMap.getChangedFlag(ppsId); }
+  Void           clearPPSChangedFlag(Int ppsId)                              { m_ppsMap.clearChangedFlag(ppsId); }
+  TComPPS*       getFirstPPS()                                               { return m_ppsMap.getFirstPS(); };
+
+  //! activate a SPS from a active parameter sets SEI message
+  //! \returns true, if activation is successful
+  // Bool           activateSPSWithSEI(Int SPSId);
+
