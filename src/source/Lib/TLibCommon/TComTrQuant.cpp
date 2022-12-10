@@ -598,3 +598,103 @@ Void partialButterfly16(TCoeff *src, TCoeff *dst, Int shift, Int line)
   TCoeff EEE[2],EEO[2];
   TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
 
+  for (j=0; j<line; j++)
+  {
+    /* E and O*/
+    for (k=0;k<8;k++)
+    {
+      E[k] = src[k] + src[15-k];
+      O[k] = src[k] - src[15-k];
+    }
+    /* EE and EO */
+    for (k=0;k<4;k++)
+    {
+      EE[k] = E[k] + E[7-k];
+      EO[k] = E[k] - E[7-k];
+    }
+    /* EEE and EEO */
+    EEE[0] = EE[0] + EE[3];
+    EEO[0] = EE[0] - EE[3];
+    EEE[1] = EE[1] + EE[2];
+    EEO[1] = EE[1] - EE[2];
+
+    dst[ 0      ] = (g_aiT16[TRANSFORM_FORWARD][ 0][0]*EEE[0] + g_aiT16[TRANSFORM_FORWARD][ 0][1]*EEE[1] + add)>>shift;
+    dst[ 8*line ] = (g_aiT16[TRANSFORM_FORWARD][ 8][0]*EEE[0] + g_aiT16[TRANSFORM_FORWARD][ 8][1]*EEE[1] + add)>>shift;
+    dst[ 4*line ] = (g_aiT16[TRANSFORM_FORWARD][ 4][0]*EEO[0] + g_aiT16[TRANSFORM_FORWARD][ 4][1]*EEO[1] + add)>>shift;
+    dst[ 12*line] = (g_aiT16[TRANSFORM_FORWARD][12][0]*EEO[0] + g_aiT16[TRANSFORM_FORWARD][12][1]*EEO[1] + add)>>shift;
+
+    for (k=2;k<16;k+=4)
+    {
+      dst[ k*line ] = (g_aiT16[TRANSFORM_FORWARD][k][0]*EO[0] + g_aiT16[TRANSFORM_FORWARD][k][1]*EO[1] +
+                       g_aiT16[TRANSFORM_FORWARD][k][2]*EO[2] + g_aiT16[TRANSFORM_FORWARD][k][3]*EO[3] + add)>>shift;
+    }
+
+    for (k=1;k<16;k+=2)
+    {
+      dst[ k*line ] = (g_aiT16[TRANSFORM_FORWARD][k][0]*O[0] + g_aiT16[TRANSFORM_FORWARD][k][1]*O[1] +
+                       g_aiT16[TRANSFORM_FORWARD][k][2]*O[2] + g_aiT16[TRANSFORM_FORWARD][k][3]*O[3] +
+                       g_aiT16[TRANSFORM_FORWARD][k][4]*O[4] + g_aiT16[TRANSFORM_FORWARD][k][5]*O[5] +
+                       g_aiT16[TRANSFORM_FORWARD][k][6]*O[6] + g_aiT16[TRANSFORM_FORWARD][k][7]*O[7] + add)>>shift;
+    }
+
+    src += 16;
+    dst ++;
+
+  }
+}
+
+/** 16x16 inverse transform implemented using partial butterfly structure (1D)
+ *  \param src            input data (transform coefficients)
+ *  \param dst            output data (residual)
+ *  \param shift          specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
+ */
+Void partialButterflyInverse16(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
+{
+  Int j,k;
+  TCoeff E[8],O[8];
+  TCoeff EE[4],EO[4];
+  TCoeff EEE[2],EEO[2];
+  TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
+
+  for (j=0; j<line; j++)
+  {
+    /* Utilizing symmetry properties to the maximum to minimize the number of multiplications */
+    for (k=0;k<8;k++)
+    {
+      O[k] = g_aiT16[TRANSFORM_INVERSE][ 1][k]*src[ line]   + g_aiT16[TRANSFORM_INVERSE][ 3][k]*src[ 3*line] +
+             g_aiT16[TRANSFORM_INVERSE][ 5][k]*src[ 5*line] + g_aiT16[TRANSFORM_INVERSE][ 7][k]*src[ 7*line] +
+             g_aiT16[TRANSFORM_INVERSE][ 9][k]*src[ 9*line] + g_aiT16[TRANSFORM_INVERSE][11][k]*src[11*line] +
+             g_aiT16[TRANSFORM_INVERSE][13][k]*src[13*line] + g_aiT16[TRANSFORM_INVERSE][15][k]*src[15*line];
+    }
+    for (k=0;k<4;k++)
+    {
+      EO[k] = g_aiT16[TRANSFORM_INVERSE][ 2][k]*src[ 2*line] + g_aiT16[TRANSFORM_INVERSE][ 6][k]*src[ 6*line] +
+              g_aiT16[TRANSFORM_INVERSE][10][k]*src[10*line] + g_aiT16[TRANSFORM_INVERSE][14][k]*src[14*line];
+    }
+    EEO[0] = g_aiT16[TRANSFORM_INVERSE][4][0]*src[ 4*line ] + g_aiT16[TRANSFORM_INVERSE][12][0]*src[ 12*line ];
+    EEE[0] = g_aiT16[TRANSFORM_INVERSE][0][0]*src[ 0      ] + g_aiT16[TRANSFORM_INVERSE][ 8][0]*src[ 8*line  ];
+    EEO[1] = g_aiT16[TRANSFORM_INVERSE][4][1]*src[ 4*line ] + g_aiT16[TRANSFORM_INVERSE][12][1]*src[ 12*line ];
+    EEE[1] = g_aiT16[TRANSFORM_INVERSE][0][1]*src[ 0      ] + g_aiT16[TRANSFORM_INVERSE][ 8][1]*src[ 8*line  ];
+
+    /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
+    for (k=0;k<2;k++)
+    {
+      EE[k] = EEE[k] + EEO[k];
+      EE[k+2] = EEE[1-k] - EEO[1-k];
+    }
+    for (k=0;k<4;k++)
+    {
+      E[k] = EE[k] + EO[k];
+      E[k+4] = EE[3-k] - EO[3-k];
+    }
+    for (k=0;k<8;k++)
+    {
+      dst[k]   = Clip3( outputMinimum, outputMaximum, (E[k] + O[k] + add)>>shift );
+      dst[k+8] = Clip3( outputMinimum, outputMaximum, (E[7-k] - O[7-k] + add)>>shift );
+    }
+    src ++;
+    dst += 16;
+  }
