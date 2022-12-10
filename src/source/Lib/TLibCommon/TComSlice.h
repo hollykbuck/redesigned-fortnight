@@ -1698,3 +1698,22 @@ public:
   //! \returns true, if activation is successful
   // Bool           activateSPSWithSEI(Int SPSId);
 
+  //! activate a PPS and depending on isIDR parameter also SPS and VPS
+  //! \returns true, if activation is successful
+  Bool           activatePPS(Int ppsId, Bool isIRAP);
+
+  const TComVPS* getActiveVPS()const { return m_vpsMap.getPS(m_activeVPSId); };
+  const TComSPS* getActiveSPS()const { return m_spsMap.getPS(m_activeSPSId); };
+
+protected:
+  ParameterSetMap<TComVPS> m_vpsMap;
+  ParameterSetMap<TComSPS> m_spsMap;
+  ParameterSetMap<TComPPS> m_ppsMap;
+
+  Int m_activeVPSId; // -1 for nothing active
+  Int m_activeSPSId; // -1 for nothing active
+};
+
+//! \}
+
+#endif // __TCOMSLICE__
