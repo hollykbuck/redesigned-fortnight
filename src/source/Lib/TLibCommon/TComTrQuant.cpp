@@ -698,3 +698,103 @@ Void partialButterflyInverse16(TCoeff *src, TCoeff *dst, Int shift, Int line, co
     src ++;
     dst += 16;
   }
+}
+
+/** 32x32 forward transform implemented using partial butterfly structure (1D)
+ *  \param src   input data (residual)
+ *  \param dst   output data (transform coefficients)
+ *  \param shift specifies right shift after 1D transform
+ *  \param line
+ */
+Void partialButterfly32(TCoeff *src, TCoeff *dst, Int shift, Int line)
+{
+  Int j,k;
+  TCoeff E[16],O[16];
+  TCoeff EE[8],EO[8];
+  TCoeff EEE[4],EEO[4];
+  TCoeff EEEE[2],EEEO[2];
+  TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
+
+  for (j=0; j<line; j++)
+  {
+    /* E and O*/
+    for (k=0;k<16;k++)
+    {
+      E[k] = src[k] + src[31-k];
+      O[k] = src[k] - src[31-k];
+    }
+    /* EE and EO */
+    for (k=0;k<8;k++)
+    {
+      EE[k] = E[k] + E[15-k];
+      EO[k] = E[k] - E[15-k];
+    }
+    /* EEE and EEO */
+    for (k=0;k<4;k++)
+    {
+      EEE[k] = EE[k] + EE[7-k];
+      EEO[k] = EE[k] - EE[7-k];
+    }
+    /* EEEE and EEEO */
+    EEEE[0] = EEE[0] + EEE[3];
+    EEEO[0] = EEE[0] - EEE[3];
+    EEEE[1] = EEE[1] + EEE[2];
+    EEEO[1] = EEE[1] - EEE[2];
+
+    dst[ 0       ] = (g_aiT32[TRANSFORM_FORWARD][ 0][0]*EEEE[0] + g_aiT32[TRANSFORM_FORWARD][ 0][1]*EEEE[1] + add)>>shift;
+    dst[ 16*line ] = (g_aiT32[TRANSFORM_FORWARD][16][0]*EEEE[0] + g_aiT32[TRANSFORM_FORWARD][16][1]*EEEE[1] + add)>>shift;
+    dst[ 8*line  ] = (g_aiT32[TRANSFORM_FORWARD][ 8][0]*EEEO[0] + g_aiT32[TRANSFORM_FORWARD][ 8][1]*EEEO[1] + add)>>shift;
+    dst[ 24*line ] = (g_aiT32[TRANSFORM_FORWARD][24][0]*EEEO[0] + g_aiT32[TRANSFORM_FORWARD][24][1]*EEEO[1] + add)>>shift;
+    for (k=4;k<32;k+=8)
+    {
+      dst[ k*line ] = (g_aiT32[TRANSFORM_FORWARD][k][0]*EEO[0] + g_aiT32[TRANSFORM_FORWARD][k][1]*EEO[1] +
+                       g_aiT32[TRANSFORM_FORWARD][k][2]*EEO[2] + g_aiT32[TRANSFORM_FORWARD][k][3]*EEO[3] + add)>>shift;
+    }
+    for (k=2;k<32;k+=4)
+    {
+      dst[ k*line ] = (g_aiT32[TRANSFORM_FORWARD][k][0]*EO[0] + g_aiT32[TRANSFORM_FORWARD][k][1]*EO[1] +
+                       g_aiT32[TRANSFORM_FORWARD][k][2]*EO[2] + g_aiT32[TRANSFORM_FORWARD][k][3]*EO[3] +
+                       g_aiT32[TRANSFORM_FORWARD][k][4]*EO[4] + g_aiT32[TRANSFORM_FORWARD][k][5]*EO[5] +
+                       g_aiT32[TRANSFORM_FORWARD][k][6]*EO[6] + g_aiT32[TRANSFORM_FORWARD][k][7]*EO[7] + add)>>shift;
+    }
+    for (k=1;k<32;k+=2)
+    {
+      dst[ k*line ] = (g_aiT32[TRANSFORM_FORWARD][k][ 0]*O[ 0] + g_aiT32[TRANSFORM_FORWARD][k][ 1]*O[ 1] +
+                       g_aiT32[TRANSFORM_FORWARD][k][ 2]*O[ 2] + g_aiT32[TRANSFORM_FORWARD][k][ 3]*O[ 3] +
+                       g_aiT32[TRANSFORM_FORWARD][k][ 4]*O[ 4] + g_aiT32[TRANSFORM_FORWARD][k][ 5]*O[ 5] +
+                       g_aiT32[TRANSFORM_FORWARD][k][ 6]*O[ 6] + g_aiT32[TRANSFORM_FORWARD][k][ 7]*O[ 7] +
+                       g_aiT32[TRANSFORM_FORWARD][k][ 8]*O[ 8] + g_aiT32[TRANSFORM_FORWARD][k][ 9]*O[ 9] +
+                       g_aiT32[TRANSFORM_FORWARD][k][10]*O[10] + g_aiT32[TRANSFORM_FORWARD][k][11]*O[11] +
+                       g_aiT32[TRANSFORM_FORWARD][k][12]*O[12] + g_aiT32[TRANSFORM_FORWARD][k][13]*O[13] +
+                       g_aiT32[TRANSFORM_FORWARD][k][14]*O[14] + g_aiT32[TRANSFORM_FORWARD][k][15]*O[15] + add)>>shift;
+    }
+
+    src += 32;
+    dst ++;
+  }
+}
+
+/** 32x32 inverse transform implemented using partial butterfly structure (1D)
+ *  \param src   input data (transform coefficients)
+ *  \param dst   output data (residual)
+ *  \param shift specifies right shift after 1D transform
+ *  \param line
+ *  \param outputMinimum  minimum for clipping
+ *  \param outputMaximum  maximum for clipping
+ */
+Void partialButterflyInverse32(TCoeff *src, TCoeff *dst, Int shift, Int line, const TCoeff outputMinimum, const TCoeff outputMaximum)
+{
+  Int j,k;
+  TCoeff E[16],O[16];
+  TCoeff EE[8],EO[8];
+  TCoeff EEE[4],EEO[4];
+  TCoeff EEEE[2],EEEO[2];
+  TCoeff add = (shift > 0) ? (1<<(shift-1)) : 0;
+
+  for (j=0; j<line; j++)
+  {
+    /* Utilizing symmetry properties to the maximum to minimize the number of multiplications */
+    for (k=0;k<16;k++)
+    {
+      O[k] = g_aiT32[TRANSFORM_INVERSE][ 1][k]*src[ line    ] + g_aiT32[TRANSFORM_INVERSE][ 3][k]*src[ 3*line  ] +
+             g_aiT32[TRANSFORM_INVERSE][ 5][k]*src[ 5*line  ] + g_aiT32[TRANSFORM_INVERSE][ 7][k]*src[ 7*line  ] +
