@@ -98,3 +98,103 @@ private:
   SChar*        m_phQP;                                 ///< array of QP values
   UChar*        m_ChromaQpAdj;                          ///< array of chroma QP adjustments (indexed). when value = 0, cu_chroma_qp_offset_flag=0; when value>0, indicates cu_chroma_qp_offset_flag=1 and cu_chroma_qp_offset_idx=value-1
   UInt          m_codedChromaQpAdj;
+  UChar*        m_puhTrIdx;                             ///< array of transform indices
+  UChar*        m_puhTransformSkip[MAX_NUM_COMPONENT];  ///< array of transform skipping flags
+  UChar*        m_puhCbf[MAX_NUM_COMPONENT];            ///< array of coded block flags (CBF)
+  TComCUMvField m_acCUMvField[NUM_REF_PIC_LIST_01];     ///< array of motion vectors.
+  TCoeff*       m_pcTrCoeff[MAX_NUM_COMPONENT];         ///< array of transform coefficient buffers (0->Y, 1->Cb, 2->Cr)
+#if ADAPTIVE_QP_SELECTION
+  TCoeff*       m_pcArlCoeff[MAX_NUM_COMPONENT];        ///< ARL coefficient buffer (0->Y, 1->Cb, 2->Cr)
+  Bool          m_ArlCoeffIsAliasedAllocation;          ///< ARL coefficient buffer is an alias of the global buffer and must not be free()'d
+#endif
+
+  Pel*          m_pcIPCMSample[MAX_NUM_COMPONENT];      ///< PCM sample buffer (0->Y, 1->Cb, 2->Cr)
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // neighbour access variables
+  // -------------------------------------------------------------------------------------------------------------------
+
+  TComDataCU*   m_pCtuAboveLeft;                        ///< pointer of above-left CTU.
+  TComDataCU*   m_pCtuAboveRight;                       ///< pointer of above-right CTU.
+  TComDataCU*   m_pCtuAbove;                            ///< pointer of above CTU.
+  TComDataCU*   m_pCtuLeft;                             ///< pointer of left CTU
+  TComMvField   m_cMvFieldA;                            ///< motion vector of position A
+  TComMvField   m_cMvFieldB;                            ///< motion vector of position B
+  TComMvField   m_cMvFieldC;                            ///< motion vector of position C
+  TComMv        m_cMvPred;                              ///< motion vector predictor
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // coding tool information
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Bool*         m_pbMergeFlag;                          ///< array of merge flags
+  UChar*        m_puhMergeIndex;                        ///< array of merge candidate indices
+#if AMP_MRG
+  Bool          m_bIsMergeAMP;
+#endif
+  UChar*        m_puhIntraDir[MAX_NUM_CHANNEL_TYPE];
+  UChar*        m_puhInterDir;                          ///< array of inter directions
+  SChar*        m_apiMVPIdx[NUM_REF_PIC_LIST_01];       ///< array of motion vector predictor candidates
+  SChar*        m_apiMVPNum[NUM_REF_PIC_LIST_01];       ///< array of number of possible motion vectors predictors
+  Bool*         m_pbIPCMFlag;                           ///< array of intra_pcm flags
+#if MCTS_ENC_CHECK
+  Bool          m_tMctsMvpIsValid;
+#endif
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // misc. variables
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Bool          m_bDecSubCu;                            ///< indicates decoder-mode
+  Double        m_dTotalCost;                           ///< sum of partition RD costs
+  Distortion    m_uiTotalDistortion;                    ///< sum of partition distortion
+  UInt          m_uiTotalBits;                          ///< sum of partition bits
+  UInt          m_uiTotalBins;                          ///< sum of partition bins
+  SChar         m_codedQP;
+  UChar*        m_explicitRdpcmMode[MAX_NUM_COMPONENT]; ///< Stores the explicit RDPCM mode for all TUs belonging to this CU
+
+protected:
+
+  /// adds a single possible motion vector predictor candidate
+  Bool          xAddMVPCandUnscaled           ( AMVPInfo &info, const RefPicList eRefPicList, const Int iRefIdx, const UInt uiPartUnitIdx, const MVP_DIR eDir ) const;
+  Bool          xAddMVPCandWithScaling        ( AMVPInfo &info, const RefPicList eRefPicList, const Int iRefIdx, const UInt uiPartUnitIdx, const MVP_DIR eDir ) const;
+
+  Void          deriveRightBottomIdx          ( UInt uiPartIdx, UInt& ruiPartIdxRB ) const;
+  Bool          xGetColMVP                    ( const RefPicList eRefPicList, const Int ctuRsAddr, const Int partUnitIdx, TComMv& rcMv, const Int refIdx ) const;
+
+  /// compute scaling factor from POC difference
+  static Int    xGetDistScaleFactor           ( Int iCurrPOC, Int iCurrRefPOC, Int iColPOC, Int iColRefPOC );
+
+  Void          xDeriveCenterIdx              ( UInt uiPartIdx, UInt& ruiPartIdxCenter ) const;
+
+public:
+                TComDataCU();
+  virtual       ~TComDataCU();
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // create / destroy / initialize / copy
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void          create                        ( ChromaFormat chromaFormatIDC, UInt uiNumPartition, UInt uiWidth, UInt uiHeight, Bool bDecSubCu, Int unitSize
+#if ADAPTIVE_QP_SELECTION
+                                                , TCoeff *pParentARLBuffer = 0
+#endif
+                                              );
+  Void          destroy                       ( );
+
+  Void          initCtu                       ( TComPic* pcPic, UInt ctuRsAddr );
+  Void          initEstData                   ( const UInt uiDepth, const Int qp, const Bool bTransquantBypass );
+  Void          initSubCU                     ( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, Int qp );
+  Void          setOutsideCUPart              ( UInt uiAbsPartIdx, UInt uiDepth );
+
+  Void          copySubCU                     ( TComDataCU* pcCU, UInt uiPartUnitIdx );
+  Void          copyInterPredInfoFrom         ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefPicList );
+  Void          copyPartFrom                  ( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth );
+
+  Void          copyToPic                     ( UChar uiDepth );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for CU description
+  // -------------------------------------------------------------------------------------------------------------------
+
+  TComPic*         getPic                     ( )                                                          { return m_pcPic;                            }
