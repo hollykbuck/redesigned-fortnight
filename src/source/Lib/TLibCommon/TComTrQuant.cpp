@@ -798,3 +798,103 @@ Void partialButterflyInverse32(TCoeff *src, TCoeff *dst, Int shift, Int line, co
     {
       O[k] = g_aiT32[TRANSFORM_INVERSE][ 1][k]*src[ line    ] + g_aiT32[TRANSFORM_INVERSE][ 3][k]*src[ 3*line  ] +
              g_aiT32[TRANSFORM_INVERSE][ 5][k]*src[ 5*line  ] + g_aiT32[TRANSFORM_INVERSE][ 7][k]*src[ 7*line  ] +
+             g_aiT32[TRANSFORM_INVERSE][ 9][k]*src[ 9*line  ] + g_aiT32[TRANSFORM_INVERSE][11][k]*src[ 11*line ] +
+             g_aiT32[TRANSFORM_INVERSE][13][k]*src[ 13*line ] + g_aiT32[TRANSFORM_INVERSE][15][k]*src[ 15*line ] +
+             g_aiT32[TRANSFORM_INVERSE][17][k]*src[ 17*line ] + g_aiT32[TRANSFORM_INVERSE][19][k]*src[ 19*line ] +
+             g_aiT32[TRANSFORM_INVERSE][21][k]*src[ 21*line ] + g_aiT32[TRANSFORM_INVERSE][23][k]*src[ 23*line ] +
+             g_aiT32[TRANSFORM_INVERSE][25][k]*src[ 25*line ] + g_aiT32[TRANSFORM_INVERSE][27][k]*src[ 27*line ] +
+             g_aiT32[TRANSFORM_INVERSE][29][k]*src[ 29*line ] + g_aiT32[TRANSFORM_INVERSE][31][k]*src[ 31*line ];
+    }
+    for (k=0;k<8;k++)
+    {
+      EO[k] = g_aiT32[TRANSFORM_INVERSE][ 2][k]*src[ 2*line  ] + g_aiT32[TRANSFORM_INVERSE][ 6][k]*src[ 6*line  ] +
+              g_aiT32[TRANSFORM_INVERSE][10][k]*src[ 10*line ] + g_aiT32[TRANSFORM_INVERSE][14][k]*src[ 14*line ] +
+              g_aiT32[TRANSFORM_INVERSE][18][k]*src[ 18*line ] + g_aiT32[TRANSFORM_INVERSE][22][k]*src[ 22*line ] +
+              g_aiT32[TRANSFORM_INVERSE][26][k]*src[ 26*line ] + g_aiT32[TRANSFORM_INVERSE][30][k]*src[ 30*line ];
+    }
+    for (k=0;k<4;k++)
+    {
+      EEO[k] = g_aiT32[TRANSFORM_INVERSE][ 4][k]*src[  4*line ] + g_aiT32[TRANSFORM_INVERSE][12][k]*src[ 12*line ] +
+               g_aiT32[TRANSFORM_INVERSE][20][k]*src[ 20*line ] + g_aiT32[TRANSFORM_INVERSE][28][k]*src[ 28*line ];
+    }
+    EEEO[0] = g_aiT32[TRANSFORM_INVERSE][8][0]*src[ 8*line ] + g_aiT32[TRANSFORM_INVERSE][24][0]*src[ 24*line ];
+    EEEO[1] = g_aiT32[TRANSFORM_INVERSE][8][1]*src[ 8*line ] + g_aiT32[TRANSFORM_INVERSE][24][1]*src[ 24*line ];
+    EEEE[0] = g_aiT32[TRANSFORM_INVERSE][0][0]*src[ 0      ] + g_aiT32[TRANSFORM_INVERSE][16][0]*src[ 16*line ];
+    EEEE[1] = g_aiT32[TRANSFORM_INVERSE][0][1]*src[ 0      ] + g_aiT32[TRANSFORM_INVERSE][16][1]*src[ 16*line ];
+
+    /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
+    EEE[0] = EEEE[0] + EEEO[0];
+    EEE[3] = EEEE[0] - EEEO[0];
+    EEE[1] = EEEE[1] + EEEO[1];
+    EEE[2] = EEEE[1] - EEEO[1];
+    for (k=0;k<4;k++)
+    {
+      EE[k] = EEE[k] + EEO[k];
+      EE[k+4] = EEE[3-k] - EEO[3-k];
+    }
+    for (k=0;k<8;k++)
+    {
+      E[k] = EE[k] + EO[k];
+      E[k+8] = EE[7-k] - EO[7-k];
+    }
+    for (k=0;k<16;k++)
+    {
+      dst[k]    = Clip3( outputMinimum, outputMaximum, (E[k] + O[k] + add)>>shift );
+      dst[k+16] = Clip3( outputMinimum, outputMaximum, (E[15-k] - O[15-k] + add)>>shift );
+    }
+    src ++;
+    dst += 32;
+  }
+}
+
+/** MxN forward transform (2D)
+*  \param bitDepth              [in]  bit depth
+*  \param block                 [in]  residual block
+*  \param coeff                 [out] transform coefficients
+*  \param iWidth                [in]  width of transform
+*  \param iHeight               [in]  height of transform
+*  \param useDST                [in]
+*  \param maxLog2TrDynamicRange [in]
+
+*/
+Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight, Bool useDST, const Int maxLog2TrDynamicRange)
+{
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_FORWARD];
+
+  const Int shift_1st = ((g_aucConvertToBit[iWidth] + 2) +  bitDepth + TRANSFORM_MATRIX_SHIFT) - maxLog2TrDynamicRange;
+  const Int shift_2nd = (g_aucConvertToBit[iHeight] + 2) + TRANSFORM_MATRIX_SHIFT;
+
+  assert(shift_1st >= 0);
+  assert(shift_2nd >= 0);
+
+  TCoeff tmp[ MAX_TU_SIZE * MAX_TU_SIZE ];
+
+  switch (iWidth)
+  {
+    case 4:
+      {
+        if ((iHeight == 4) && useDST)    // Check for DCT or DST
+        {
+           fastForwardDst( block, tmp, shift_1st );
+        }
+        else
+        {
+          partialButterfly4 ( block, tmp, shift_1st, iHeight );
+        }
+      }
+      break;
+
+    case 8:     partialButterfly8 ( block, tmp, shift_1st, iHeight );  break;
+    case 16:    partialButterfly16( block, tmp, shift_1st, iHeight );  break;
+    case 32:    partialButterfly32( block, tmp, shift_1st, iHeight );  break;
+    default:
+      assert(0); exit (1); break;
+  }
+
+  switch (iHeight)
+  {
+    case 4:
+      {
+        if ((iWidth == 4) && useDST)    // Check for DCT or DST
+        {
+          fastForwardDst( tmp, coeff, shift_2nd );
