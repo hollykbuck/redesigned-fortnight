@@ -898,3 +898,103 @@ Void xTrMxN(Int bitDepth, TCoeff *block, TCoeff *coeff, Int iWidth, Int iHeight,
         if ((iWidth == 4) && useDST)    // Check for DCT or DST
         {
           fastForwardDst( tmp, coeff, shift_2nd );
+        }
+        else
+        {
+          partialButterfly4 ( tmp, coeff, shift_2nd, iWidth );
+        }
+      }
+      break;
+
+    case 8:     partialButterfly8 ( tmp, coeff, shift_2nd, iWidth );    break;
+    case 16:    partialButterfly16( tmp, coeff, shift_2nd, iWidth );    break;
+    case 32:    partialButterfly32( tmp, coeff, shift_2nd, iWidth );    break;
+    default:
+      assert(0); exit (1); break;
+  }
+}
+
+
+/** MxN inverse transform (2D)
+*  \param bitDepth              [in]  bit depth
+*  \param coeff                 [in]  transform coefficients
+*  \param block                 [out] residual block
+*  \param iWidth                [in]  width of transform
+*  \param iHeight               [in]  height of transform
+*  \param useDST                [in]
+*  \param maxLog2TrDynamicRange [in]
+*/
+Void xITrMxN(Int bitDepth, TCoeff *coeff, TCoeff *block, Int iWidth, Int iHeight, Bool useDST, const Int maxLog2TrDynamicRange)
+{
+  const Int TRANSFORM_MATRIX_SHIFT = g_transformMatrixShift[TRANSFORM_INVERSE];
+
+  Int shift_1st = TRANSFORM_MATRIX_SHIFT + 1; //1 has been added to shift_1st at the expense of shift_2nd
+  Int shift_2nd = (TRANSFORM_MATRIX_SHIFT + maxLog2TrDynamicRange - 1) - bitDepth;
+  const TCoeff clipMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff clipMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+
+  assert(shift_1st >= 0);
+  assert(shift_2nd >= 0);
+
+  TCoeff tmp[MAX_TU_SIZE * MAX_TU_SIZE];
+
+  switch (iHeight)
+  {
+    case 4:
+      {
+        if ((iWidth == 4) && useDST)    // Check for DCT or DST
+        {
+          fastInverseDst( coeff, tmp, shift_1st, clipMinimum, clipMaximum);
+        }
+        else
+        {
+          partialButterflyInverse4 ( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum);
+        }
+      }
+      break;
+
+    case  8: partialButterflyInverse8 ( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum); break;
+    case 16: partialButterflyInverse16( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum); break;
+    case 32: partialButterflyInverse32( coeff, tmp, shift_1st, iWidth, clipMinimum, clipMaximum); break;
+
+    default:
+      assert(0); exit (1); break;
+  }
+
+  switch (iWidth)
+  {
+    // Clipping here is not in the standard, but is used to protect the "Pel" data type into which the inverse-transformed samples will be copied
+    case 4:
+      {
+        if ((iHeight == 4) && useDST)    // Check for DCT or DST
+        {
+          fastInverseDst( tmp, block, shift_2nd, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max() );
+        }
+        else
+        {
+          partialButterflyInverse4 ( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max());
+        }
+      }
+      break;
+
+    case  8: partialButterflyInverse8 ( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max()); break;
+    case 16: partialButterflyInverse16( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max()); break;
+    case 32: partialButterflyInverse32( tmp, block, shift_2nd, iHeight, std::numeric_limits<Pel>::min(), std::numeric_limits<Pel>::max()); break;
+
+    default:
+      assert(0); exit (1); break;
+  }
+}
+
+
+// To minimize the distortion only. No rate is considered.
+Void TComTrQuant::signBitHidingHDQ( TCoeff* pQCoef, TCoeff* pCoef, TCoeff* deltaU, const TUEntropyCodingParameters &codingParameters, const Int maxLog2TrDynamicRange )
+{
+  const UInt width     = codingParameters.widthInGroups  << MLS_CG_LOG2_WIDTH;
+  const UInt height    = codingParameters.heightInGroups << MLS_CG_LOG2_HEIGHT;
+  const UInt groupSize = 1 << MLS_CG_SIZE;
+
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+
+  Int lastCG = -1;
