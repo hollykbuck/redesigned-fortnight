@@ -298,3 +298,103 @@ public:
   const TComCUMvField* getCUMvField           ( RefPicList e ) const                                       { return &m_acCUMvField[e];                  }
 
   TCoeff*       getCoeff                      ( ComponentID component )                                    { return m_pcTrCoeff[component];             }
+
+#if ADAPTIVE_QP_SELECTION
+  TCoeff*       getArlCoeff                   ( ComponentID component )                                    { return m_pcArlCoeff[component];            }
+#endif
+  Pel*          getPCMSample                  ( ComponentID component )                                    { return m_pcIPCMSample[component];          }
+
+  UChar         getCbf                        ( UInt uiIdx, ComponentID eType ) const                      { return m_puhCbf[eType][uiIdx];             }
+  UChar*        getCbf                        ( ComponentID eType )                                        { return m_puhCbf[eType];                    }
+  UChar         getCbf                        ( UInt uiIdx, ComponentID eType, UInt uiTrDepth ) const      { return ( ( getCbf( uiIdx, eType ) >> uiTrDepth ) & 0x1 ); }
+  Void          setCbf                        ( UInt uiIdx, ComponentID eType, UChar uh )                  { m_puhCbf[eType][uiIdx] = uh;               }
+  Void          clearCbf                      ( UInt uiIdx, ComponentID eType, UInt uiNumParts );
+  UChar         getQtRootCbf                  ( UInt uiIdx ) const;
+
+  Void          setCbfSubParts                ( const UInt uiCbf[MAX_NUM_COMPONENT],  UInt uiAbsPartIdx, UInt uiDepth );
+  Void          setCbfSubParts                ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiDepth );
+  Void          setCbfSubParts                ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+
+  Void          setCbfPartRange               ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes );
+  Void          bitwiseOrCbfPartRange         ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for coding tool information
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Bool*         getMergeFlag                  ( )                                                          { return m_pbMergeFlag;                      }
+  Bool          getMergeFlag                  ( UInt uiIdx ) const                                         { return m_pbMergeFlag[uiIdx];               }
+  Void          setMergeFlag                  ( UInt uiIdx, Bool b )                                       { m_pbMergeFlag[uiIdx] = b;                  }
+  Void          setMergeFlagSubParts          ( Bool bMergeFlag, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+
+  UChar*        getMergeIndex                 ( )                                                          { return m_puhMergeIndex;                    }
+  UChar         getMergeIndex                 ( UInt uiIdx ) const                                         { return m_puhMergeIndex[uiIdx];             }
+  Void          setMergeIndex                 ( UInt uiIdx, UInt uiMergeIndex )                            { m_puhMergeIndex[uiIdx] = uiMergeIndex;     }
+  Void          setMergeIndexSubParts         ( UInt uiMergeIndex, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+  template <typename T>
+  Void          setSubPart                    ( T bParameter, T* pbBaseCtu, UInt uiCUAddr, UInt uiCUDepth, UInt uiPUIdx );
+
+#if AMP_MRG
+  Void          setMergeAMP                   ( Bool b )                                                   { m_bIsMergeAMP = b;                         }
+  Bool          getMergeAMP                   ( ) const                                                    { return m_bIsMergeAMP;                      }
+#endif
+
+  UChar*        getIntraDir                   ( const ChannelType channelType )                   const    { return m_puhIntraDir[channelType];         }
+  UChar         getIntraDir                   ( const ChannelType channelType, const UInt uiIdx ) const    { return m_puhIntraDir[channelType][uiIdx];  }
+
+  Void          setIntraDirSubParts           ( const ChannelType channelType,
+                                                const UInt uiDir,
+                                                const UInt uiAbsPartIdx,
+                                                const UInt uiDepth );
+
+  UChar*        getInterDir                   ( )                                                          { return m_puhInterDir;                      }
+  UChar         getInterDir                   ( UInt uiIdx ) const                                         { return m_puhInterDir[uiIdx];               }
+  Void          setInterDir                   ( UInt uiIdx, UChar  uh )                                    { m_puhInterDir[uiIdx] = uh;                 }
+  Void          setInterDirSubParts           ( UInt uiDir,  UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+  Bool*         getIPCMFlag                   ( )                                                          { return m_pbIPCMFlag;                       }
+  Bool          getIPCMFlag                   ( UInt uiIdx ) const                                         { return m_pbIPCMFlag[uiIdx];                }
+  Void          setIPCMFlag                   ( UInt uiIdx, Bool b )                                       { m_pbIPCMFlag[uiIdx] = b;                   }
+  Void          setIPCMFlagSubParts           ( Bool bIpcmFlag, UInt uiAbsPartIdx, UInt uiDepth );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for accessing partition information
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void          getPartIndexAndSize           ( UInt uiPartIdx, UInt& ruiPartAddr, Int& riWidth, Int& riHeight ) const; // This is for use by a leaf/sub CU object only, with no additional AbsPartIdx
+  UChar         getNumPartitions              ( const UInt uiAbsPartIdx = 0 ) const;
+  Bool          isFirstAbsZorderIdxInDepth    ( UInt uiAbsPartIdx, UInt uiDepth ) const;
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for motion vector
+  // -------------------------------------------------------------------------------------------------------------------
+
+  static Void   getMvField                    ( const TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefPicList, TComMvField& rcMvField );
+
+  Void          fillMvpCand                   ( const UInt uiPartIdx, const UInt uiPartAddr, const RefPicList eRefPicList, const Int iRefIdx, AMVPInfo* pInfo ) const;
+  Bool          isDiffMER                     ( Int xN, Int yN, Int xP, Int yP ) const;
+  Void          getPartPosition               ( UInt partIdx, Int& xP, Int& yP, Int& nPSW, Int& nPSH ) const;
+
+  Void          setMVPIdx                     ( RefPicList eRefPicList, UInt uiIdx, Int iMVPIdx)           { m_apiMVPIdx[eRefPicList][uiIdx] = iMVPIdx; }
+  Int           getMVPIdx                     ( RefPicList eRefPicList, UInt uiIdx) const                  { return m_apiMVPIdx[eRefPicList][uiIdx];    }
+  SChar*        getMVPIdx                     ( RefPicList eRefPicList )                                   { return m_apiMVPIdx[eRefPicList];           }
+
+  Void          setMVPNum                     ( RefPicList eRefPicList, UInt uiIdx, Int iMVPNum )          { m_apiMVPNum[eRefPicList][uiIdx] = iMVPNum; }
+  Int           getMVPNum                     ( RefPicList eRefPicList, UInt uiIdx ) const                 { return m_apiMVPNum[eRefPicList][uiIdx];    }
+  SChar*        getMVPNum                     ( RefPicList eRefPicList )                                   { return m_apiMVPNum[eRefPicList];           }
+
+  Void          setMVPIdxSubParts             ( Int iMVPIdx, RefPicList eRefPicList, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+  Void          setMVPNumSubParts             ( Int iMVPNum, RefPicList eRefPicList, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth );
+
+  Void          clipMv                        ( TComMv&     rcMv     ) const;
+  Void          getMvPredLeft                 ( TComMv&     rcMvPred ) const                               { rcMvPred = m_cMvFieldA.getMv();            }
+  Void          getMvPredAbove                ( TComMv&     rcMvPred ) const                               { rcMvPred = m_cMvFieldB.getMv();            }
+  Void          getMvPredAboveRight           ( TComMv&     rcMvPred ) const                               { rcMvPred = m_cMvFieldC.getMv();            }
+
+  Void          compressMV                    ();
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // utility functions for neighbouring information
+  // -------------------------------------------------------------------------------------------------------------------
+
+  TComDataCU*   getCtuLeft                    ( )                                                          { return m_pCtuLeft;                         }
+  TComDataCU*   getCtuAbove                   ( )                                                          { return m_pCtuAbove;                        }
