@@ -998,3 +998,103 @@ Void TComTrQuant::signBitHidingHDQ( TCoeff* pQCoef, TCoeff* pCoef, TCoeff* delta
   const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
   Int lastCG = -1;
+  Int absSum = 0 ;
+  Int n ;
+
+  for( Int subSet = (width*height-1) >> MLS_CG_SIZE; subSet >= 0; subSet-- )
+  {
+    Int  subPos = subSet << MLS_CG_SIZE;
+    Int  firstNZPosInCG=groupSize , lastNZPosInCG=-1 ;
+    absSum = 0 ;
+
+    for(n = groupSize-1; n >= 0; --n )
+    {
+      if( pQCoef[ codingParameters.scan[ n + subPos ]] )
+      {
+        lastNZPosInCG = n;
+        break;
+      }
+    }
+
+    for(n = 0; n <groupSize; n++ )
+    {
+      if( pQCoef[ codingParameters.scan[ n + subPos ]] )
+      {
+        firstNZPosInCG = n;
+        break;
+      }
+    }
+
+    for(n = firstNZPosInCG; n <=lastNZPosInCG; n++ )
+    {
+      absSum += Int(pQCoef[ codingParameters.scan[ n + subPos ]]);
+    }
+
+    if(lastNZPosInCG>=0 && lastCG==-1)
+    {
+      lastCG = 1 ;
+    }
+
+    if( lastNZPosInCG-firstNZPosInCG>=SBH_THRESHOLD )
+    {
+      UInt signbit = (pQCoef[codingParameters.scan[subPos+firstNZPosInCG]]>0?0:1) ;
+      if( signbit!=(absSum&0x1) )  //compare signbit with sum_parity
+      {
+        TCoeff curCost    = std::numeric_limits<TCoeff>::max();
+        TCoeff minCostInc = std::numeric_limits<TCoeff>::max();
+        Int minPos =-1, finalChange=0, curChange=0;
+
+        for( n = (lastCG==1?lastNZPosInCG:groupSize-1) ; n >= 0; --n )
+        {
+          UInt blkPos   = codingParameters.scan[ n+subPos ];
+          if(pQCoef[ blkPos ] != 0 )
+          {
+            if(deltaU[blkPos]>0)
+            {
+              curCost = - deltaU[blkPos];
+              curChange=1 ;
+            }
+            else
+            {
+              //curChange =-1;
+              if(n==firstNZPosInCG && abs(pQCoef[blkPos])==1)
+              {
+                curCost = std::numeric_limits<TCoeff>::max();
+              }
+              else
+              {
+                curCost = deltaU[blkPos];
+                curChange =-1;
+              }
+            }
+          }
+          else
+          {
+            if(n<firstNZPosInCG)
+            {
+              UInt thisSignBit = (pCoef[blkPos]>=0?0:1);
+              if(thisSignBit != signbit )
+              {
+                curCost = std::numeric_limits<TCoeff>::max();
+              }
+              else
+              {
+                curCost = - (deltaU[blkPos])  ;
+                curChange = 1 ;
+              }
+            }
+            else
+            {
+              curCost = - (deltaU[blkPos])  ;
+              curChange = 1 ;
+            }
+          }
+
+          if( curCost<minCostInc)
+          {
+            minCostInc = curCost ;
+            finalChange = curChange ;
+            minPos = blkPos ;
+          }
+        } //CG loop
+
