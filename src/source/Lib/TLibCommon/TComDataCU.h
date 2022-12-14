@@ -398,3 +398,103 @@ public:
 
   TComDataCU*   getCtuLeft                    ( )                                                          { return m_pCtuLeft;                         }
   TComDataCU*   getCtuAbove                   ( )                                                          { return m_pCtuAbove;                        }
+  TComDataCU*   getCtuAboveLeft               ( )                                                          { return m_pCtuAboveLeft;                    }
+  TComDataCU*   getCtuAboveRight              ( )                                                          { return m_pCtuAboveRight;                   }
+  Bool          CUIsFromSameSlice             ( const TComDataCU *pCU /* Can be NULL */ ) const            { return ( pCU!=NULL && pCU->getSlice()->getSliceCurStartCtuTsAddr() == getSlice()->getSliceCurStartCtuTsAddr() ); }
+  Bool          CUIsFromSameTile              ( const TComDataCU *pCU /* Can be NULL */ ) const;
+  Bool          CUIsFromSameSliceAndTile      ( const TComDataCU *pCU /* Can be NULL */ ) const;
+  Bool          CUIsFromSameSliceTileAndWavefrontRow( const TComDataCU *pCU /* Can be NULL */ ) const;
+  Bool          isLastSubCUOfCtu              ( const UInt absPartIdx ) const;
+
+
+  const TComDataCU*   getPULeft               ( UInt& uiLPartUnitIdx,
+                                                UInt  uiCurrPartUnitIdx,
+                                                Bool  bEnforceSliceRestriction=true,
+                                                Bool  bEnforceTileRestriction=true ) const;
+
+  const TComDataCU*   getPUAbove              ( UInt& uiAPartUnitIdx,
+                                                UInt  uiCurrPartUnitIdx,
+                                                Bool  bEnforceSliceRestriction=true,
+                                                Bool  planarAtCTUBoundary = false,
+                                                Bool  bEnforceTileRestriction=true ) const;
+
+  const TComDataCU*   getPUAboveLeft          ( UInt&  uiALPartUnitIdx, UInt uiCurrPartUnitIdx, Bool bEnforceSliceRestriction=true ) const;
+
+  const TComDataCU*   getQpMinCuLeft          ( UInt&  uiLPartUnitIdx,  UInt uiCurrAbsIdxInCtu ) const;
+  const TComDataCU*   getQpMinCuAbove         ( UInt&  uiAPartUnitIdx,  UInt uiCurrAbsIdxInCtu ) const;
+
+  /// returns CU and part index of the PU above the top row of the current uiCurrPartUnitIdx of the CU, at a horizontal offset (to the right) of uiPartUnitOffset (in parts)
+  const TComDataCU*   getPUAboveRight         ( UInt&  uiARPartUnitIdx, UInt uiCurrPartUnitIdx, UInt uiPartUnitOffset = 1, Bool bEnforceSliceRestriction=true ) const;
+  /// returns CU and part index of the PU left of the lefthand column of the current uiCurrPartUnitIdx of the CU, at a vertical offset (below) of uiPartUnitOffset (in parts)
+  const TComDataCU*   getPUBelowLeft          ( UInt&  uiBLPartUnitIdx, UInt uiCurrPartUnitIdx, UInt uiPartUnitOffset = 1, Bool bEnforceSliceRestriction=true ) const;
+
+  SChar         getRefQP                      ( UInt uiCurrAbsIdxInCtu ) const;
+
+  Void          deriveLeftRightTopIdx         ( UInt uiPartIdx, UInt& ruiPartIdxLT, UInt& ruiPartIdxRT ) const;
+  Void          deriveLeftBottomIdx           ( UInt uiPartIdx, UInt& ruiPartIdxLB ) const;
+
+  Bool          hasEqualMotion                ( UInt uiAbsPartIdx, const TComDataCU* pcCandCU, UInt uiCandAbsPartIdx ) const;
+#if MCTS_ENC_CHECK
+  Void          getInterMergeCandidates       ( UInt uiAbsPartIdx, UInt uiPUIdx, TComMvField* pcMFieldNeighbours, UChar* puhInterDirNeighbours, Int& numValidMergeCand, UInt& numSpatialMergeCandidates , Int mrgCandIdx = -1) const;
+#else
+  Void          getInterMergeCandidates       ( UInt uiAbsPartIdx, UInt uiPUIdx, TComMvField* pcMFieldNeighbours, UChar* puhInterDirNeighbours, Int& numValidMergeCand, Int mrgCandIdx = -1 ) const;
+#endif
+
+  Void          deriveLeftRightTopIdxGeneral  ( UInt uiAbsPartIdx, UInt uiPartIdx, UInt& ruiPartIdxLT, UInt& ruiPartIdxRT ) const;
+  Void          deriveLeftBottomIdxGeneral    ( UInt uiAbsPartIdx, UInt uiPartIdx, UInt& ruiPartIdxLB ) const;
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for modes
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Bool          isIntra                       ( UInt uiPartIdx ) const                                     { return m_pePredMode[ uiPartIdx ] == MODE_INTRA; }
+  Bool          isInter                       ( UInt uiPartIdx ) const                                     { return m_pePredMode[ uiPartIdx ] == MODE_INTER; }
+  Bool          isSkipped                     ( UInt uiPartIdx ) const; ///< returns true, if the partiton is skipped
+  Bool          isBipredRestriction           ( UInt puIdx     ) const;
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for symbol prediction (most probable / mode conversion)
+  // -------------------------------------------------------------------------------------------------------------------
+
+  UInt          getIntraSizeIdx               ( UInt uiAbsPartIdx ) const;
+
+  Void          getAllowedChromaDir           ( UInt uiAbsPartIdx, UInt* uiModeList ) const;
+  Void          getIntraDirPredictor          ( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM_MOST_PROBABLE_MODES], const ComponentID compID, Int* piMode = NULL ) const;
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for SBAC context
+  // -------------------------------------------------------------------------------------------------------------------
+
+  UInt          getCtxSplitFlag               ( UInt   uiAbsPartIdx, UInt uiDepth     ) const;
+  UInt          getCtxQtCbf                   ( TComTU &rTu, const ChannelType chType ) const;
+
+  UInt          getCtxSkipFlag                ( UInt   uiAbsPartIdx ) const;
+  UInt          getCtxInterDir                ( UInt   uiAbsPartIdx ) const;
+
+  UInt&         getTotalBins                  ( )                                                          { return m_uiTotalBins;       }
+  // -------------------------------------------------------------------------------------------------------------------
+  // member functions for RD cost storage
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Double&       getTotalCost                  ( )                                                          { return m_dTotalCost;        }
+  Distortion&   getTotalDistortion            ( )                                                          { return m_uiTotalDistortion; }
+  UInt&         getTotalBits                  ( )                                                          { return m_uiTotalBits;       }
+  UInt&         getTotalNumPart               ( )                                                          { return m_uiNumPartition;    }
+
+  UInt          getCoefScanIdx                ( const UInt uiAbsPartIdx, const UInt uiWidth, const UInt uiHeight, const ComponentID compID ) const ;
+
+};
+
+namespace RasterAddress
+{
+  /** Check whether 2 addresses point to the same column
+   * \param addrA          First address in raster scan order
+   * \param addrB          Second address in raters scan order
+   * \param numUnitsPerRow Number of units in a row
+   * \return Result of test
+   */
+  static inline Bool isEqualCol( Int addrA, Int addrB, Int numUnitsPerRow )
+  {
+    // addrA % numUnitsPerRow == addrB % numUnitsPerRow
+    return (( addrA ^ addrB ) &  ( numUnitsPerRow - 1 ) ) == 0;
+  }
