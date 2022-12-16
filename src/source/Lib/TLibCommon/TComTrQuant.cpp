@@ -1098,3 +1098,103 @@ Void TComTrQuant::signBitHidingHDQ( TCoeff* pQCoef, TCoeff* pCoef, TCoeff* delta
           }
         } //CG loop
 
+        if(pQCoef[minPos] == entropyCodingMaximum || pQCoef[minPos] == entropyCodingMinimum)
+        {
+          finalChange = -1;
+        }
+
+        if(pCoef[minPos]>=0)
+        {
+          pQCoef[minPos] += finalChange ;
+        }
+        else
+        {
+          pQCoef[minPos] -= finalChange ;
+        }
+      } // Hide
+    }
+    if(lastCG==1)
+    {
+      lastCG=0 ;
+    }
+  } // TU loop
+
+  return;
+}
+
+
+Void TComTrQuant::xQuant(       TComTU       &rTu,
+                                TCoeff      * pSrc,
+                                TCoeff      * pDes,
+#if ADAPTIVE_QP_SELECTION
+                                TCoeff      *pArlDes,
+#endif
+                                TCoeff       &uiAbsSum,
+                          const ComponentID   compID,
+                          const QpParam      &cQP )
+{
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt uiWidth        = rect.width;
+  const UInt uiHeight       = rect.height;
+  TComDataCU* pcCU          = rTu.getCU();
+  const UInt uiAbsPartIdx   = rTu.GetAbsPartIdxTU();
+  const Int channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+
+  TCoeff* piCoef    = pSrc;
+  TCoeff* piQCoef   = pDes;
+#if ADAPTIVE_QP_SELECTION
+  TCoeff* piArlCCoef = pArlDes;
+#endif
+
+  const Bool useTransformSkip      = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+  const Int  maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+
+  Bool useRDOQ = useTransformSkip ? m_useRDOQTS : m_useRDOQ;
+  if ( useRDOQ && (isLuma(compID) || RDOQ_CHROMA) )
+  {
+    if ( !m_useSelectiveRDOQ || xNeedRDOQ( rTu, piCoef, compID, cQP ) )
+    {
+#if ADAPTIVE_QP_SELECTION
+      xRateDistOptQuant( rTu, piCoef, pDes, pArlDes, uiAbsSum, compID, cQP );
+#else
+      xRateDistOptQuant( rTu, piCoef, pDes, uiAbsSum, compID, cQP );
+#endif
+    }
+    else
+    {
+      memset( pDes, 0, sizeof( TCoeff ) * uiWidth *uiHeight );
+      uiAbsSum = 0;
+    }
+  }
+  else
+  {
+    TUEntropyCodingParameters codingParameters;
+    getTUEntropyCodingParameters(codingParameters, rTu, compID);
+
+    const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+    const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+
+    TCoeff deltaU[MAX_TU_SIZE * MAX_TU_SIZE];
+
+    const UInt uiLog2TrSize = rTu.GetEquivalentLog2TrSize(compID);
+
+    Int scalingListType = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+    assert(scalingListType < SCALING_LIST_NUM);
+    Int *piQuantCoeff = getQuantCoeff(scalingListType, cQP.rem, uiLog2TrSize-2);
+
+    const Bool enableScalingLists             = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
+    const Int  defaultQuantisationCoefficient = g_quantScales[cQP.rem];
+
+    /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+     * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+     * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+     * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+     */
+
+    // Represents scaling through forward transform
+    Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
+    if (useTransformSkip && pcCU->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag())
+    {
+      iTransformShift = std::max<Int>(0, iTransformShift);
+    }
+
