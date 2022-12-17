@@ -1198,3 +1198,103 @@ Void TComTrQuant::xQuant(       TComTU       &rTu,
       iTransformShift = std::max<Int>(0, iTransformShift);
     }
 
+    const Int iQBits = QUANT_SHIFT + cQP.per + iTransformShift;
+    // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
+
+#if ADAPTIVE_QP_SELECTION
+    Int iQBitsC = MAX_INT;
+    Int iAddC   = MAX_INT;
+
+    if (m_bUseAdaptQpSelect)
+    {
+      iQBitsC = iQBits - ARL_C_PRECISION;
+      iAddC   = 1 << (iQBitsC-1);
+    }
+#endif
+
+    const Int iAdd   = (pcCU->getSlice()->getSliceType()==I_SLICE ? 171 : 85) << (iQBits-9);
+    const Int qBits8 = iQBits - 8;
+
+    for( Int uiBlockPos = 0; uiBlockPos < uiWidth*uiHeight; uiBlockPos++ )
+    {
+      const TCoeff iLevel   = piCoef[uiBlockPos];
+      const TCoeff iSign    = (iLevel < 0 ? -1: 1);
+
+      const Int64  tmpLevel = (Int64)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+
+#if ADAPTIVE_QP_SELECTION
+      if( m_bUseAdaptQpSelect )
+      {
+        piArlCCoef[uiBlockPos] = (TCoeff)((tmpLevel + iAddC ) >> iQBitsC);
+      }
+#endif
+
+      const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+      deltaU[uiBlockPos] = (TCoeff)((tmpLevel - (quantisedMagnitude<<iQBits) )>> qBits8);
+
+      uiAbsSum += quantisedMagnitude;
+      const TCoeff quantisedCoefficient = quantisedMagnitude * iSign;
+
+      piQCoef[uiBlockPos] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+    } // for n
+
+    if( pcCU->getSlice()->getPPS()->getSignDataHidingEnabledFlag() )
+    {
+      if(uiAbsSum >= 2) //this prevents TUs with only one coefficient of value 1 from being tested
+      {
+        signBitHidingHDQ( piQCoef, piCoef, deltaU, codingParameters, maxLog2TrDynamicRange ) ;
+      }
+    }
+  } //if RDOQ
+  //return;
+}
+
+Bool TComTrQuant::xNeedRDOQ( TComTU &rTu, TCoeff * pSrc, const ComponentID compID, const QpParam &cQP )
+{
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt uiWidth        = rect.width;
+  const UInt uiHeight       = rect.height;
+  TComDataCU* pcCU          = rTu.getCU();
+  const UInt uiAbsPartIdx   = rTu.GetAbsPartIdxTU();
+  const Int channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+
+  TCoeff* piCoef    = pSrc;
+
+  const Bool useTransformSkip      = pcCU->getTransformSkip(uiAbsPartIdx, compID);
+  const Int  maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+
+  const UInt uiLog2TrSize = rTu.GetEquivalentLog2TrSize(compID);
+
+  Int scalingListType = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+  assert(scalingListType < SCALING_LIST_NUM);
+  Int *piQuantCoeff = getQuantCoeff(scalingListType, cQP.rem, uiLog2TrSize-2);
+
+  const Bool enableScalingLists             = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
+  const Int  defaultQuantisationCoefficient = g_quantScales[cQP.rem];
+
+  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+    * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+    * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+    * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+    */
+
+  // Represents scaling through forward transform
+  Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
+  if (useTransformSkip && pcCU->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag())
+  {
+    iTransformShift = std::max<Int>(0, iTransformShift);
+  }
+
+  const Int iQBits = QUANT_SHIFT + cQP.per + iTransformShift;
+  // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
+
+  // iAdd is different from the iAdd used in normal quantization
+  const Int iAdd   = (compID == COMPONENT_Y ? 171 : 256) << (iQBits-9);
+
+  for( Int uiBlockPos = 0; uiBlockPos < uiWidth*uiHeight; uiBlockPos++ )
+  {
+    const TCoeff iLevel   = piCoef[uiBlockPos];
+    const Int64  tmpLevel = (Int64)abs(iLevel) * (enableScalingLists ? piQuantCoeff[uiBlockPos] : defaultQuantisationCoefficient);
+    const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
+
+    if ( quantisedMagnitude != 0 )
