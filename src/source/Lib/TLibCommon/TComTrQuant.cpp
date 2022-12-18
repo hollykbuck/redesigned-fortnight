@@ -1298,3 +1298,103 @@ Bool TComTrQuant::xNeedRDOQ( TComTU &rTu, TCoeff * pSrc, const ComponentID compI
     const TCoeff quantisedMagnitude = TCoeff((tmpLevel + iAdd ) >> iQBits);
 
     if ( quantisedMagnitude != 0 )
+    {
+      return true;
+    }
+  } // for n
+  return false;
+}
+
+Void TComTrQuant::xDeQuant(       TComTU        &rTu,
+                            const TCoeff       * pSrc,
+                                  TCoeff       * pDes,
+                            const ComponentID    compID,
+                            const QpParam       &cQP )
+{
+  assert(compID<MAX_NUM_COMPONENT);
+
+        TComDataCU          *pcCU               = rTu.getCU();
+  const UInt                 uiAbsPartIdx       = rTu.GetAbsPartIdxTU();
+  const TComRectangle       &rect               = rTu.getRect(compID);
+  const UInt                 uiWidth            = rect.width;
+  const UInt                 uiHeight           = rect.height;
+  const TCoeff        *const piQCoef            = pSrc;
+        TCoeff        *const piCoef             = pDes;
+  const UInt                 uiLog2TrSize       = rTu.GetEquivalentLog2TrSize(compID);
+  const UInt                 numSamplesInBlock  = uiWidth*uiHeight;
+  const Int                  maxLog2TrDynamicRange  = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const TCoeff               transformMinimum   = -(1 << maxLog2TrDynamicRange);
+  const TCoeff               transformMaximum   =  (1 << maxLog2TrDynamicRange) - 1;
+  const Bool                 enableScalingLists = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
+  const Int                  scalingListType    = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+#if O0043_BEST_EFFORT_DECODING
+  const Int                  channelBitDepth    = pcCU->getSlice()->getSPS()->getStreamBitDepth(toChannelType(compID));
+#else
+  const Int                  channelBitDepth    = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+#endif
+
+  assert (scalingListType < SCALING_LIST_NUM);
+  assert ( uiWidth <= m_uiMaxTrSize );
+
+  // Represents scaling through forward transform
+  const Bool bClipTransformShiftTo0 = (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0) && pcCU->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag();
+  const Int  originalTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
+  const Int  iTransformShift        = bClipTransformShiftTo0 ? std::max<Int>(0, originalTransformShift) : originalTransformShift;
+
+  const Int QP_per = cQP.per;
+  const Int QP_rem = cQP.rem;
+
+  const Int rightShift = (IQUANT_SHIFT - (iTransformShift + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+
+  if(enableScalingLists)
+  {
+    //from the dequantisation equation:
+    //iCoeffQ                         = ((Intermediate_Int(clipQCoef) * piDequantCoef[deQuantIdx]) + iAdd ) >> rightShift
+    //(sizeof(Intermediate_Int) * 8)  =              inputBitDepth    +    dequantCoefBits                   - rightShift
+    const UInt             dequantCoefBits     = 1 + IQUANT_SHIFT + SCALING_LIST_BITS;
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
+
+    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
+    const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
+
+    Int *piDequantCoef = getDequantCoeff(scalingListType,QP_rem,uiLog2TrSize-2);
+
+    if(rightShift > 0)
+    {
+      const Intermediate_Int iAdd = 1 << (rightShift - 1);
+
+      for( Int n = 0; n < numSamplesInBlock; n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
+        const Intermediate_Int iCoeffQ   = ((Intermediate_Int(clipQCoef) * piDequantCoef[n]) + iAdd ) >> rightShift;
+
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+    else
+    {
+      const Int leftShift = -rightShift;
+
+      for( Int n = 0; n < numSamplesInBlock; n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
+        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * piDequantCoef[n]) << leftShift;
+
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+  }
+  else
+  {
+    const Int scale     =  g_invQuantScales[QP_rem];
+    const Int scaleBits =     (IQUANT_SHIFT + 1)   ;
+
+    //from the dequantisation equation:
+    //iCoeffQ                         = Intermediate_Int((Int64(clipQCoef) * scale + iAdd) >> rightShift);
+    //(sizeof(Intermediate_Int) * 8)  =                    inputBitDepth   + scaleBits      - rightShift
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
+    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
+    const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
+
+    if (rightShift > 0)
+    {
