@@ -98,3 +98,103 @@ struct TRCLCU
   Double m_actualSSE;
   Double m_actualMSE;
 #endif
+};
+
+struct TRCParameter
+{
+  Double m_alpha;
+  Double m_beta;
+#if JVET_K0390_RATE_CTRL
+  Int    m_validPix;
+#endif
+#if JVET_M0600_RATE_CTRL
+  Double m_skipRatio;
+#endif
+};
+
+class TEncRCSeq
+{
+public:
+  TEncRCSeq();
+  ~TEncRCSeq();
+
+public:
+#if JVET_Y0105_SW_AND_QDF
+  Void create( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int intraPeriod, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int numberOfLevel, Bool useLCUSeparateModel, Int adaptiveBit );
+#else
+  Void create( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int numberOfLevel, Bool useLCUSeparateModel, Int adaptiveBit );
+#endif
+  Void destroy();
+  Void initBitsRatio( Int bitsRatio[] );
+  Void initGOPID2Level( Int GOPID2Level[] );
+  Void initPicPara( TRCParameter* picPara  = NULL );    // NULL to initial with default value
+  Void initLCUPara( TRCParameter** LCUPara = NULL );    // NULL to initial with default value
+  Void updateAfterPic ( Int bits );
+  Void setAllBitRatio( Double basicLambda, Double* equaCoeffA, Double* equaCoeffB );
+
+public:
+  Int  getTotalFrames()                 { return m_totalFrames; }
+  Int  getTargetRate()                  { return m_targetRate; }
+  Int  getFrameRate()                   { return m_frameRate; }
+  Int  getGOPSize()                     { return m_GOPSize; }
+#if JVET_Y0105_SW_AND_QDF
+  Int  getIntraPeriod()                 { return m_intraPeriod; }
+#endif
+  Int  getPicWidth()                    { return m_picWidth; }
+  Int  getPicHeight()                   { return m_picHeight; }
+  Int  getLCUWidth()                    { return m_LCUWidth; }
+  Int  getLCUHeight()                   { return m_LCUHeight; }
+  Int  getNumberOfLevel()               { return m_numberOfLevel; }
+  Int  getAverageBits()                 { return m_averageBits; }
+  Int  getLeftAverageBits()             { assert( m_framesLeft > 0 ); return (Int)(m_bitsLeft / m_framesLeft); }
+  Bool getUseLCUSeparateModel()         { return m_useLCUSeparateModel; }
+
+  Int  getNumPixel()                    { return m_numberOfPixel; }
+  Int64  getTargetBits()                { return m_targetBits; }
+  Int  getNumberOfLCU()                 { return m_numberOfLCU; }
+  Int* getBitRatio()                    { return m_bitsRatio; }
+  Int  getBitRatio( Int idx )           { assert( idx<m_GOPSize); return m_bitsRatio[idx]; }
+  Int* getGOPID2Level()                 { return m_GOPID2Level; }
+  Int  getGOPID2Level( Int ID )         { assert( ID < m_GOPSize ); return m_GOPID2Level[ID]; }
+  TRCParameter*  getPicPara()                                   { return m_picPara; }
+  TRCParameter   getPicPara( Int level )                        { assert( level < m_numberOfLevel ); return m_picPara[level]; }
+  Void           setPicPara( Int level, TRCParameter para )     { assert( level < m_numberOfLevel ); m_picPara[level] = para; }
+  TRCParameter** getLCUPara()                                   { return m_LCUPara; }
+  TRCParameter*  getLCUPara( Int level )                        { assert( level < m_numberOfLevel ); return m_LCUPara[level]; }
+  TRCParameter   getLCUPara( Int level, Int LCUIdx )            { assert( LCUIdx  < m_numberOfLCU ); return getLCUPara(level)[LCUIdx]; }
+  Void           setLCUPara( Int level, Int LCUIdx, TRCParameter para ) { assert( level < m_numberOfLevel ); assert( LCUIdx  < m_numberOfLCU ); m_LCUPara[level][LCUIdx] = para; }
+
+  Int  getFramesLeft()                  { return m_framesLeft; }
+  Int64  getBitsLeft()                  { return m_bitsLeft; }
+
+  Double getSeqBpp()                    { return m_seqTargetBpp; }
+  Double getAlphaUpdate()               { return m_alphaUpdate; }
+  Double getBetaUpdate()                { return m_betaUpdate; }
+
+  Int    getAdaptiveBits()              { return m_adaptiveBit;  }
+  Double getLastLambda()                { return m_lastLambda;   }
+  Void   setLastLambda( Double lamdba ) { m_lastLambda = lamdba; }
+
+private:
+  Int m_totalFrames;
+  Int m_targetRate;
+  Int m_frameRate;
+  Int m_GOPSize;
+#if JVET_Y0105_SW_AND_QDF
+  Int m_intraPeriod;
+#endif
+  Int m_picWidth;
+  Int m_picHeight;
+  Int m_LCUWidth;
+  Int m_LCUHeight;
+  Int m_numberOfLevel;
+  Int m_averageBits;
+
+  Int m_numberOfPixel;
+  Int64 m_targetBits;
+  Int m_numberOfLCU;
+  Int* m_bitsRatio;
+  Int* m_GOPID2Level;
+  TRCParameter*  m_picPara;
+  TRCParameter** m_LCUPara;
+
