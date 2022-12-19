@@ -198,3 +198,103 @@ private:
   TRCParameter*  m_picPara;
   TRCParameter** m_LCUPara;
 
+  Int m_framesLeft;
+  Int64 m_bitsLeft;
+  Double m_seqTargetBpp;
+  Double m_alphaUpdate;
+  Double m_betaUpdate;
+  Bool m_useLCUSeparateModel;
+
+  Int m_adaptiveBit;
+  Double m_lastLambda;
+};
+
+class TEncRCGOP
+{
+public:
+  TEncRCGOP();
+  ~TEncRCGOP();
+
+public:
+#if JVET_Y0105_SW_AND_QDF
+  Void create( TEncRCSeq* encRCSeq, Int numPic, bool useAdaptiveBitsRatio );
+#else
+  Void create( TEncRCSeq* encRCSeq, Int numPic );
+#endif
+  Void destroy();
+  Void updateAfterPicture( Int bitsCost );
+
+private:
+  Int  xEstGOPTargetBits( TEncRCSeq* encRCSeq, Int GOPSize );
+  Void   xCalEquaCoeff( TEncRCSeq* encRCSeq, Double* lambdaRatio, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize );
+#if JVET_K0390_RATE_CTRL
+  Double xSolveEqua(TEncRCSeq* encRCSeq, Double targetBpp, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize);
+#else
+  Double xSolveEqua( Double targetBpp, Double* equaCoeffA, Double* equaCoeffB, Int GOPSize );
+#endif
+public:
+  TEncRCSeq* getEncRCSeq()        { return m_encRCSeq; }
+  Int  getNumPic()                { return m_numPic;}
+  Int  getTargetBits()            { return m_targetBits; }
+  Int  getPicLeft()               { return m_picLeft; }
+  Int  getBitsLeft()              { return m_bitsLeft; }
+  Int  getTargetBitInGOP( Int i ) { return m_picTargetBitInGOP[i]; }
+
+private:
+  TEncRCSeq* m_encRCSeq;
+  Int* m_picTargetBitInGOP;
+  Int m_numPic;
+  Int m_targetBits;
+  Int m_picLeft;
+  Int m_bitsLeft;
+};
+
+class TEncRCPic
+{
+public:
+  TEncRCPic();
+  ~TEncRCPic();
+
+public:
+  Void create( TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP, Int frameLevel, list<TEncRCPic*>& listPreviousPictures );
+  Void destroy();
+
+  Int    estimatePicQP    ( Double lambda, list<TEncRCPic*>& listPreviousPictures );
+  Int    getRefineBitsForIntra(Int orgBits);
+  Double calculateLambdaIntra(Double alpha, Double beta, Double MADPerPixel, Double bitsPerPixel);
+  Double estimatePicLambda( list<TEncRCPic*>& listPreviousPictures, SliceType eSliceType);
+
+  Void   updateAlphaBetaIntra(Double *alpha, Double *beta);
+
+  Double getLCUTargetBpp(SliceType eSliceType);
+  Double getLCUEstLambdaAndQP(Double bpp, Int clipPicQP, Int *estQP);
+  Double getLCUEstLambda( Double bpp );
+  Int    getLCUEstQP( Double lambda, Int clipPicQP );
+#if JVET_M0600_RATE_CTRL
+  void updateAfterCTU( Int LCUIdx, Int bits, Int QP, Double lambda, Double skipRatio, Bool updateLCUParameter = true);
+#else
+  Void updateAfterCTU( Int LCUIdx, Int bits, Int QP, Double lambda, Bool updateLCUParameter = true );
+#endif
+  Void updateAfterPicture( Int actualHeaderBits, Int actualTotalBits, Double averageQP, Double averageLambda, SliceType eSliceType);
+
+  Void addToPictureLsit( list<TEncRCPic*>& listPreviousPictures );
+  Double calAverageQP();
+  Double calAverageLambda();
+
+private:
+  Int xEstPicTargetBits( TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP );
+  Int xEstPicHeaderBits( list<TEncRCPic*>& listPreviousPictures, Int frameLevel );
+  Int xEstPicLowerBound( TEncRCSeq* encRCSeq, TEncRCGOP* encRCGOP );
+
+public:
+  TEncRCSeq*      getRCSequence()                         { return m_encRCSeq; }
+  TEncRCGOP*      getRCGOP()                              { return m_encRCGOP; }
+
+  Int  getFrameLevel()                                    { return m_frameLevel; }
+  Int  getNumberOfPixel()                                 { return m_numberOfPixel; }
+  Int  getNumberOfLCU()                                   { return m_numberOfLCU; }
+  Int  getTargetBits()                                    { return m_targetBits; }
+  Int  getEstHeaderBits()                                 { return m_estHeaderBits; }
+  Int  getLCULeft()                                       { return m_LCULeft; }
+  Int  getBitsLeft()                                      { return m_bitsLeft; }
+  Int  getPixelsLeft()                                    { return m_pixelsLeft; }
