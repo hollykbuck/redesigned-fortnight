@@ -1398,3 +1398,103 @@ Void TComTrQuant::xDeQuant(       TComTU        &rTu,
 
     if (rightShift > 0)
     {
+      const Intermediate_Int iAdd = 1 << (rightShift - 1);
+
+      for( Int n = 0; n < numSamplesInBlock; n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
+        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale + iAdd) >> rightShift;
+
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+    else
+    {
+      const Int leftShift = -rightShift;
+
+      for( Int n = 0; n < numSamplesInBlock; n++ )
+      {
+        const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, piQCoef[n]));
+        const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
+
+        piCoef[n] = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+      }
+    }
+  }
+}
+
+
+Void TComTrQuant::init(   UInt  uiMaxTrSize,
+                          Bool  bUseRDOQ,
+                          Bool  bUseRDOQTS,
+                          Bool  useSelectiveRDOQ,
+                          Bool  bEnc,
+                          Bool  useTransformSkipFast
+#if ADAPTIVE_QP_SELECTION
+                        , Bool bUseAdaptQpSelect
+#endif
+                       )
+{
+  m_uiMaxTrSize  = uiMaxTrSize;
+  m_bEnc         = bEnc;
+  m_useRDOQ      = bUseRDOQ;
+  m_useRDOQTS    = bUseRDOQTS;
+  m_useSelectiveRDOQ = useSelectiveRDOQ;
+#if ADAPTIVE_QP_SELECTION
+  m_bUseAdaptQpSelect = bUseAdaptQpSelect;
+#endif
+  m_useTransformSkipFast = useTransformSkipFast;
+}
+
+
+Void TComTrQuant::transformNxN(       TComTU        & rTu,
+                                const ComponentID     compID,
+                                      Pel          *  pcResidual,
+                                const UInt            uiStride,
+                                      TCoeff       *  rpcCoeff,
+#if ADAPTIVE_QP_SELECTION
+                                      TCoeff       *  pcArlCoeff,
+#endif
+                                      TCoeff        & uiAbsSum,
+                                const QpParam       & cQP
+                              )
+{
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt uiWidth        = rect.width;
+  const UInt uiHeight       = rect.height;
+  TComDataCU* pcCU          = rTu.getCU();
+  const UInt uiAbsPartIdx   = rTu.GetAbsPartIdxTU();
+  const UInt uiOrgTrDepth   = rTu.GetTransformDepthRel();
+
+  uiAbsSum=0;
+
+  RDPCMMode rdpcmMode = RDPCM_OFF;
+  rdpcmNxN( rTu, compID, pcResidual, uiStride, cQP, rpcCoeff, uiAbsSum, rdpcmMode );
+
+  if (rdpcmMode == RDPCM_OFF)
+  {
+    uiAbsSum = 0;
+    //transform and quantise
+    if(pcCU->getCUTransquantBypass(uiAbsPartIdx))
+    {
+      const Bool rotateResidual = rTu.isNonTransformedResidualRotated(compID);
+      const UInt uiSizeMinus1   = (uiWidth * uiHeight) - 1;
+
+      for (UInt y = 0, coefficientIndex = 0; y<uiHeight; y++)
+      {
+        for (UInt x = 0; x<uiWidth; x++, coefficientIndex++)
+        {
+          const Pel currentSample = pcResidual[(y * uiStride) + x];
+
+          rpcCoeff[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex] = currentSample;
+          uiAbsSum += TCoeff(abs(currentSample));
+        }
+      }
+    }
+    else
+    {
+#if DEBUG_TRANSFORM_AND_QUANTISE
+      std::cout << g_debugCounter << ": " << uiWidth << "x" << uiHeight << " channel " << compID << " TU at input to transform\n";
+      printBlock(pcResidual, uiWidth, uiHeight, uiStride);
+#endif
+
