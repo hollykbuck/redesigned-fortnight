@@ -298,3 +298,103 @@ public:
   Int  getLCULeft()                                       { return m_LCULeft; }
   Int  getBitsLeft()                                      { return m_bitsLeft; }
   Int  getPixelsLeft()                                    { return m_pixelsLeft; }
+  Int  getBitsCoded()                                     { return m_targetBits - m_estHeaderBits - m_bitsLeft; }
+  Int  getLCUCoded()                                      { return m_numberOfLCU - m_LCULeft; }
+  Int  getLowerBound()                                    { return m_lowerBound; }
+  TRCLCU* getLCU()                                        { return m_LCUs; }
+  TRCLCU& getLCU( Int LCUIdx )                            { return m_LCUs[LCUIdx]; }
+  Int  getPicActualHeaderBits()                           { return m_picActualHeaderBits; }
+  Void setBitLeft(Int bits)                               { m_bitsLeft = bits; }
+  Void setTargetBits( Int bits )                          { m_targetBits = bits; m_bitsLeft = bits;}
+  Void setTotalIntraCost(Double cost)                     { m_totalCostIntra = cost; }
+  Void getLCUInitTargetBits();
+
+  Int  getPicActualBits()                                 { return m_picActualBits; }
+  Int  getPicActualQP()                                   { return m_picQP; }
+  Double getPicActualLambda()                             { return m_picLambda; }
+  Int  getPicEstQP()                                      { return m_estPicQP; }
+  Void setPicEstQP( Int QP )                              { m_estPicQP = QP; }
+  Double getPicEstLambda()                                { return m_estPicLambda; }
+  Void setPicEstLambda( Double lambda )                   { m_picLambda = lambda; }
+
+#if JVET_K0390_RATE_CTRL
+  Double getPicMSE()                                      { return m_picMSE; }
+  void  setPicMSE(Double avgMSE)                           { m_picMSE = avgMSE; }
+#endif
+
+private:
+  TEncRCSeq* m_encRCSeq;
+  TEncRCGOP* m_encRCGOP;
+
+  Int m_frameLevel;
+  Int m_numberOfPixel;
+  Int m_numberOfLCU;
+  Int m_targetBits;
+  Int m_estHeaderBits;
+  Int m_estPicQP;
+  Int m_lowerBound;
+  Double m_estPicLambda;
+
+  Int m_LCULeft;
+  Int m_bitsLeft;
+  Int m_pixelsLeft;
+
+  TRCLCU* m_LCUs;
+  Int m_picActualHeaderBits;    // only SH and potential APS
+  Double m_totalCostIntra;
+  Double m_remainingCostIntra;
+  Int m_picActualBits;          // the whole picture, including header
+  Int m_picQP;                  // in integer form
+  Double m_picLambda;
+#if JVET_K0390_RATE_CTRL
+  Double m_picMSE;
+  Int m_validPixelsInPic;
+#endif
+};
+
+class TEncRateCtrl
+{
+public:
+  TEncRateCtrl();
+  ~TEncRateCtrl();
+
+public:
+#if JVET_Y0105_SW_AND_QDF
+  Void init( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int intraPeriod, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int keepHierBits, Bool useLCUSeparateModel, GOPEntry GOPList[MAX_GOP] );
+#else
+  Void init( Int totalFrames, Int targetBitrate, Int frameRate, Int GOPSize, Int picWidth, Int picHeight, Int LCUWidth, Int LCUHeight, Int keepHierBits, Bool useLCUSeparateModel, GOPEntry GOPList[MAX_GOP] );
+#endif
+  Void destroy();
+  Void initRCPic( Int frameLevel );
+  Void initRCGOP( Int numberOfPictures );
+  Void destroyRCGOP();
+
+public:
+  Void       setRCQP ( Int QP ) { m_RCQP = QP;   }
+  Int        getRCQP ()         { return m_RCQP; }
+  TEncRCSeq* getRCSeq()          { assert ( m_encRCSeq != NULL ); return m_encRCSeq; }
+  TEncRCGOP* getRCGOP()          { assert ( m_encRCGOP != NULL ); return m_encRCGOP; }
+  TEncRCPic* getRCPic()          { assert ( m_encRCPic != NULL ); return m_encRCPic; }
+  list<TEncRCPic*>& getPicList() { return m_listRCPictures; }
+  Bool       getCpbSaturationEnabled()  { return m_CpbSaturationEnabled;  }
+  UInt       getCpbState()              { return m_cpbState;       }
+  UInt       getCpbSize()               { return m_cpbSize;        }
+  UInt       getBufferingRate()         { return m_bufferingRate;  }
+  Int        updateCpbState(Int actualBits);
+  Void       initHrdParam(const TComHRD* pcHrd, Int iFrameRate, Double fInitialCpbFullness);
+
+private:
+  TEncRCSeq* m_encRCSeq;
+  TEncRCGOP* m_encRCGOP;
+  TEncRCPic* m_encRCPic;
+  list<TEncRCPic*> m_listRCPictures;
+  Int        m_RCQP;
+  Bool       m_CpbSaturationEnabled;    // Enable target bits saturation to avoid CPB overflow and underflow
+  Int        m_cpbState;                // CPB State 
+  UInt       m_cpbSize;                 // CPB size
+  UInt       m_bufferingRate;           // Buffering rate
+};
+
+#endif
+
+
