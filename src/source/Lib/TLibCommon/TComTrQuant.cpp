@@ -1498,3 +1498,103 @@ Void TComTrQuant::transformNxN(       TComTU        & rTu,
       printBlock(pcResidual, uiWidth, uiHeight, uiStride);
 #endif
 
+      assert( (pcCU->getSlice()->getSPS()->getMaxTrSize() >= uiWidth) );
+
+      if(pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0)
+      {
+        xTransformSkip( pcResidual, uiStride, m_plTempCoeff, rTu, compID );
+      }
+      else
+      {
+        const Int channelBitDepth=pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+        xT( channelBitDepth, rTu.useDST(compID), pcResidual, uiStride, m_plTempCoeff, uiWidth, uiHeight, pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID)) );
+      }
+
+#if DEBUG_TRANSFORM_AND_QUANTISE
+      std::cout << g_debugCounter << ": " << uiWidth << "x" << uiHeight << " channel " << compID << " TU between transform and quantiser\n";
+      printBlock(m_plTempCoeff, uiWidth, uiHeight, uiWidth);
+#endif
+
+      xQuant( rTu, m_plTempCoeff, rpcCoeff,
+
+#if ADAPTIVE_QP_SELECTION
+              pcArlCoeff,
+#endif
+              uiAbsSum, compID, cQP );
+
+#if DEBUG_TRANSFORM_AND_QUANTISE
+      std::cout << g_debugCounter << ": " << uiWidth << "x" << uiHeight << " channel " << compID << " TU at output of quantiser\n";
+      printBlock(rpcCoeff, uiWidth, uiHeight, uiWidth);
+#endif
+    }
+  }
+
+    //set the CBF
+  pcCU->setCbfPartRange((((uiAbsSum > 0) ? 1 : 0) << uiOrgTrDepth), compID, uiAbsPartIdx, rTu.GetAbsPartIdxNumParts(compID));
+}
+
+
+Void TComTrQuant::invTransformNxN(      TComTU        &rTu,
+                                  const ComponentID    compID,
+                                        Pel          *pcResidual,
+                                  const UInt           uiStride,
+                                        TCoeff       * pcCoeff,
+                                  const QpParam       &cQP
+                                        DEBUG_STRING_FN_DECLAREP(psDebug))
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+  const TComRectangle &rect = rTu.getRect(compID);
+  const UInt uiWidth = rect.width;
+  const UInt uiHeight = rect.height;
+
+  if (uiWidth != uiHeight) //for intra, the TU will have been split above this level, so this condition won't be true, hence this only affects inter
+  {
+    //------------------------------------------------
+
+    //recurse deeper
+
+    TComTURecurse subTURecurse(rTu, false, TComTU::VERTICAL_SPLIT, true, compID);
+
+    do
+    {
+      //------------------
+
+      const UInt lineOffset = subTURecurse.GetSectionNumber() * subTURecurse.getRect(compID).height;
+
+      Pel    *subTUResidual     = pcResidual + (lineOffset * uiStride);
+      TCoeff *subTUCoefficients = pcCoeff     + (lineOffset * subTURecurse.getRect(compID).width);
+
+      invTransformNxN(subTURecurse, compID, subTUResidual, uiStride, subTUCoefficients, cQP DEBUG_STRING_PASS_INTO(psDebug));
+
+      //------------------
+
+    } while (subTURecurse.nextSection(rTu));
+
+    //------------------------------------------------
+
+    return;
+  }
+
+#if DEBUG_STRING
+  if (psDebug)
+  {
+    std::stringstream ss(stringstream::out);
+    printBlockToStream(ss, (compID==0)?"###InvTran ip Ch0: " : ((compID==1)?"###InvTran ip Ch1: ":"###InvTran ip Ch2: "), pcCoeff, uiWidth, uiHeight, uiWidth);
+    DEBUG_STRING_APPEND((*psDebug), ss.str())
+  }
+#endif
+
+  if(pcCU->getCUTransquantBypass(uiAbsPartIdx))
+  {
+    const Bool rotateResidual = rTu.isNonTransformedResidualRotated(compID);
+    const UInt uiSizeMinus1   = (uiWidth * uiHeight) - 1;
+
+    for (UInt y = 0, coefficientIndex = 0; y<uiHeight; y++)
+    {
+      for (UInt x = 0; x<uiWidth; x++, coefficientIndex++)
+      {
+        pcResidual[(y * uiStride) + x] = Pel(pcCoeff[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex]);
+      }
+    }
+  }
