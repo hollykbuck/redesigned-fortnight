@@ -1698,3 +1698,103 @@ Void TComTrQuant::invRecurTransformNxN( const ComponentID compID,
       DEBUG_STRING_NEW(sTemp)
 #if DEBUG_STRING
       std::string *psDebug=((DebugOptionList::DebugString_InvTran.getInt()&(pcCU->isIntra(absPartIdxTU)?1:(pcCU->isInter(absPartIdxTU)?2:4)))!=0) ? &sTemp : 0;
+#endif
+
+      invTransformNxN( rTu, compID, pResi, uiStride, pcCoeff, cQP DEBUG_STRING_PASS_INTO(psDebug) );
+
+#if DEBUG_STRING
+      if (psDebug != 0)
+      {
+        std::cout << (*psDebug);
+      }
+#endif
+    }
+
+    if (isChroma(compID) && (pcCU->getCrossComponentPredictionAlpha(absPartIdxTU, compID) != 0))
+    {
+      const Pel *piResiLuma = pResidual->getAddr( COMPONENT_Y );
+      const Int  strideLuma = pResidual->getStride( COMPONENT_Y );
+      const Int  tuWidth    = rTu.getRect( compID ).width;
+      const Int  tuHeight   = rTu.getRect( compID ).height;
+
+      if(pcCU->getCbf(absPartIdxTU, COMPONENT_Y, uiTrMode) != 0)
+      {
+        pResi = rpcResidual + uiAddr;
+        const Pel *pResiLuma = piResiLuma + uiAddr;
+
+        crossComponentPrediction( rTu, compID, pResiLuma, pResi, pResi, tuWidth, tuHeight, strideLuma, uiStride, uiStride, true );
+      }
+    }
+  }
+  else
+  {
+    TComTURecurse tuRecurseChild(rTu, false);
+    do
+    {
+      invRecurTransformNxN( compID, pResidual, tuRecurseChild );
+    } while (tuRecurseChild.nextSection(rTu));
+  }
+}
+
+Void TComTrQuant::applyForwardRDPCM( TComTU& rTu, const ComponentID compID, Pel* pcResidual, const UInt uiStride, const QpParam& cQP, TCoeff* pcCoeff, TCoeff &uiAbsSum, const RDPCMMode mode )
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+
+  const Bool bLossless      = pcCU->getCUTransquantBypass( uiAbsPartIdx );
+  const UInt uiWidth        = rTu.getRect(compID).width;
+  const UInt uiHeight       = rTu.getRect(compID).height;
+  const Bool rotateResidual = rTu.isNonTransformedResidualRotated(compID);
+  const UInt uiSizeMinus1   = (uiWidth * uiHeight) - 1;
+
+  UInt uiX = 0;
+  UInt uiY = 0;
+
+        UInt &majorAxis             = (mode == RDPCM_VER) ? uiX      : uiY;
+        UInt &minorAxis             = (mode == RDPCM_VER) ? uiY      : uiX;
+  const UInt  majorAxisLimit        = (mode == RDPCM_VER) ? uiWidth  : uiHeight;
+  const UInt  minorAxisLimit        = (mode == RDPCM_VER) ? uiHeight : uiWidth;
+
+  const Bool bUseHalfRoundingPoint  = (mode != RDPCM_OFF);
+
+  uiAbsSum = 0;
+
+  for ( majorAxis = 0; majorAxis < majorAxisLimit; majorAxis++ )
+  {
+    TCoeff accumulatorValue = 0; // 32-bit accumulator
+    for ( minorAxis = 0; minorAxis < minorAxisLimit; minorAxis++ )
+    {
+      const UInt sampleIndex      = (uiY * uiWidth) + uiX;
+      const UInt coefficientIndex = (rotateResidual ? (uiSizeMinus1-sampleIndex) : sampleIndex);
+      const Pel  currentSample    = pcResidual[(uiY * uiStride) + uiX];
+      const TCoeff encoderSideDelta = TCoeff(currentSample) - accumulatorValue;
+
+      Pel reconstructedDelta;
+      if ( bLossless )
+      {
+        pcCoeff[coefficientIndex] = encoderSideDelta;
+        reconstructedDelta        = (Pel) encoderSideDelta;
+      }
+      else
+      {
+        transformSkipQuantOneSample(rTu, compID, encoderSideDelta, pcCoeff, coefficientIndex, cQP, bUseHalfRoundingPoint);
+        invTrSkipDeQuantOneSample  (rTu, compID, pcCoeff[coefficientIndex], reconstructedDelta, cQP, coefficientIndex);
+      }
+
+      uiAbsSum += abs(pcCoeff[coefficientIndex]);
+
+      if (mode != RDPCM_OFF)
+      {
+        accumulatorValue += reconstructedDelta;
+      }
+    }
+  }
+}
+
+Void TComTrQuant::rdpcmNxN   ( TComTU& rTu, const ComponentID compID, Pel* pcResidual, const UInt uiStride, const QpParam& cQP, TCoeff* pcCoeff, TCoeff &uiAbsSum, RDPCMMode& rdpcmMode )
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+
+  if (!pcCU->isRDPCMEnabled(uiAbsPartIdx) || ((pcCU->getTransformSkip(uiAbsPartIdx, compID) == 0) && !pcCU->getCUTransquantBypass(uiAbsPartIdx)))
+  {
