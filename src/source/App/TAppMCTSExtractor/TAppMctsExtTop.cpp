@@ -198,3 +198,103 @@ Void TAppMctsExtTop::extract()
       {
         c += 32;
       }
+      printf("POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", m_pcSlice->getPOC(),
+        m_pcSlice->getTLayer(),
+        c,
+        m_pcSlice->getSliceQp());
+      printf(" %10d bits\n", (int)inNalu.getBitstream().getFifo().size());
+    }
+  }
+
+  if (!m_mctsExtractionInfoPresent)
+  {
+    fprintf(stderr, "\nInput bitstream file `%s' does not contain MCTS extraction information for target MCTS index %d\n", m_inputBitstreamFileName.c_str(), m_targetMctsIdx);
+  }
+
+  // delete buffers
+  m_cTDecTop.deletePicBuffer();
+
+  // destroy internal classes
+  xDestroyMctsExtLib();
+
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+
+Void TAppMctsExtTop::xCreateMctsExtLib()
+{
+  // create decoder class
+  m_cTDecTop.create();
+}
+
+Void TAppMctsExtTop::xDestroyMctsExtLib()
+{
+  // destroy decoder class
+  m_cTDecTop.destroy();
+}
+
+Void TAppMctsExtTop::xInitMctsExtLib()
+{
+  // initialize decoder class
+  m_cTDecTop.init();
+}
+
+
+Void TAppMctsExtTop::xExtractSuitableParameterSets(SEIMessages SEIMctsSEIs, SEIMessages SEIMctsEisSEIs, AccessUnit &accessUnit)
+{
+  if (SEIMctsSEIs.size() && SEIMctsEisSEIs.size())
+  {
+    SEIMCTSExtractionInfoSet* SEIMCTSExtractionInfoSetSEI = (SEIMCTSExtractionInfoSet*) *(SEIMctsEisSEIs.begin());
+    for (std::vector<SEIMCTSExtractionInfoSet::MCTSExtractionInfo>::iterator EisIter = SEIMCTSExtractionInfoSetSEI->m_MCTSExtractionInfoSets.begin(); EisIter != SEIMCTSExtractionInfoSetSEI->m_MCTSExtractionInfoSets.end(); EisIter++)
+    {
+      for (int j = 0; j < EisIter->m_idxOfMctsInSet.size() && !m_mctsExtractionInfoPresent; j++)
+      {
+        for (int k = 0; k < EisIter->m_idxOfMctsInSet[j].size() && !m_mctsExtractionInfoPresent; k++)
+        {
+          if (EisIter->m_idxOfMctsInSet[j][k] == m_targetMctsIdx)
+          {
+            std::vector<TComInputBitstream> vps_rbsps;
+            vps_rbsps.resize(EisIter->m_vpsRbspData.size());
+            for (int jj = 0; jj < EisIter->m_vpsRbspData.size(); jj++)
+            {
+              for (int kk = 0; kk < EisIter->m_vpsRbspDataLength[jj]; kk++)
+              {
+                vps_rbsps[jj].getFifo().push_back(EisIter->m_vpsRbspData[jj][kk]);
+              }
+              OutputNALUnit vpsout(NAL_UNIT_VPS, 0, 0);
+              vpsout.m_Bitstream.getFIFO() = vps_rbsps[jj].getFifo();
+              accessUnit.push_back(new NALUnitEBSP(vpsout));
+            }
+
+            std::vector<TComInputBitstream> sps_rbsps;
+            sps_rbsps.resize(EisIter->m_spsRbspData.size());
+            for (int jj = 0; jj < EisIter->m_spsRbspData.size(); jj++)
+            {
+              for (int kk = 0; kk < EisIter->m_spsRbspDataLength[jj]; kk++)
+              {
+                sps_rbsps[jj].getFifo().push_back(EisIter->m_spsRbspData[jj][kk]);
+              }
+              OutputNALUnit spsout(NAL_UNIT_SPS, 0, 0);
+              spsout.m_Bitstream.getFIFO() = sps_rbsps[jj].getFifo();
+              accessUnit.push_back(new NALUnitEBSP(spsout));
+            }
+
+            std::vector<TComInputBitstream> pps_rbsps;
+            pps_rbsps.resize(EisIter->m_ppsRbspData.size());
+            for (int jj = 0; jj < EisIter->m_ppsRbspData.size(); jj++)
+            {
+              for (int kk = 0; kk < EisIter->m_ppsRbspDataLength[jj]; kk++)
+              {
+                pps_rbsps[jj].getFifo().push_back(EisIter->m_ppsRbspData[jj][kk]);
+              }
+              OutputNALUnit ppsout(NAL_UNIT_PPS, 0, 0);
+              ppsout.m_Bitstream.getFIFO() = pps_rbsps[jj].getFifo();
+              accessUnit.push_back(new NALUnitEBSP(ppsout));
+            }
+            TComSPS* nestedSps = new TComSPS();
+            m_cEntropyDecoder.setEntropyDecoder(&m_cCavlcDecoder);
+            m_cEntropyDecoder.setBitstream(&sps_rbsps[0]);
+            m_cEntropyDecoder.decodeSPS(nestedSps);
