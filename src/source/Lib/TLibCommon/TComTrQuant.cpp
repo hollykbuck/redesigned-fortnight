@@ -1798,3 +1798,103 @@ Void TComTrQuant::rdpcmNxN   ( TComTU& rTu, const ComponentID compID, Pel* pcRes
 
   if (!pcCU->isRDPCMEnabled(uiAbsPartIdx) || ((pcCU->getTransformSkip(uiAbsPartIdx, compID) == 0) && !pcCU->getCUTransquantBypass(uiAbsPartIdx)))
   {
+    rdpcmMode = RDPCM_OFF;
+  }
+  else if ( pcCU->isIntra( uiAbsPartIdx ) )
+  {
+    const ChromaFormat chFmt = pcCU->getPic()->getPicYuvOrg()->getChromaFormat();
+    const ChannelType chType = toChannelType(compID);
+    const UInt uiChPredMode  = pcCU->getIntraDir( chType, uiAbsPartIdx );
+    const TComSPS *sps=pcCU->getSlice()->getSPS();
+    const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+    const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
+    const UInt uiChFinalMode = ((chFmt == CHROMA_422)       && isChroma(compID)) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
+
+    if (uiChFinalMode == VER_IDX || uiChFinalMode == HOR_IDX)
+    {
+      rdpcmMode = (uiChFinalMode == VER_IDX) ? RDPCM_VER : RDPCM_HOR;
+      applyForwardRDPCM( rTu, compID, pcResidual, uiStride, cQP, pcCoeff, uiAbsSum, rdpcmMode );
+    }
+    else
+    {
+      rdpcmMode = RDPCM_OFF;
+    }
+  }
+  else // not intra, need to select the best mode
+  {
+    const UInt uiWidth  = rTu.getRect(compID).width;
+    const UInt uiHeight = rTu.getRect(compID).height;
+
+    RDPCMMode bestMode   = NUMBER_OF_RDPCM_MODES;
+    TCoeff    bestAbsSum = std::numeric_limits<TCoeff>::max();
+    TCoeff    bestCoefficients[MAX_TU_SIZE * MAX_TU_SIZE];
+
+    for (UInt modeIndex = 0; modeIndex < NUMBER_OF_RDPCM_MODES; modeIndex++)
+    {
+      const RDPCMMode mode = RDPCMMode(modeIndex);
+
+      TCoeff currAbsSum = 0;
+
+      applyForwardRDPCM( rTu, compID, pcResidual, uiStride, cQP, pcCoeff, currAbsSum, mode );
+
+      if (currAbsSum < bestAbsSum)
+      {
+        bestMode   = mode;
+        bestAbsSum = currAbsSum;
+        if (mode != RDPCM_OFF)
+        {
+          memcpy(bestCoefficients, pcCoeff, (uiWidth * uiHeight * sizeof(TCoeff)));
+        }
+      }
+    }
+
+    rdpcmMode = bestMode;
+    uiAbsSum  = bestAbsSum;
+
+    if (rdpcmMode != RDPCM_OFF) //the TU is re-transformed and quantised if DPCM_OFF is returned, so there is no need to preserve it here
+    {
+      memcpy(pcCoeff, bestCoefficients, (uiWidth * uiHeight * sizeof(TCoeff)));
+    }
+  }
+
+  pcCU->setExplicitRdpcmModePartRange(rdpcmMode, compID, uiAbsPartIdx, rTu.GetAbsPartIdxNumParts(compID));
+}
+
+Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcResidual, const UInt uiStride )
+{
+  TComDataCU *pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+
+  if (pcCU->isRDPCMEnabled( uiAbsPartIdx ) && ((pcCU->getTransformSkip(uiAbsPartIdx, compID ) != 0) || pcCU->getCUTransquantBypass(uiAbsPartIdx)))
+  {
+    const UInt uiWidth  = rTu.getRect(compID).width;
+    const UInt uiHeight = rTu.getRect(compID).height;
+
+    RDPCMMode rdpcmMode = RDPCM_OFF;
+
+    if ( pcCU->isIntra( uiAbsPartIdx ) )
+    {
+      const ChromaFormat chFmt = pcCU->getPic()->getPicYuvRec()->getChromaFormat();
+      const ChannelType chType = toChannelType(compID);
+      const UInt uiChPredMode  = pcCU->getIntraDir( chType, uiAbsPartIdx );
+      const TComSPS *sps=pcCU->getSlice()->getSPS();
+      const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+      const UInt uiChCodedMode = (uiChPredMode==DM_CHROMA_IDX && isChroma(compID)) ? pcCU->getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, chFmt, partsPerMinCU)) : uiChPredMode;
+      const UInt uiChFinalMode = ((chFmt == CHROMA_422)       && isChroma(compID)) ? g_chroma422IntraAngleMappingTable[uiChCodedMode] : uiChCodedMode;
+
+      if (uiChFinalMode == VER_IDX || uiChFinalMode == HOR_IDX)
+      {
+        rdpcmMode = (uiChFinalMode == VER_IDX) ? RDPCM_VER : RDPCM_HOR;
+      }
+    }
+    else  // not intra case
+    {
+      rdpcmMode = RDPCMMode(pcCU->getExplicitRdpcmMode( compID, uiAbsPartIdx ));
+    }
+
+    const TCoeff pelMin=(TCoeff) std::numeric_limits<Pel>::min();
+    const TCoeff pelMax=(TCoeff) std::numeric_limits<Pel>::max();
+    if (rdpcmMode == RDPCM_VER)
+    {
+      for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+      {
