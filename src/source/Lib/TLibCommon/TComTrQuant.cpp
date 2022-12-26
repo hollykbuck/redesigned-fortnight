@@ -1898,3 +1898,103 @@ Void TComTrQuant::invRdpcmNxN( TComTU& rTu, const ComponentID compID, Pel* pcRes
     {
       for( UInt uiX = 0; uiX < uiWidth; uiX++ )
       {
+        Pel *pcCurResidual = pcResidual+uiX;
+        TCoeff accumulator = *pcCurResidual; // 32-bit accumulator
+        pcCurResidual+=uiStride;
+        for( UInt uiY = 1; uiY < uiHeight; uiY++, pcCurResidual+=uiStride )
+        {
+          accumulator += *(pcCurResidual);
+          *pcCurResidual = (Pel)Clip3<TCoeff>(pelMin, pelMax, accumulator);
+        }
+      }
+    }
+    else if (rdpcmMode == RDPCM_HOR)
+    {
+      for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+      {
+        Pel *pcCurResidual = pcResidual+uiY*uiStride;
+        TCoeff accumulator = *pcCurResidual;
+        pcCurResidual++;
+        for( UInt uiX = 1; uiX < uiWidth; uiX++, pcCurResidual++ )
+        {
+          accumulator += *(pcCurResidual);
+          *pcCurResidual = (Pel)Clip3<TCoeff>(pelMin, pelMax, accumulator);
+        }
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Logical transform
+// ------------------------------------------------------------------------------------------------
+
+/** Wrapper function between HM interface and core NxN forward transform (2D)
+ *  \param channelBitDepth bit depth of channel
+ *  \param useDST
+ *  \param piBlkResi input data (residual)
+ *  \param uiStride stride of input residual data
+ *  \param psCoeff output data (transform coefficients)
+ *  \param iWidth transform width
+ *  \param iHeight transform height
+ *  \param maxLog2TrDynamicRange
+ */
+Void TComTrQuant::xT( const Int channelBitDepth, Bool useDST, Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff, Int iWidth, Int iHeight, const Int maxLog2TrDynamicRange )
+{
+#if MATRIX_MULT
+  if( iWidth == iHeight)
+  {
+    xTr(channelBitDepth, piBlkResi, psCoeff, uiStride, (UInt)iWidth, useDST, maxLog2TrDynamicRange);
+    return;
+  }
+#endif
+
+  TCoeff block[ MAX_TU_SIZE * MAX_TU_SIZE ];
+  TCoeff coeff[ MAX_TU_SIZE * MAX_TU_SIZE ];
+
+  for (Int y = 0; y < iHeight; y++)
+  {
+    for (Int x = 0; x < iWidth; x++)
+    {
+      block[(y * iWidth) + x] = piBlkResi[(y * uiStride) + x];
+    }
+  }
+
+  xTrMxN( channelBitDepth, block, coeff, iWidth, iHeight, useDST, maxLog2TrDynamicRange );
+
+  memcpy(psCoeff, coeff, (iWidth * iHeight * sizeof(TCoeff)));
+}
+
+/** Wrapper function between HM interface and core NxN inverse transform (2D)
+ *  \param channelBitDepth bit depth of channel
+ *  \param useDST
+ *  \param plCoef input data (transform coefficients)
+ *  \param pResidual output data (residual)
+ *  \param uiStride stride of input residual data
+ *  \param iWidth transform width
+ *  \param iHeight transform height
+ *  \param maxLog2TrDynamicRange
+ */
+Void TComTrQuant::xIT( const Int channelBitDepth, Bool useDST, TCoeff* plCoef, Pel* pResidual, UInt uiStride, Int iWidth, Int iHeight, const Int maxLog2TrDynamicRange )
+{
+#if MATRIX_MULT
+  if( iWidth == iHeight )
+  {
+    xITr(channelBitDepth, plCoef, pResidual, uiStride, (UInt)iWidth, useDST, maxLog2TrDynamicRange);
+    return;
+  }
+#endif
+
+  TCoeff block[ MAX_TU_SIZE * MAX_TU_SIZE ];
+  TCoeff coeff[ MAX_TU_SIZE * MAX_TU_SIZE ];
+
+  memcpy(coeff, plCoef, (iWidth * iHeight * sizeof(TCoeff)));
+
+  xITrMxN( channelBitDepth, coeff, block, iWidth, iHeight, useDST, maxLog2TrDynamicRange );
+
+  for (Int y = 0; y < iHeight; y++)
+  {
+    for (Int x = 0; x < iWidth; x++)
+    {
+      pResidual[(y * uiStride) + x] = Pel(block[(y * iWidth) + x]);
+    }
