@@ -1998,3 +1998,103 @@ Void TComTrQuant::xIT( const Int channelBitDepth, Bool useDST, TCoeff* plCoef, P
     {
       pResidual[(y * uiStride) + x] = Pel(block[(y * iWidth) + x]);
     }
+  }
+}
+
+/** Wrapper function between HM interface and core 4x4 transform skipping
+ *  \param piBlkResi input data (residual)
+ *  \param uiStride stride of input residual data
+ *  \param psCoeff output data (transform coefficients)
+ *  \param rTu reference to transform data
+ *  \param component colour component
+ */
+Void TComTrQuant::xTransformSkip( Pel* piBlkResi, UInt uiStride, TCoeff* psCoeff, TComTU &rTu, const ComponentID component )
+{
+  const TComRectangle &rect = rTu.getRect(component);
+  const Int width           = rect.width;
+  const Int height          = rect.height;
+  const Int maxLog2TrDynamicRange = rTu.getCU()->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(component));
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(toChannelType(component));
+
+  Int iTransformShift = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(component), maxLog2TrDynamicRange);
+  if (rTu.getCU()->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag())
+  {
+    iTransformShift = std::max<Int>(0, iTransformShift);
+  }
+
+  const Bool rotateResidual = rTu.isNonTransformedResidualRotated(component);
+  const UInt uiSizeMinus1   = (width * height) - 1;
+
+  if (iTransformShift >= 0)
+  {
+    for (UInt y = 0, coefficientIndex = 0; y < height; y++)
+    {
+      for (UInt x = 0; x < width; x++, coefficientIndex++)
+      {
+        psCoeff[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex] = TCoeff(piBlkResi[(y * uiStride) + x]) << iTransformShift;
+      }
+    }
+  }
+  else //for very high bit depths
+  {
+    iTransformShift = -iTransformShift;
+    const TCoeff offset = 1 << (iTransformShift - 1);
+
+    for (UInt y = 0, coefficientIndex = 0; y < height; y++)
+    {
+      for (UInt x = 0; x < width; x++, coefficientIndex++)
+      {
+        psCoeff[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex] = (TCoeff(piBlkResi[(y * uiStride) + x]) + offset) >> iTransformShift;
+      }
+    }
+  }
+}
+
+/** Wrapper function between HM interface and core NxN transform skipping
+ *  \param plCoef input data (coefficients)
+ *  \param pResidual output data (residual)
+ *  \param uiStride stride of input residual data
+ *  \param rTu reference to transform data
+ *  \param component colour component ID
+ */
+Void TComTrQuant::xITransformSkip( TCoeff* plCoef, Pel* pResidual, UInt uiStride, TComTU &rTu, const ComponentID component )
+{
+  const TComRectangle &rect = rTu.getRect(component);
+  const Int width           = rect.width;
+  const Int height          = rect.height;
+  const Int maxLog2TrDynamicRange = rTu.getCU()->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(component));
+#if O0043_BEST_EFFORT_DECODING
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getStreamBitDepth(toChannelType(component));
+#else
+  const Int channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(toChannelType(component));
+#endif
+
+  Int iTransformShift = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(component), maxLog2TrDynamicRange);
+  if (rTu.getCU()->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag())
+  {
+    iTransformShift = std::max<Int>(0, iTransformShift);
+  }
+
+  const Bool rotateResidual = rTu.isNonTransformedResidualRotated(component);
+  const UInt uiSizeMinus1   = (width * height) - 1;
+
+  if (iTransformShift >= 0)
+  {
+    const TCoeff offset = iTransformShift==0 ? 0 : (1 << (iTransformShift - 1));
+
+    for (UInt y = 0, coefficientIndex = 0; y < height; y++)
+    {
+      for (UInt x = 0; x < width; x++, coefficientIndex++)
+      {
+        pResidual[(y * uiStride) + x] =  Pel((plCoef[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex] + offset) >> iTransformShift);
+      }
+    }
+  }
+  else //for very high bit depths
+  {
+    iTransformShift = -iTransformShift;
+
+    for (UInt y = 0, coefficientIndex = 0; y < height; y++)
+    {
+      for (UInt x = 0; x < width; x++, coefficientIndex++)
+      {
