@@ -2098,3 +2098,103 @@ Void TComTrQuant::xITransformSkip( TCoeff* plCoef, Pel* pResidual, UInt uiStride
     {
       for (UInt x = 0; x < width; x++, coefficientIndex++)
       {
+        pResidual[(y * uiStride) + x] = Pel(plCoef[rotateResidual ? (uiSizeMinus1 - coefficientIndex) : coefficientIndex] << iTransformShift);
+      }
+    }
+  }
+}
+
+/** RDOQ with CABAC
+ * \param rTu reference to transform data
+ * \param plSrcCoeff pointer to input buffer
+ * \param piDstCoeff reference to pointer to output buffer
+ * \param piArlDstCoeff
+ * \param uiAbsSum reference to absolute sum of quantized transform coefficient
+ * \param compID colour component ID
+ * \param cQP reference to quantization parameters
+
+ * Rate distortion optimized quantization for entropy
+ * coding engines using probability models like CABAC
+ */
+Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
+                                                            TCoeff      * plSrcCoeff,
+                                                            TCoeff      * piDstCoeff,
+#if ADAPTIVE_QP_SELECTION
+                                                            TCoeff      * piArlDstCoeff,
+#endif
+                                                            TCoeff       &uiAbsSum,
+                                                      const ComponentID   compID,
+                                                      const QpParam      &cQP  )
+{
+  const TComRectangle  & rect             = rTu.getRect(compID);
+  const UInt             uiWidth          = rect.width;
+  const UInt             uiHeight         = rect.height;
+        TComDataCU    *  pcCU             = rTu.getCU();
+  const UInt             uiAbsPartIdx     = rTu.GetAbsPartIdxTU();
+  const ChannelType      channelType      = toChannelType(compID);
+  const UInt             uiLog2TrSize     = rTu.GetEquivalentLog2TrSize(compID);
+
+  const Bool             extendedPrecision = pcCU->getSlice()->getSPS()->getSpsRangeExtension().getExtendedPrecisionProcessingFlag();
+  const Int              maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const Int              channelBitDepth = rTu.getCU()->getSlice()->getSPS()->getBitDepth(channelType);
+
+  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+   * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+   * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+   * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+   */
+
+  // Represents scaling through forward transform
+  Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange);
+  if ((pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0) && extendedPrecision)
+  {
+    iTransformShift = std::max<Int>(0, iTransformShift);
+  }
+
+  const Bool bUseGolombRiceParameterAdaptation = pcCU->getSlice()->getSPS()->getSpsRangeExtension().getPersistentRiceAdaptationEnabledFlag();
+  const UInt initialGolombRiceParameter        = m_pcEstBitsSbac->golombRiceAdaptationStatistics[rTu.getGolombRiceStatisticsIndex(compID)] / RExt__GOLOMB_RICE_INCREMENT_DIVISOR;
+        UInt uiGoRiceParam                     = initialGolombRiceParameter;
+  Double     d64BlockUncodedCost               = 0;
+  const UInt uiLog2BlockWidth                  = g_aucConvertToBit[ uiWidth  ] + 2;
+  const UInt uiLog2BlockHeight                 = g_aucConvertToBit[ uiHeight ] + 2;
+  const UInt uiMaxNumCoeff                     = uiWidth * uiHeight;
+  assert(compID<MAX_NUM_COMPONENT);
+
+  Int scalingListType = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+  assert(scalingListType < SCALING_LIST_NUM);
+
+#if ADAPTIVE_QP_SELECTION
+  memset(piArlDstCoeff, 0, sizeof(TCoeff) *  uiMaxNumCoeff);
+#endif
+
+  Double pdCostCoeff [ MAX_TU_SIZE * MAX_TU_SIZE ];
+  Double pdCostSig   [ MAX_TU_SIZE * MAX_TU_SIZE ];
+  Double pdCostCoeff0[ MAX_TU_SIZE * MAX_TU_SIZE ];
+  memset( pdCostCoeff, 0, sizeof(Double) *  uiMaxNumCoeff );
+  memset( pdCostSig,   0, sizeof(Double) *  uiMaxNumCoeff );
+  Int rateIncUp   [ MAX_TU_SIZE * MAX_TU_SIZE ];
+  Int rateIncDown [ MAX_TU_SIZE * MAX_TU_SIZE ];
+  Int sigRateDelta[ MAX_TU_SIZE * MAX_TU_SIZE ];
+  TCoeff deltaU   [ MAX_TU_SIZE * MAX_TU_SIZE ];
+  memset( rateIncUp,    0, sizeof(Int   ) *  uiMaxNumCoeff );
+  memset( rateIncDown,  0, sizeof(Int   ) *  uiMaxNumCoeff );
+  memset( sigRateDelta, 0, sizeof(Int   ) *  uiMaxNumCoeff );
+  memset( deltaU,       0, sizeof(TCoeff) *  uiMaxNumCoeff );
+
+  const Int iQBits = QUANT_SHIFT + cQP.per + iTransformShift;                   // Right shift of non-RDOQ quantizer;  level = (coeff*uiQ + offset)>>q_bits
+  const Double *const pdErrScale = getErrScaleCoeff(scalingListType, (uiLog2TrSize-2), cQP.rem);
+  const Int    *const piQCoef    = getQuantCoeff(scalingListType, cQP.rem, (uiLog2TrSize-2));
+
+  const Bool   enableScalingLists             = getUseScalingList(uiWidth, uiHeight, (pcCU->getTransformSkip(uiAbsPartIdx, compID) != 0));
+  const Int    defaultQuantisationCoefficient = g_quantScales[cQP.rem];
+  const Double defaultErrorScale              = getErrScaleCoeffNoScalingList(scalingListType, (uiLog2TrSize-2), cQP.rem);
+
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+
+#if ADAPTIVE_QP_SELECTION
+  Int iQBitsC = iQBits - ARL_C_PRECISION;
+  Int iAddC =  1 << (iQBitsC-1);
+#endif
+
+  TUEntropyCodingParameters codingParameters;
