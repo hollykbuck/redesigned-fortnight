@@ -198,3 +198,103 @@ static const uint32_t seedLUT[256] = {
 1411989632, 929068432, 495735097, 1684636033, 1284520017, 432816184, 1344884865, 210843729,
 676364544, 234449232, 12112337, 1350619139, 1753272996, 2037118872, 1408560528, 533334916,
 1043640385, 357326099, 201376421, 110375493, 541106497, 416159637, 242512193, 777294080,
+1614872576, 1535546636, 870600145, 910810409, 1821440209, 1605432464, 1145147393, 951695441,
+1758494976, 1506656568, 1557150160, 608221521, 1073840384, 217672017, 684818688, 1750138880,
+16777217, 677990609, 953274371, 1770050213, 1359128393, 1797602707, 1984616737, 1865815816,
+2120835200, 2051677060, 1772234061, 1579794881, 1652821009, 1742099468, 1887260865, 46468113,
+1011925248, 1134107920, 881643832, 1354774993, 472508800, 1892499769, 1752793472, 1962502272,
+687898625, 883538000, 1354355153, 1761673473, 944820481, 2020102353, 22020353, 961597696,
+1342242816, 964808962, 1355809701, 17016649, 1386540177, 647682692, 1849012289, 751668241,
+1557184768, 127374604, 1927564752, 1045744913, 1614921984, 43588881, 1016185088, 1544617984,
+1090519041, 136122424, 215038417, 1563027841, 2026918145, 1688778833, 701530369, 1372639488,
+1342242817, 2036945104, 953274369, 1750192384, 16842753, 964808960, 1359020032, 1358954497
+};
+
+static const uint32_t deblockFactor[13] =
+{ 64, 71, 77, 84, 90, 96, 103, 109, 116, 122, 128, 128, 128 };
+
+
+SEIFilmGrainSynthesizer::SEIFilmGrainSynthesizer()
+  : m_width           (0)
+  , m_height          (0)
+  , m_chromaFormat    (NUM_CHROMA_FORMAT)
+  , m_bitDepth        (0)
+  , m_idrPicId        (0)
+  , m_grainSynt       (NULL)
+  , m_fgsBlkSize      (8)
+  , m_poc             (0)
+  , m_errorCode       (0)
+  , m_fgcParameters   (NULL)
+{
+
+}
+
+void SEIFilmGrainSynthesizer::create(uint32_t width, uint32_t height, ChromaFormat fmt, uint8_t bitDepth, uint32_t idrPicId)
+{
+  m_width             = width;
+  m_height            = height;
+  m_chromaFormat      = fmt;
+  m_bitDepth          = bitDepth;
+  m_idrPicId          = idrPicId;
+  m_fgsBlkSize        = 8;
+  m_errorCode         = 0;
+
+  if (!m_grainSynt)
+    m_grainSynt       = new GrainSynthesisStruct;
+  if (!m_fgcParameters)
+    m_fgcParameters   = new SEIFilmGrainCharacteristics;
+}
+
+SEIFilmGrainSynthesizer::~SEIFilmGrainSynthesizer()
+{
+  destroy();
+}
+
+void SEIFilmGrainSynthesizer::fgsInit()
+{
+  deriveFGSBlkSize();
+  dataBaseGen();
+}
+
+void SEIFilmGrainSynthesizer::destroy()
+{
+  if (m_fgcParameters)
+  {
+    delete m_fgcParameters;
+    m_fgcParameters = NULL;
+  }
+  if (m_grainSynt)
+  {
+    delete m_grainSynt;
+    m_grainSynt = NULL;
+  }
+}
+
+void SEIFilmGrainSynthesizer::grainSynthesizeAndBlend(TComPicYuv* pGrainBuf, Bool isIdrPic)
+{
+  uint8_t     numComp = MAX_NUM_COMPONENT, compCtr; /* number of color components */
+  uint8_t     color_offset[MAX_NUM_COMPONENT];
+  uint32_t    widthComp[MAX_NUM_COMPONENT], heightComp[MAX_NUM_COMPONENT], strideComp[MAX_NUM_COMPONENT];
+  uint32_t *  offsetsArr[MAX_NUM_COMPONENT];
+  Pel *       decComp[MAX_NUM_COMPONENT];
+  uint32_t    pseudoRandValEc;
+  uint32_t    picOffset;
+
+  /* from SMPTE RDD5 */
+  color_offset[0] = COLOUR_OFFSET_LUMA;
+  color_offset[1] = COLOUR_OFFSET_CR;
+  color_offset[2] = COLOUR_OFFSET_CB;
+
+  if (0 != m_fgcParameters->m_filmGrainCharacteristicsCancelFlag)
+  {
+    return;
+  }
+
+  widthComp[0]  = m_width;
+  heightComp[0] = m_height;
+
+  if (CHROMA_420 == m_chromaFormat)
+  {
+    widthComp[1]  = (m_width >> 1);
+    widthComp[2]  = (m_width >> 1);
+    heightComp[1] = (m_height >> 1);
