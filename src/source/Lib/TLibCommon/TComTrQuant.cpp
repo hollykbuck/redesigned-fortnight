@@ -2298,3 +2298,103 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
 
         if( uiLevel > 0 )
         {
+          Int rateNow = xGetICRate( uiLevel, uiOneCtx, uiAbsCtx, uiGoRiceParam, c1Idx, c2Idx, extendedPrecision, maxLog2TrDynamicRange );
+          rateIncUp   [ uiBlkPos ] = xGetICRate( uiLevel+1, uiOneCtx, uiAbsCtx, uiGoRiceParam, c1Idx, c2Idx, extendedPrecision, maxLog2TrDynamicRange ) - rateNow;
+          rateIncDown [ uiBlkPos ] = xGetICRate( uiLevel-1, uiOneCtx, uiAbsCtx, uiGoRiceParam, c1Idx, c2Idx, extendedPrecision, maxLog2TrDynamicRange ) - rateNow;
+        }
+        else // uiLevel == 0
+        {
+          rateIncUp   [ uiBlkPos ] = m_pcEstBitsSbac->m_greaterOneBits[ uiOneCtx ][ 0 ];
+        }
+        piDstCoeff[ uiBlkPos ] = uiLevel;
+        d64BaseCost           += pdCostCoeff [ iScanPos ];
+
+        baseLevel = (c1Idx < C1FLAG_NUMBER) ? (2 + (c2Idx < C2FLAG_NUMBER)) : 1;
+        if( uiLevel >= baseLevel )
+        {
+          if (uiLevel > 3*(1<<uiGoRiceParam))
+          {
+            uiGoRiceParam = bUseGolombRiceParameterAdaptation ? (uiGoRiceParam + 1) : (std::min<UInt>((uiGoRiceParam + 1), 4));
+          }
+        }
+        if ( uiLevel >= 1)
+        {
+          c1Idx ++;
+        }
+
+        //===== update bin model =====
+        if( uiLevel > 1 )
+        {
+          c1 = 0;
+          c2 += (c2 < 2);
+          c2Idx ++;
+        }
+        else if( (c1 < 3) && (c1 > 0) && uiLevel)
+        {
+          c1++;
+        }
+
+        //===== context set update =====
+        if( ( iScanPos % uiCGSize == 0 ) && ( iScanPos > 0 ) )
+        {
+          uiCtxSet          = getContextSetIndex(compID, ((iScanPos - 1) >> MLS_CG_SIZE), (c1 == 0)); //(iScanPos - 1) because we do this **before** entering the final group
+          c1                = 1;
+          c2                = 0;
+          c1Idx             = 0;
+          c2Idx             = 0;
+          uiGoRiceParam     = initialGolombRiceParameter;
+        }
+      }
+      else
+      {
+        d64BaseCost    += pdCostCoeff0[ iScanPos ];
+      }
+      rdStats.d64SigCost += pdCostSig[ iScanPos ];
+      if (iScanPosinCG == 0 )
+      {
+        rdStats.d64SigCost_0 = pdCostSig[ iScanPos ];
+      }
+      if (piDstCoeff[ uiBlkPos ] )
+      {
+        uiSigCoeffGroupFlag[ uiCGBlkPos ] = 1;
+        rdStats.d64CodedLevelandDist += pdCostCoeff[ iScanPos ] - pdCostSig[ iScanPos ];
+        rdStats.d64UncodedDist += pdCostCoeff0[ iScanPos ];
+        if ( iScanPosinCG != 0 )
+        {
+          rdStats.iNNZbeforePos0++;
+        }
+      }
+    } //end for (iScanPosinCG)
+
+    if (iCGLastScanPos >= 0)
+    {
+      if( iCGScanPos )
+      {
+        if (uiSigCoeffGroupFlag[ uiCGBlkPos ] == 0)
+        {
+          UInt  uiCtxSig = getSigCoeffGroupCtxInc( uiSigCoeffGroupFlag, uiCGPosX, uiCGPosY, codingParameters.widthInGroups, codingParameters.heightInGroups );
+          d64BaseCost += xGetRateSigCoeffGroup(0, uiCtxSig) - rdStats.d64SigCost;;
+          pdCostCoeffGroupSig[ iCGScanPos ] = xGetRateSigCoeffGroup(0, uiCtxSig);
+        }
+        else
+        {
+          if (iCGScanPos < iCGLastScanPos) //skip the last coefficient group, which will be handled together with last position below.
+          {
+            if ( rdStats.iNNZbeforePos0 == 0 )
+            {
+              d64BaseCost -= rdStats.d64SigCost_0;
+              rdStats.d64SigCost -= rdStats.d64SigCost_0;
+            }
+            // rd-cost if SigCoeffGroupFlag = 0, initialization
+            Double d64CostZeroCG = d64BaseCost;
+
+            // add SigCoeffGroupFlag cost to total cost
+            UInt  uiCtxSig = getSigCoeffGroupCtxInc( uiSigCoeffGroupFlag, uiCGPosX, uiCGPosY, codingParameters.widthInGroups, codingParameters.heightInGroups );
+
+            if (iCGScanPos < iCGLastScanPos)
+            {
+              d64BaseCost  += xGetRateSigCoeffGroup(1, uiCtxSig);
+              d64CostZeroCG += xGetRateSigCoeffGroup(0, uiCtxSig);
+              pdCostCoeffGroupSig[ iCGScanPos ] = xGetRateSigCoeffGroup(1, uiCtxSig);
+            }
+
