@@ -2198,3 +2198,103 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
 #endif
 
   TUEntropyCodingParameters codingParameters;
+  getTUEntropyCodingParameters(codingParameters, rTu, compID);
+  const UInt uiCGSize = (1 << MLS_CG_SIZE);
+
+  Double pdCostCoeffGroupSig[ MLS_GRP_NUM ];
+  UInt uiSigCoeffGroupFlag[ MLS_GRP_NUM ];
+  Int iCGLastScanPos = -1;
+
+  UInt    uiCtxSet            = 0;
+  Int     c1                  = 1;
+  Int     c2                  = 0;
+  Double  d64BaseCost         = 0;
+  Int     iLastScanPos        = -1;
+
+  UInt    c1Idx     = 0;
+  UInt    c2Idx     = 0;
+  Int     baseLevel;
+
+  memset( pdCostCoeffGroupSig,   0, sizeof(Double) * MLS_GRP_NUM );
+  memset( uiSigCoeffGroupFlag,   0, sizeof(UInt) * MLS_GRP_NUM );
+
+  UInt uiCGNum = uiWidth * uiHeight >> MLS_CG_SIZE;
+  Int iScanPos;
+  coeffGroupRDStats rdStats;
+
+  const UInt significanceMapContextOffset = getSignificanceMapContextOffset(compID);
+
+  for (Int iCGScanPos = uiCGNum-1; iCGScanPos >= 0; iCGScanPos--)
+  {
+    UInt uiCGBlkPos = codingParameters.scanCG[ iCGScanPos ];
+    UInt uiCGPosY   = uiCGBlkPos / codingParameters.widthInGroups;
+    UInt uiCGPosX   = uiCGBlkPos - (uiCGPosY * codingParameters.widthInGroups);
+
+    memset( &rdStats, 0, sizeof (coeffGroupRDStats));
+
+    const Int patternSigCtx = TComTrQuant::calcPatternSigCtx(uiSigCoeffGroupFlag, uiCGPosX, uiCGPosY, codingParameters.widthInGroups, codingParameters.heightInGroups);
+
+    for (Int iScanPosinCG = uiCGSize-1; iScanPosinCG >= 0; iScanPosinCG--)
+    {
+      iScanPos = iCGScanPos*uiCGSize + iScanPosinCG;
+      //===== quantization =====
+      UInt    uiBlkPos          = codingParameters.scan[iScanPos];
+      // set coeff
+
+      const Int    quantisationCoefficient = (enableScalingLists) ? piQCoef   [uiBlkPos] : defaultQuantisationCoefficient;
+      const Double errorScale              = (enableScalingLists) ? pdErrScale[uiBlkPos] : defaultErrorScale;
+
+      const Int64  tmpLevel                = Int64(abs(plSrcCoeff[ uiBlkPos ])) * quantisationCoefficient;
+
+      const Intermediate_Int lLevelDouble  = (Intermediate_Int)min<Int64>(tmpLevel, std::numeric_limits<Intermediate_Int>::max() - (Intermediate_Int(1) << (iQBits - 1)));
+
+#if ADAPTIVE_QP_SELECTION
+      if( m_bUseAdaptQpSelect )
+      {
+        piArlDstCoeff[uiBlkPos]   = (TCoeff)(( lLevelDouble + iAddC) >> iQBitsC );
+      }
+#endif
+      const UInt uiMaxAbsLevel  = std::min<UInt>(UInt(entropyCodingMaximum), UInt((lLevelDouble + (Intermediate_Int(1) << (iQBits - 1))) >> iQBits));
+
+      const Double dErr         = Double( lLevelDouble );
+      pdCostCoeff0[ iScanPos ]  = dErr * dErr * errorScale;
+      d64BlockUncodedCost      += pdCostCoeff0[ iScanPos ];
+      piDstCoeff[ uiBlkPos ]    = uiMaxAbsLevel;
+
+      if ( uiMaxAbsLevel > 0 && iLastScanPos < 0 )
+      {
+        iLastScanPos            = iScanPos;
+        uiCtxSet                = getContextSetIndex(compID, (iScanPos >> MLS_CG_SIZE), 0);
+        iCGLastScanPos          = iCGScanPos;
+      }
+
+      if ( iLastScanPos >= 0 )
+      {
+        //===== coefficient level estimation =====
+        UInt  uiLevel;
+        UInt  uiOneCtx         = (NUM_ONE_FLAG_CTX_PER_SET * uiCtxSet) + c1;
+        UInt  uiAbsCtx         = (NUM_ABS_FLAG_CTX_PER_SET * uiCtxSet) + c2;
+
+        if( iScanPos == iLastScanPos )
+        {
+          uiLevel              = xGetCodedLevel( pdCostCoeff[ iScanPos ], pdCostCoeff0[ iScanPos ], pdCostSig[ iScanPos ],
+                                                  lLevelDouble, uiMaxAbsLevel, significanceMapContextOffset, uiOneCtx, uiAbsCtx, uiGoRiceParam,
+                                                  c1Idx, c2Idx, iQBits, errorScale, 1, extendedPrecision, maxLog2TrDynamicRange
+                                                  );
+        }
+        else
+        {
+          UShort uiCtxSig      = significanceMapContextOffset + getSigCtxInc( patternSigCtx, codingParameters, iScanPos, uiLog2BlockWidth, uiLog2BlockHeight, channelType );
+
+          uiLevel              = xGetCodedLevel( pdCostCoeff[ iScanPos ], pdCostCoeff0[ iScanPos ], pdCostSig[ iScanPos ],
+                                                  lLevelDouble, uiMaxAbsLevel, uiCtxSig, uiOneCtx, uiAbsCtx, uiGoRiceParam,
+                                                  c1Idx, c2Idx, iQBits, errorScale, 0, extendedPrecision, maxLog2TrDynamicRange
+                                                  );
+
+          sigRateDelta[ uiBlkPos ] = m_pcEstBitsSbac->significantBits[ uiCtxSig ][ 1 ] - m_pcEstBitsSbac->significantBits[ uiCtxSig ][ 0 ];
+        }
+
+        deltaU[ uiBlkPos ]        = TCoeff((lLevelDouble - (Intermediate_Int(uiLevel) << iQBits)) >> (iQBits-8));
+
+        if( uiLevel > 0 )
+        {
