@@ -2398,3 +2398,103 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
               pdCostCoeffGroupSig[ iCGScanPos ] = xGetRateSigCoeffGroup(1, uiCtxSig);
             }
 
+            // try to convert the current coeff group from non-zero to all-zero
+            d64CostZeroCG += rdStats.d64UncodedDist;  // distortion for resetting non-zero levels to zero levels
+            d64CostZeroCG -= rdStats.d64CodedLevelandDist;   // distortion and level cost for keeping all non-zero levels
+            d64CostZeroCG -= rdStats.d64SigCost;     // sig cost for all coeffs, including zero levels and non-zerl levels
+
+            // if we can save cost, change this block to all-zero block
+            if ( d64CostZeroCG < d64BaseCost )
+            {
+              uiSigCoeffGroupFlag[ uiCGBlkPos ] = 0;
+              d64BaseCost = d64CostZeroCG;
+              if (iCGScanPos < iCGLastScanPos)
+              {
+                pdCostCoeffGroupSig[ iCGScanPos ] = xGetRateSigCoeffGroup(0, uiCtxSig);
+              }
+              // reset coeffs to 0 in this block
+              for (Int iScanPosinCG = uiCGSize-1; iScanPosinCG >= 0; iScanPosinCG--)
+              {
+                iScanPos      = iCGScanPos*uiCGSize + iScanPosinCG;
+                UInt uiBlkPos = codingParameters.scan[ iScanPos ];
+
+                if (piDstCoeff[ uiBlkPos ])
+                {
+                  piDstCoeff [ uiBlkPos ] = 0;
+                  pdCostCoeff[ iScanPos ] = pdCostCoeff0[ iScanPos ];
+                  pdCostSig  [ iScanPos ] = 0;
+                }
+              }
+            } // end if ( d64CostAllZeros < d64BaseCost )
+          }
+        } // end if if (uiSigCoeffGroupFlag[ uiCGBlkPos ] == 0)
+      }
+      else
+      {
+        uiSigCoeffGroupFlag[ uiCGBlkPos ] = 1;
+      }
+    }
+  } //end for (iCGScanPos)
+
+  //===== estimate last position =====
+  if ( iLastScanPos < 0 )
+  {
+    return;
+  }
+
+  Double  d64BestCost         = 0;
+  Int     ui16CtxCbf          = 0;
+  Int     iBestLastIdxP1      = 0;
+  if( !pcCU->isIntra( uiAbsPartIdx ) && isLuma(compID) && pcCU->getTransformIdx( uiAbsPartIdx ) == 0 )
+  {
+    ui16CtxCbf   = 0;
+    d64BestCost  = d64BlockUncodedCost + xGetICost( m_pcEstBitsSbac->blockRootCbpBits[ ui16CtxCbf ][ 0 ] );
+    d64BaseCost += xGetICost( m_pcEstBitsSbac->blockRootCbpBits[ ui16CtxCbf ][ 1 ] );
+  }
+  else
+  {
+    ui16CtxCbf   = pcCU->getCtxQtCbf( rTu, channelType );
+    ui16CtxCbf  += getCBFContextOffset(compID);
+    d64BestCost  = d64BlockUncodedCost + xGetICost( m_pcEstBitsSbac->blockCbpBits[ ui16CtxCbf ][ 0 ] );
+    d64BaseCost += xGetICost( m_pcEstBitsSbac->blockCbpBits[ ui16CtxCbf ][ 1 ] );
+  }
+
+
+  Bool bFoundLast = false;
+  for (Int iCGScanPos = iCGLastScanPos; iCGScanPos >= 0; iCGScanPos--)
+  {
+    UInt uiCGBlkPos = codingParameters.scanCG[ iCGScanPos ];
+
+    d64BaseCost -= pdCostCoeffGroupSig [ iCGScanPos ];
+    if (uiSigCoeffGroupFlag[ uiCGBlkPos ])
+    {
+      for (Int iScanPosinCG = uiCGSize-1; iScanPosinCG >= 0; iScanPosinCG--)
+      {
+        iScanPos = iCGScanPos*uiCGSize + iScanPosinCG;
+
+        if (iScanPos > iLastScanPos)
+        {
+          continue;
+        }
+        UInt   uiBlkPos     = codingParameters.scan[iScanPos];
+
+        if( piDstCoeff[ uiBlkPos ] )
+        {
+          UInt   uiPosY       = uiBlkPos >> uiLog2BlockWidth;
+          UInt   uiPosX       = uiBlkPos - ( uiPosY << uiLog2BlockWidth );
+
+          Double d64CostLast= codingParameters.scanType == SCAN_VER ? xGetRateLast( uiPosY, uiPosX, compID ) : xGetRateLast( uiPosX, uiPosY, compID );
+          Double totalCost = d64BaseCost + d64CostLast - pdCostSig[ iScanPos ];
+
+          if( totalCost < d64BestCost )
+          {
+            iBestLastIdxP1  = iScanPos + 1;
+            d64BestCost     = totalCost;
+          }
+          if( piDstCoeff[ uiBlkPos ] > 1 )
+          {
+            bFoundLast = true;
+            break;
+          }
+          d64BaseCost      -= pdCostCoeff[ iScanPos ];
+          d64BaseCost      += pdCostCoeff0[ iScanPos ];
