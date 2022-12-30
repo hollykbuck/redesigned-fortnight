@@ -2498,3 +2498,103 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
           }
           d64BaseCost      -= pdCostCoeff[ iScanPos ];
           d64BaseCost      += pdCostCoeff0[ iScanPos ];
+        }
+        else
+        {
+          d64BaseCost      -= pdCostSig[ iScanPos ];
+        }
+      } //end for
+      if (bFoundLast)
+      {
+        break;
+      }
+    } // end if (uiSigCoeffGroupFlag[ uiCGBlkPos ])
+  } // end for
+
+
+  for ( Int scanPos = 0; scanPos < iBestLastIdxP1; scanPos++ )
+  {
+    Int blkPos = codingParameters.scan[ scanPos ];
+    TCoeff level = piDstCoeff[ blkPos ];
+    uiAbsSum += level;
+    piDstCoeff[ blkPos ] = ( plSrcCoeff[ blkPos ] < 0 ) ? -level : level;
+  }
+
+  //===== clean uncoded coefficients =====
+  for ( Int scanPos = iBestLastIdxP1; scanPos <= iLastScanPos; scanPos++ )
+  {
+    piDstCoeff[ codingParameters.scan[ scanPos ] ] = 0;
+  }
+
+
+  if( pcCU->getSlice()->getPPS()->getSignDataHidingEnabledFlag() && uiAbsSum>=2)
+  {
+    const Double inverseQuantScale = Double(g_invQuantScales[cQP.rem]);
+    Int64 rdFactor = (Int64)(inverseQuantScale * inverseQuantScale * (1 << (2 * cQP.per))
+                             / m_dLambda / 16 / (1 << (2 * DISTORTION_PRECISION_ADJUSTMENT(channelBitDepth - 8)))
+                             + 0.5);
+
+    Int lastCG = -1;
+    Int absSum = 0 ;
+    Int n ;
+
+    for( Int subSet = (uiWidth*uiHeight-1) >> MLS_CG_SIZE; subSet >= 0; subSet-- )
+    {
+      Int  subPos     = subSet << MLS_CG_SIZE;
+      Int  firstNZPosInCG=uiCGSize , lastNZPosInCG=-1 ;
+      absSum = 0 ;
+
+      for(n = uiCGSize-1; n >= 0; --n )
+      {
+        if( piDstCoeff[ codingParameters.scan[ n + subPos ]] )
+        {
+          lastNZPosInCG = n;
+          break;
+        }
+      }
+
+      for(n = 0; n <uiCGSize; n++ )
+      {
+        if( piDstCoeff[ codingParameters.scan[ n + subPos ]] )
+        {
+          firstNZPosInCG = n;
+          break;
+        }
+      }
+
+      for(n = firstNZPosInCG; n <=lastNZPosInCG; n++ )
+      {
+        absSum += Int(piDstCoeff[ codingParameters.scan[ n + subPos ]]);
+      }
+
+      if(lastNZPosInCG>=0 && lastCG==-1)
+      {
+        lastCG = 1;
+      }
+
+      if( lastNZPosInCG-firstNZPosInCG>=SBH_THRESHOLD )
+      {
+        UInt signbit = (piDstCoeff[codingParameters.scan[subPos+firstNZPosInCG]]>0?0:1);
+        if( signbit!=(absSum&0x1) )  // hide but need tune
+        {
+          // calculate the cost
+          Int64 minCostInc = std::numeric_limits<Int64>::max(), curCost = std::numeric_limits<Int64>::max();
+          Int minPos = -1, finalChange = 0, curChange = 0;
+
+          for( n = (lastCG==1?lastNZPosInCG:uiCGSize-1) ; n >= 0; --n )
+          {
+            UInt uiBlkPos   = codingParameters.scan[ n + subPos ];
+            if(piDstCoeff[ uiBlkPos ] != 0 )
+            {
+              Int64 costUp   = rdFactor * ( - deltaU[uiBlkPos] ) + rateIncUp[uiBlkPos];
+              Int64 costDown = rdFactor * (   deltaU[uiBlkPos] ) + rateIncDown[uiBlkPos]
+                               -   ((abs(piDstCoeff[uiBlkPos]) == 1) ? sigRateDelta[uiBlkPos] : 0);
+
+              if(lastCG==1 && lastNZPosInCG==n && abs(piDstCoeff[uiBlkPos])==1)
+              {
+                costDown -= (4<<15);
+              }
+
+              if(costUp<costDown)
+              {
+                curCost = costUp;
