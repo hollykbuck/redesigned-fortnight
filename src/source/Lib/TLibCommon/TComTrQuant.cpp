@@ -2598,3 +2598,103 @@ Void TComTrQuant::xRateDistOptQuant                 (       TComTU       &rTu,
               if(costUp<costDown)
               {
                 curCost = costUp;
+                curChange =  1;
+              }
+              else
+              {
+                curChange = -1;
+                if(n==firstNZPosInCG && abs(piDstCoeff[uiBlkPos])==1)
+                {
+                  curCost = std::numeric_limits<Int64>::max();
+                }
+                else
+                {
+                  curCost = costDown;
+                }
+              }
+            }
+            else
+            {
+              curCost = rdFactor * ( - (abs(deltaU[uiBlkPos])) ) + (1<<15) + rateIncUp[uiBlkPos] + sigRateDelta[uiBlkPos] ;
+              curChange = 1 ;
+
+              if(n<firstNZPosInCG)
+              {
+                UInt thissignbit = (plSrcCoeff[uiBlkPos]>=0?0:1);
+                if(thissignbit != signbit )
+                {
+                  curCost = std::numeric_limits<Int64>::max();
+                }
+              }
+            }
+
+            if( curCost<minCostInc)
+            {
+              minCostInc = curCost;
+              finalChange = curChange;
+              minPos = uiBlkPos;
+            }
+          }
+
+          if(piDstCoeff[minPos] == entropyCodingMaximum || piDstCoeff[minPos] == entropyCodingMinimum)
+          {
+            finalChange = -1;
+          }
+
+          if(plSrcCoeff[minPos]>=0)
+          {
+            piDstCoeff[minPos] += finalChange ;
+          }
+          else
+          {
+            piDstCoeff[minPos] -= finalChange ;
+          }
+        }
+      }
+
+      if(lastCG==1)
+      {
+        lastCG=0 ;
+      }
+    }
+  }
+}
+
+
+/** Pattern decision for context derivation process of significant_coeff_flag
+ * \param sigCoeffGroupFlag pointer to prior coded significant coeff group
+ * \param uiCGPosX column of current coefficient group
+ * \param uiCGPosY row of current coefficient group
+ * \param widthInGroups width of the block
+ * \param heightInGroups height of the block
+ * \returns pattern for current coefficient group
+ */
+Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPosX, UInt uiCGPosY, UInt widthInGroups, UInt heightInGroups )
+{
+  if ((widthInGroups <= 1) && (heightInGroups <= 1))
+  {
+    return 0;
+  }
+
+  const Bool rightAvailable = uiCGPosX < (widthInGroups  - 1);
+  const Bool belowAvailable = uiCGPosY < (heightInGroups - 1);
+
+  UInt sigRight = 0;
+  UInt sigLower = 0;
+
+  if (rightAvailable)
+  {
+    sigRight = ((sigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
+  }
+  if (belowAvailable)
+  {
+    sigLower = ((sigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
+  }
+
+  return sigRight + (sigLower << 1);
+}
+
+
+/** Context derivation process of coeff_abs_significant_flag
+ * \param patternSigCtx pattern for current coefficient group
+ * \param codingParameters coding parameters for the TU (includes the scan)
