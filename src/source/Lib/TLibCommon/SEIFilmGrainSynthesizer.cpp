@@ -798,3 +798,103 @@ void SEIFilmGrainSynthesizer::blendStripe_32x32(Pel *decSampleHbdOffsetY, Pel *g
   int32_t  grainSample;
   uint16_t decodeSampleHbd;
   uint8_t bitDepthShift = (bitDepth - FG_BIT_DEPTH_8);
+  uint32_t bufInc = (strideSrc - widthComp);
+  uint32_t grainBufInc = (strideGrain - widthComp);
+
+  for (l = 0; l < blockHeight; l++) /* y direction */
+  {
+    for (k = 0; k < widthComp; k++) /* x direction */
+    {
+      decodeSampleHbd = *decSampleHbdOffsetY;
+      grainSample = *grainStripe;
+      grainSample <<= bitDepthShift;
+      grainSample = CLIP3(0, maxRange, grainSample + decodeSampleHbd);
+      *decSampleHbdOffsetY = (Pel)grainSample;
+      decSampleHbdOffsetY++;
+      grainStripe++;
+    }
+    decSampleHbdOffsetY += bufInc;
+    grainStripe += grainBufInc;
+  }
+  return;
+}
+
+Pel SEIFilmGrainSynthesizer::blockAverage_8x8(Pel *decSampleBlk8, uint32_t widthComp, uint16_t *pNumSamples,
+  uint8_t ySize, uint8_t xSize, uint8_t bitDepth)
+{
+  uint32_t blockAvg = 0;
+  uint8_t  k;
+  uint8_t l;
+  for (k = 0; k < ySize; k++)
+  {
+    for (l = 0; l < xSize; l++)
+    {
+      blockAvg += *decSampleBlk8;
+      decSampleBlk8++;
+    }
+    decSampleBlk8 += widthComp - xSize;
+  }
+
+  blockAvg = blockAvg >> (FG_BLK_8_shift + (bitDepth - FG_BIT_DEPTH_8));
+  *pNumSamples = FG_BLK_AREA_8x8;
+
+  return blockAvg;
+}
+
+uint32_t SEIFilmGrainSynthesizer::blockAverage_16x16(Pel *decSampleBlk8, uint32_t widthComp, uint16_t *pNumSamples,
+  uint8_t ySize, uint8_t xSize, uint8_t bitDepth)
+{
+  uint32_t blockAvg = 0;
+  uint8_t  k;
+  uint8_t l;
+  for (k = 0; k < ySize; k++)
+  {
+    for (l = 0; l < xSize; l++)
+    {
+      blockAvg += *decSampleBlk8;
+      decSampleBlk8++;
+    }
+    decSampleBlk8 += widthComp - xSize;
+  }
+
+  // blockAvg = blockAvg >> (FG_BLK_16_shift + (bitDepth - FG_BIT_DEPTH_8));
+  // If FG_BLK_16 is not used or changed FG_BLK_AREA_16x16 has to be changed
+  *pNumSamples = FG_BLK_AREA_16x16;
+  return blockAvg;
+}
+
+uint32_t SEIFilmGrainSynthesizer::blockAverage_32x32(Pel *decSampleBlk32, uint32_t strideComp, uint8_t bitDepth)
+{
+  uint32_t blockAvg = 0;
+  uint8_t  k;
+  uint8_t l;
+  uint32_t bufInc = strideComp - FG_BLK_32;
+  for (k = 0; k < FG_BLK_32; k++)
+  {
+    for (l = 0; l < FG_BLK_32; l++)
+    {
+      blockAvg += *decSampleBlk32++;
+    }
+    decSampleBlk32 += bufInc;
+  }
+  blockAvg = blockAvg >> (FG_BLK_32_shift + (bitDepth - FG_BIT_DEPTH_8));
+  return blockAvg;
+}
+
+void SEIFilmGrainSynthesizer::simulateGrainBlk8x8(Pel *grainStripe, uint32_t grainStripeOffsetBlk8,
+  GrainSynthesisStruct *grain_synt, uint32_t width,
+  uint8_t log2ScaleFactor, int16_t scaleFactor, uint32_t kOffset,
+  uint32_t lOffset, uint8_t h, uint8_t v, uint32_t xSize)
+{
+  uint32_t l;
+  int8_t * database_h_v = &grain_synt->dataBase[h][v][lOffset][kOffset];
+  grainStripe += grainStripeOffsetBlk8;
+  uint32_t k;
+  for (l = 0; l < FG_BLK_8; l++) /* y direction */
+  {
+    for (k = 0; k < xSize; k++) /* x direction */
+    {
+      *grainStripe = ((scaleFactor * (*database_h_v)) >> (log2ScaleFactor + GRAIN_SCALE));
+      grainStripe++;
+      database_h_v++;
+    }
