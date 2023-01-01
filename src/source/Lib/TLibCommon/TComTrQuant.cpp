@@ -2698,3 +2698,103 @@ Int  TComTrQuant::calcPatternSigCtx( const UInt* sigCoeffGroupFlag, UInt uiCGPos
 /** Context derivation process of coeff_abs_significant_flag
  * \param patternSigCtx pattern for current coefficient group
  * \param codingParameters coding parameters for the TU (includes the scan)
+ * \param scanPosition current position in scan order
+ * \param log2BlockWidth log2 width of the block
+ * \param log2BlockHeight log2 height of the block
+ * \param chanType channel type (CHANNEL_TYPE_LUMA/CHROMA)
+ * \returns ctxInc for current scan position
+ */
+Int TComTrQuant::getSigCtxInc    (       Int                        patternSigCtx,
+                                   const TUEntropyCodingParameters &codingParameters,
+                                   const Int                        scanPosition,
+                                   const Int                        log2BlockWidth,
+                                   const Int                        log2BlockHeight,
+                                   const ChannelType                chanType)
+{
+  if (codingParameters.firstSignificanceMapContext == significanceMapContextSetStart[chanType][CONTEXT_TYPE_SINGLE])
+  {
+    //single context mode
+    return significanceMapContextSetStart[chanType][CONTEXT_TYPE_SINGLE];
+  }
+
+  const UInt rasterPosition = codingParameters.scan[scanPosition];
+  const UInt posY           = rasterPosition >> log2BlockWidth;
+  const UInt posX           = rasterPosition - (posY << log2BlockWidth);
+
+  if ((posX + posY) == 0)
+  {
+    return 0; //special case for the DC context variable
+  }
+
+  Int offset = MAX_INT;
+
+  if ((log2BlockWidth == 2) && (log2BlockHeight == 2)) //4x4
+  {
+    offset = ctxIndMap4x4[ (4 * posY) + posX ];
+  }
+  else
+  {
+    Int cnt = 0;
+
+    switch (patternSigCtx)
+    {
+      //------------------
+
+      case 0: //neither neighbouring group is significant
+        {
+          const Int posXinSubset     = posX & ((1 << MLS_CG_LOG2_WIDTH)  - 1);
+          const Int posYinSubset     = posY & ((1 << MLS_CG_LOG2_HEIGHT) - 1);
+          const Int posTotalInSubset = posXinSubset + posYinSubset;
+
+          //first N coefficients in scan order use 2; the next few use 1; the rest use 0.
+          const UInt context1Threshold = NEIGHBOURHOOD_00_CONTEXT_1_THRESHOLD_4x4;
+          const UInt context2Threshold = NEIGHBOURHOOD_00_CONTEXT_2_THRESHOLD_4x4;
+
+          cnt = (posTotalInSubset >= context1Threshold) ? 0 : ((posTotalInSubset >= context2Threshold) ? 1 : 2);
+        }
+        break;
+
+      //------------------
+
+      case 1: //right group is significant, below is not
+        {
+          const Int posYinSubset = posY & ((1 << MLS_CG_LOG2_HEIGHT) - 1);
+          const Int groupHeight  = 1 << MLS_CG_LOG2_HEIGHT;
+
+          cnt = (posYinSubset >= (groupHeight >> 1)) ? 0 : ((posYinSubset >= (groupHeight >> 2)) ? 1 : 2); //top quarter uses 2; second-from-top quarter uses 1; bottom half uses 0
+        }
+        break;
+
+      //------------------
+
+      case 2: //below group is significant, right is not
+        {
+          const Int posXinSubset = posX & ((1 << MLS_CG_LOG2_WIDTH)  - 1);
+          const Int groupWidth   = 1 << MLS_CG_LOG2_WIDTH;
+
+          cnt = (posXinSubset >= (groupWidth >> 1)) ? 0 : ((posXinSubset >= (groupWidth >> 2)) ? 1 : 2); //left quarter uses 2; second-from-left quarter uses 1; right half uses 0
+        }
+        break;
+
+      //------------------
+
+      case 3: //both neighbouring groups are significant
+        {
+          cnt = 2;
+        }
+        break;
+
+      //------------------
+
+      default:
+        std::cerr << "ERROR: Invalid patternSigCtx \"" << Int(patternSigCtx) << "\" in getSigCtxInc" << std::endl;
+        exit(1);
+        break;
+    }
+
+    //------------------------------------------------
+
+    const Bool notFirstGroup = ((posX >> MLS_CG_LOG2_WIDTH) + (posY >> MLS_CG_LOG2_HEIGHT)) > 0;
+
+    offset = (notFirstGroup ? notFirstGroupNeighbourhoodContextOffset[chanType] : 0) + cnt;
+  }
