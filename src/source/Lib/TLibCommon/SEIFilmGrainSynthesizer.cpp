@@ -698,3 +698,103 @@ void SEIFilmGrainSynthesizer::dataBaseGen()
       {
         for (k = 0; k < FG_DATA_BASE_SIZE; k++)
         {
+          m_grainSynt->dataBase[h][v][l][k] = ((m_grainSynt->dataBase[h][v][l][k]) * deblockFactor[v]) >> 7;
+          m_grainSynt->dataBase[h][v][l + m_fgsBlkSize - 1][k] = ((m_grainSynt->dataBase[h][v][l + m_fgsBlkSize - 1][k]) * deblockFactor[v]) >> 7;
+        }
+      }
+    }
+  }
+  return;
+}
+
+uint32_t SEIFilmGrainSynthesizer::prng(uint32_t x_r)
+{
+  uint32_t addVal;
+  addVal  = (1 + ((x_r & (POS_2)) > 0) + ((x_r & (POS_30)) > 0)) % 2;
+  x_r     = (x_r << 1) + addVal;
+  return x_r;
+}
+
+uint32_t SEIFilmGrainSynthesizer::fgsProcess(fgsProcessArgs &inArgs)
+{
+  uint32_t errorCode;
+  uint8_t  blkSize = inArgs.blkSize;
+
+  if (blkSize == 8)
+    errorCode = fgsSimulationBlending_8x8(&inArgs);
+  else if (blkSize == 16)
+    errorCode = fgsSimulationBlending_16x16(&inArgs);
+  else if (blkSize == 32)
+    errorCode = fgsSimulationBlending_32x32(&inArgs);
+  else
+    errorCode = FGS_FAIL;
+
+  return errorCode;
+}
+
+void SEIFilmGrainSynthesizer::deblockGrainStripe(Pel *grainStripe, uint32_t widthComp, uint32_t heightComp,
+  uint32_t strideComp, uint32_t blkSize)
+{
+  int32_t  left1, left0, right0, right1;
+  uint32_t pos, vertCtr;
+
+  uint32_t widthCropped = (widthComp - blkSize);
+  
+  for (vertCtr = 0; vertCtr < heightComp; vertCtr++)
+  {
+    for (pos = 0; pos < widthCropped; pos += blkSize)
+    {
+      left1 = *(grainStripe + blkSize - 2);
+      left0 = *(grainStripe + blkSize - 1);
+      right0 = *(grainStripe + blkSize + 0);
+      right1 = *(grainStripe + blkSize + 1);
+      *(grainStripe + blkSize + 0) = (left0 + (right0 << 1) + right1) >> 2;
+      *(grainStripe + blkSize - 1) = (left1 + (left0 << 1) + right0) >> 2;
+      grainStripe += blkSize;
+    }
+    grainStripe = grainStripe + (strideComp - pos);
+  }
+  return;
+}
+
+void SEIFilmGrainSynthesizer::blendStripe(Pel *decSampleHbdOffsetY, Pel *grainStripe, uint32_t widthComp,
+  uint32_t strideSrc, uint32_t strideGrain, uint32_t blockHeight, uint8_t bitDepth)
+{
+  uint32_t k, l;
+  uint16_t maxRange;
+  maxRange = (1 << bitDepth) - 1;
+
+  int32_t  grainSample;
+  uint16_t decodeSampleHbd;
+  uint8_t bitDepthShift = (bitDepth - FG_BIT_DEPTH_8);
+  uint32_t bufInc = (strideSrc - widthComp);
+  uint32_t grainBufInc = (strideGrain - widthComp);
+
+  for (l = 0; l < blockHeight; l++) /* y direction */
+  {
+    for (k = 0; k < widthComp; k++) /* x direction */
+    {
+      decodeSampleHbd = *decSampleHbdOffsetY;
+      grainSample = *grainStripe;
+      grainSample <<= bitDepthShift;
+      grainSample = CLIP3(0, maxRange, grainSample + decodeSampleHbd);
+      *decSampleHbdOffsetY = (Pel)grainSample;
+      decSampleHbdOffsetY++;
+      grainStripe++;
+    }
+    decSampleHbdOffsetY += bufInc;
+    grainStripe += grainBufInc;
+  }
+  return;
+}
+
+void SEIFilmGrainSynthesizer::blendStripe_32x32(Pel *decSampleHbdOffsetY, Pel *grainStripe, uint32_t widthComp,
+  uint32_t strideSrc, uint32_t strideGrain, uint32_t blockHeight, uint8_t bitDepth)
+{
+  uint32_t k, l;
+  uint16_t maxRange;
+  maxRange = (1 << bitDepth) - 1;
+
+  int32_t  grainSample;
+  uint16_t decodeSampleHbd;
+  uint8_t bitDepthShift = (bitDepth - FG_BIT_DEPTH_8);
