@@ -898,3 +898,103 @@ void SEIFilmGrainSynthesizer::simulateGrainBlk8x8(Pel *grainStripe, uint32_t gra
       grainStripe++;
       database_h_v++;
     }
+    grainStripe += width - xSize;
+    database_h_v += FG_DATA_BASE_SIZE - xSize;
+  }
+  return;
+}
+
+void SEIFilmGrainSynthesizer::simulateGrainBlk16x16(Pel *grainStripe, uint32_t grainStripeOffsetBlk8,
+  GrainSynthesisStruct *grain_synt, uint32_t width,
+  uint8_t log2ScaleFactor, int16_t scaleFactor, uint32_t kOffset,
+  uint32_t lOffset, uint8_t h, uint8_t v, uint32_t xSize)
+{
+  uint32_t l;
+  int8_t * database_h_v = &grain_synt->dataBase[h][v][lOffset][kOffset];
+  grainStripe += grainStripeOffsetBlk8;
+  uint32_t k;
+  for (l = 0; l < FG_BLK_16; l++) /* y direction */
+  {
+    for (k = 0; k < xSize; k++) /* x direction */
+    {
+      *grainStripe = (int16_t)(((int32_t)scaleFactor * (*database_h_v)) >> (log2ScaleFactor + GRAIN_SCALE));
+      grainStripe++;
+      database_h_v++;
+    }
+    grainStripe += width - xSize;
+    database_h_v += FG_DATA_BASE_SIZE - xSize;
+  }
+  return;
+}
+
+void SEIFilmGrainSynthesizer::simulateGrainBlk32x32(Pel *grainStripe, uint32_t grainStripeOffsetBlk32,
+  GrainSynthesisStruct *grain_synt, uint32_t width,
+  uint8_t log2ScaleFactor, int16_t scaleFactor, uint32_t kOffset,
+  uint32_t lOffset, uint8_t h, uint8_t v)
+{
+  uint32_t l;
+  int8_t * database_h_v = &grain_synt->dataBase[h][v][lOffset][kOffset];
+  grainStripe += grainStripeOffsetBlk32;
+  uint32_t k;
+  uint8_t shiftVal = log2ScaleFactor + GRAIN_SCALE;
+  uint32_t grainbufInc = width - FG_BLK_32;
+
+  for (l = 0; l < FG_BLK_32; l++) /* y direction */
+  {
+    for (k = 0; k < FG_BLK_32; k++) /* x direction */
+    {
+      *grainStripe = ((scaleFactor * (*database_h_v)) >> shiftVal);
+      grainStripe++;
+      database_h_v++;
+    }
+    grainStripe += grainbufInc;
+    database_h_v += FG_DATA_BASE_SIZE - FG_BLK_32;
+  }
+  return;
+}
+
+uint32_t SEIFilmGrainSynthesizer::fgsSimulationBlending_8x8(fgsProcessArgs *inArgs)
+{
+  uint8_t  numComp, compCtr, blkId; /* number of color components */
+  uint8_t  log2ScaleFactor, h, v;
+  uint8_t  bitDepth; /*grain bit depth and decoded bit depth are assumed to be same */
+  uint32_t widthComp[MAX_NUM_COMPONENT], heightComp[MAX_NUM_COMPONENT], strideComp[MAX_NUM_COMPONENT];
+  Pel *    decSampleHbdBlk16, *decSampleHbdBlk8, *decSampleHbdOffsetY;
+  Pel *    decHbdComp[MAX_NUM_COMPONENT];
+  uint16_t numSamples;
+  int16_t  scaleFactor;
+  uint32_t kOffset, lOffset, grainStripeOffset, grainStripeOffsetBlk8, offsetBlk8x8;
+  uint32_t kOffset_const, lOffset_const;
+  int16_t  scaleFactor_const;
+  Pel *    grainStripe; /* worth a row of 16x16 : Max size : 16xw;*/
+  int32_t  yOffset8x8, xOffset8x8;
+  uint32_t x, y;
+  uint32_t blockAvg, intensityInt; /* ec : seed to be used for the psudo random generator for a given color component */
+  uint32_t grainStripeWidth;
+  uint32_t wdPadded;
+
+  bitDepth        = inArgs->bitDepth;
+  numComp         = inArgs->numComp;
+  log2ScaleFactor = inArgs->pFgcParameters->m_log2ScaleFactor;
+
+  for (compCtr = 0; compCtr < numComp; compCtr++)
+  {
+    decHbdComp[compCtr] = inArgs->decComp[compCtr];
+    strideComp[compCtr] = inArgs->strideComp[compCtr];
+    widthComp[compCtr]  = inArgs->widthComp[compCtr];
+    heightComp[compCtr] = inArgs->heightComp[compCtr];
+  }
+
+  wdPadded = ((inArgs->widthComp[0] - 1) | 0xF) + 1;
+  grainStripe = new Pel[wdPadded * FG_BLK_16];
+
+  if (0 == inArgs->pFgcParameters->m_filmGrainCharacteristicsCancelFlag)
+  {
+    for (compCtr = 0; compCtr < numComp; compCtr++)
+    {
+      if (1 == inArgs->pFgcParameters->m_compModel[compCtr].bPresentFlag)
+      {
+        decSampleHbdOffsetY  = decHbdComp[compCtr];
+        uint32_t *offset_tmp = inArgs->fgsOffsets[compCtr];
+        grainStripeWidth = ((widthComp[compCtr] - 1) | 0xF) + 1;   // Make next muliptle of 16
+
