@@ -2798,3 +2798,103 @@ Int TComTrQuant::getSigCtxInc    (       Int                        patternSigCt
 
     offset = (notFirstGroup ? notFirstGroupNeighbourhoodContextOffset[chanType] : 0) + cnt;
   }
+
+  return codingParameters.firstSignificanceMapContext + offset;
+}
+
+
+/** Get the best level in RD sense
+ *
+ * \returns best quantized transform level for given scan position
+ *
+ * This method calculates the best quantized transform level for a given scan position.
+ */
+__inline UInt TComTrQuant::xGetCodedLevel ( Double&          rd64CodedCost,          //< reference to coded cost
+                                            Double&          rd64CodedCost0,         //< reference to cost when coefficient is 0
+                                            Double&          rd64CodedCostSig,       //< rd64CodedCostSig reference to cost of significant coefficient
+                                            Intermediate_Int lLevelDouble,           //< reference to unscaled quantized level
+                                            UInt             uiMaxAbsLevel,          //< scaled quantized level
+                                            UShort           ui16CtxNumSig,          //< current ctxInc for coeff_abs_significant_flag
+                                            UShort           ui16CtxNumOne,          //< current ctxInc for coeff_abs_level_greater1 (1st bin of coeff_abs_level_minus1 in AVC)
+                                            UShort           ui16CtxNumAbs,          //< current ctxInc for coeff_abs_level_greater2 (remaining bins of coeff_abs_level_minus1 in AVC)
+                                            UShort           ui16AbsGoRice,          //< current Rice parameter for coeff_abs_level_minus3
+                                            UInt             c1Idx,                  //< 
+                                            UInt             c2Idx,                  //< 
+                                            Int              iQBits,                 //< quantization step size
+                                            Double           errorScale,             //< 
+                                            Bool             bLast,                  //< indicates if the coefficient is the last significant
+                                            Bool             useLimitedPrefixLength, //< 
+                                            const Int        maxLog2TrDynamicRange   //< 
+                                            ) const
+{
+  Double dCurrCostSig   = 0;
+  UInt   uiBestAbsLevel = 0;
+
+  if( !bLast && uiMaxAbsLevel < 3 )
+  {
+    rd64CodedCostSig    = xGetRateSigCoef( 0, ui16CtxNumSig );
+    rd64CodedCost       = rd64CodedCost0 + rd64CodedCostSig;
+    if( uiMaxAbsLevel == 0 )
+    {
+      return uiBestAbsLevel;
+    }
+  }
+  else
+  {
+    rd64CodedCost       = MAX_DOUBLE;
+  }
+
+  if( !bLast )
+  {
+    dCurrCostSig        = xGetRateSigCoef( 1, ui16CtxNumSig );
+  }
+
+  UInt uiMinAbsLevel    = ( uiMaxAbsLevel > 1 ? uiMaxAbsLevel - 1 : 1 );
+  for( Int uiAbsLevel  = uiMaxAbsLevel; uiAbsLevel >= uiMinAbsLevel ; uiAbsLevel-- )
+  {
+    Double dErr         = Double( lLevelDouble  - ( Intermediate_Int(uiAbsLevel) << iQBits ) );
+    Double dCurrCost    = dErr * dErr * errorScale + xGetICost( xGetICRate( uiAbsLevel, ui16CtxNumOne, ui16CtxNumAbs, ui16AbsGoRice, c1Idx, c2Idx, useLimitedPrefixLength, maxLog2TrDynamicRange ) );
+    dCurrCost          += dCurrCostSig;
+
+    if( dCurrCost < rd64CodedCost )
+    {
+      uiBestAbsLevel    = uiAbsLevel;
+      rd64CodedCost     = dCurrCost;
+      rd64CodedCostSig  = dCurrCostSig;
+    }
+  }
+
+  return uiBestAbsLevel;
+}
+
+/** Calculates the cost for specific absolute transform level
+ * \param uiAbsLevel scaled quantized level
+ * \param ui16CtxNumOne current ctxInc for coeff_abs_level_greater1 (1st bin of coeff_abs_level_minus1 in AVC)
+ * \param ui16CtxNumAbs current ctxInc for coeff_abs_level_greater2 (remaining bins of coeff_abs_level_minus1 in AVC)
+ * \param ui16AbsGoRice Rice parameter for coeff_abs_level_minus3
+ * \param c1Idx
+ * \param c2Idx
+ * \param useLimitedPrefixLength
+ * \param maxLog2TrDynamicRange
+ * \returns cost of given absolute transform level
+ */
+__inline Int TComTrQuant::xGetICRate         ( const UInt    uiAbsLevel,
+                                               const UShort  ui16CtxNumOne,
+                                               const UShort  ui16CtxNumAbs,
+                                               const UShort  ui16AbsGoRice,
+                                               const UInt    c1Idx,
+                                               const UInt    c2Idx,
+                                               const Bool    useLimitedPrefixLength,
+                                               const Int     maxLog2TrDynamicRange
+                                               ) const
+{
+  Int  iRate      = Int(xGetIEPRate()); // cost of sign bit
+  UInt baseLevel  = (c1Idx < C1FLAG_NUMBER) ? (2 + (c2Idx < C2FLAG_NUMBER)) : 1;
+
+  if ( uiAbsLevel >= baseLevel )
+  {
+    UInt symbol     = uiAbsLevel - baseLevel;
+    UInt length;
+    if (symbol < (COEF_REMAIN_BIN_REDUCTION << ui16AbsGoRice))
+    {
+      length = symbol>>ui16AbsGoRice;
