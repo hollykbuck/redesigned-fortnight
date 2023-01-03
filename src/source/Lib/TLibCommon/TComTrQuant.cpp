@@ -2898,3 +2898,103 @@ __inline Int TComTrQuant::xGetICRate         ( const UInt    uiAbsLevel,
     if (symbol < (COEF_REMAIN_BIN_REDUCTION << ui16AbsGoRice))
     {
       length = symbol>>ui16AbsGoRice;
+      iRate += (length+1+ui16AbsGoRice)<< 15;
+    }
+    else if (useLimitedPrefixLength)
+    {
+      const UInt maximumPrefixLength = (32 - (COEF_REMAIN_BIN_REDUCTION + maxLog2TrDynamicRange));
+
+      UInt prefixLength = 0;
+      UInt suffix       = (symbol >> ui16AbsGoRice) - COEF_REMAIN_BIN_REDUCTION;
+
+      while ((prefixLength < maximumPrefixLength) && (suffix > ((2 << prefixLength) - 2)))
+      {
+        prefixLength++;
+      }
+
+      const UInt suffixLength = (prefixLength == maximumPrefixLength) ? (maxLog2TrDynamicRange - ui16AbsGoRice) : (prefixLength + 1/*separator*/);
+
+      iRate += (COEF_REMAIN_BIN_REDUCTION + prefixLength + suffixLength + ui16AbsGoRice) << 15;
+    }
+    else
+    {
+      length = ui16AbsGoRice;
+      symbol  = symbol - ( COEF_REMAIN_BIN_REDUCTION << ui16AbsGoRice);
+      while (symbol >= (1<<length))
+      {
+        symbol -=  (1<<(length++));
+      }
+      iRate += (COEF_REMAIN_BIN_REDUCTION+length+1-ui16AbsGoRice+length)<< 15;
+    }
+
+    if (c1Idx < C1FLAG_NUMBER)
+    {
+      iRate += m_pcEstBitsSbac->m_greaterOneBits[ ui16CtxNumOne ][ 1 ];
+
+      if (c2Idx < C2FLAG_NUMBER)
+      {
+        iRate += m_pcEstBitsSbac->m_levelAbsBits[ ui16CtxNumAbs ][ 1 ];
+      }
+    }
+  }
+  else if( uiAbsLevel == 1 )
+  {
+    iRate += m_pcEstBitsSbac->m_greaterOneBits[ ui16CtxNumOne ][ 0 ];
+  }
+  else if( uiAbsLevel == 2 )
+  {
+    iRate += m_pcEstBitsSbac->m_greaterOneBits[ ui16CtxNumOne ][ 1 ];
+    iRate += m_pcEstBitsSbac->m_levelAbsBits[ ui16CtxNumAbs ][ 0 ];
+  }
+  else
+  {
+    iRate = 0;
+  }
+
+  return  iRate;
+}
+
+__inline Double TComTrQuant::xGetRateSigCoeffGroup  ( UShort                    uiSignificanceCoeffGroup,
+                                                UShort                          ui16CtxNumSig ) const
+{
+  return xGetICost( m_pcEstBitsSbac->significantCoeffGroupBits[ ui16CtxNumSig ][ uiSignificanceCoeffGroup ] );
+}
+
+/** Calculates the cost of signaling the last significant coefficient in the block
+ * \param uiPosX X coordinate of the last significant coefficient
+ * \param uiPosY Y coordinate of the last significant coefficient
+ * \param component colour component ID
+ * \returns cost of last significant coefficient
+ */
+/*
+ * \param uiWidth width of the transform unit (TU)
+*/
+__inline Double TComTrQuant::xGetRateLast   ( const UInt                      uiPosX,
+                                              const UInt                      uiPosY,
+                                              const ComponentID               component  ) const
+{
+  UInt uiCtxX   = g_uiGroupIdx[uiPosX];
+  UInt uiCtxY   = g_uiGroupIdx[uiPosY];
+
+  Double uiCost = m_pcEstBitsSbac->lastXBits[toChannelType(component)][ uiCtxX ] + m_pcEstBitsSbac->lastYBits[toChannelType(component)][ uiCtxY ];
+
+  if( uiCtxX > 3 )
+  {
+    uiCost += xGetIEPRate() * ((uiCtxX-2)>>1);
+  }
+  if( uiCtxY > 3 )
+  {
+    uiCost += xGetIEPRate() * ((uiCtxY-2)>>1);
+  }
+  return xGetICost( uiCost );
+}
+
+__inline Double TComTrQuant::xGetRateSigCoef  ( UShort                          uiSignificance,
+                                                UShort                          ui16CtxNumSig ) const
+{
+  return xGetICost( m_pcEstBitsSbac->significantBits[ ui16CtxNumSig ][ uiSignificance ] );
+}
+
+/** Get the cost for a specific rate
+ * \param dRate rate of a bit
+ * \returns cost at the specific rate
