@@ -2998,3 +2998,103 @@ __inline Double TComTrQuant::xGetRateSigCoef  ( UShort                          
 /** Get the cost for a specific rate
  * \param dRate rate of a bit
  * \returns cost at the specific rate
+ */
+__inline Double TComTrQuant::xGetICost        ( Double                          dRate         ) const
+{
+  return m_dLambda * dRate;
+}
+
+/** Get the cost of an equal probable bit
+ * \returns cost of equal probable bit
+ */
+__inline Double TComTrQuant::xGetIEPRate      (                                               ) const
+{
+  return 32768;
+}
+
+/** Context derivation process of coeff_abs_significant_flag
+ * \param uiSigCoeffGroupFlag significance map of L1
+ * \param uiCGPosX column of current scan position
+ * \param uiCGPosY row of current scan position
+ * \param widthInGroups width of the block
+ * \param heightInGroups height of the block
+ * \returns ctxInc for current scan position
+ */
+UInt TComTrQuant::getSigCoeffGroupCtxInc  (const UInt*  uiSigCoeffGroupFlag,
+                                           const UInt   uiCGPosX,
+                                           const UInt   uiCGPosY,
+                                           const UInt   widthInGroups,
+                                           const UInt   heightInGroups)
+{
+  UInt sigRight = 0;
+  UInt sigLower = 0;
+
+  if (uiCGPosX < (widthInGroups  - 1))
+  {
+    sigRight = ((uiSigCoeffGroupFlag[ (uiCGPosY * widthInGroups) + uiCGPosX + 1 ] != 0) ? 1 : 0);
+  }
+  if (uiCGPosY < (heightInGroups - 1))
+  {
+    sigLower = ((uiSigCoeffGroupFlag[ (uiCGPosY + 1) * widthInGroups + uiCGPosX ] != 0) ? 1 : 0);
+  }
+
+  return ((sigRight + sigLower) != 0) ? 1 : 0;
+}
+
+
+/** set quantized matrix coefficient for encode
+ * \param scalingList            quantized matrix address
+ * \param format                 chroma format
+ * \param maxLog2TrDynamicRange
+ * \param bitDepths              reference to bit depth array for all channels
+ */
+Void TComTrQuant::setScalingList(TComScalingList *scalingList, const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
+{
+  const Int minimumQp = 0;
+  const Int maximumQp = SCALING_LIST_REM_NUM;
+
+  for(UInt size = 0; size < SCALING_LIST_SIZE_NUM; size++)
+  {
+    for(UInt list = 0; list < SCALING_LIST_NUM; list++)
+    {
+      for(Int qp = minimumQp; qp < maximumQp; qp++)
+      {
+        xSetScalingListEnc(scalingList,list,size,qp);
+        xSetScalingListDec(*scalingList,list,size,qp);
+        setErrScaleCoeff(list,size,qp,maxLog2TrDynamicRange, bitDepths);
+      }
+    }
+  }
+}
+/** set quantized matrix coefficient for decode
+ * \param scalingList quantized matrix address
+ * \param format      chroma format
+ */
+Void TComTrQuant::setScalingListDec(const TComScalingList &scalingList)
+{
+  const Int minimumQp = 0;
+  const Int maximumQp = SCALING_LIST_REM_NUM;
+
+  for(UInt size = 0; size < SCALING_LIST_SIZE_NUM; size++)
+  {
+    for(UInt list = 0; list < SCALING_LIST_NUM; list++)
+    {
+      for(Int qp = minimumQp; qp < maximumQp; qp++)
+      {
+        xSetScalingListDec(scalingList,list,size,qp);
+      }
+    }
+  }
+}
+/** set error scale coefficients
+ * \param list                   list ID
+ * \param size                   
+ * \param qp                     quantization parameter
+ * \param maxLog2TrDynamicRange
+ * \param bitDepths              reference to bit depth array for all channels
+ */
+Void TComTrQuant::setErrScaleCoeff(UInt list, UInt size, Int qp, const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
+{
+  const UInt uiLog2TrSize = g_aucConvertToBit[ g_scalingListSizeX[size] ] + 2;
+  const ChannelType channelType = ((list == 0) || (list == MAX_NUM_COMPONENT)) ? CHANNEL_TYPE_LUMA : CHANNEL_TYPE_CHROMA;
+
