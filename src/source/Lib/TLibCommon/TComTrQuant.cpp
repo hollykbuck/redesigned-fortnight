@@ -3098,3 +3098,103 @@ Void TComTrQuant::setErrScaleCoeff(UInt list, UInt size, Int qp, const Int maxLo
   const UInt uiLog2TrSize = g_aucConvertToBit[ g_scalingListSizeX[size] ] + 2;
   const ChannelType channelType = ((list == 0) || (list == MAX_NUM_COMPONENT)) ? CHANNEL_TYPE_LUMA : CHANNEL_TYPE_CHROMA;
 
+  const Int channelBitDepth    = bitDepths.recon[channelType];
+  const Int iTransformShift = getTransformShift(channelBitDepth, uiLog2TrSize, maxLog2TrDynamicRange[channelType]);  // Represents scaling through forward transform
+
+  UInt i,uiMaxNumCoeff = g_scalingListSize[size];
+  Int *piQuantcoeff;
+  Double *pdErrScale;
+  piQuantcoeff   = getQuantCoeff(list, qp,size);
+  pdErrScale     = getErrScaleCoeff(list, size, qp);
+
+  Double dErrScale = (Double)(1<<SCALE_BITS);                                // Compensate for scaling of bitcount in Lagrange cost function
+  dErrScale = dErrScale*pow(2.0,(-2.0*iTransformShift));                     // Compensate for scaling through forward transform
+
+  for(i=0;i<uiMaxNumCoeff;i++)
+  {
+    pdErrScale[i] =  dErrScale / piQuantcoeff[i] / piQuantcoeff[i] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (bitDepths.recon[channelType] - 8)));
+  }
+
+  getErrScaleCoeffNoScalingList(list, size, qp) = dErrScale / g_quantScales[qp] / g_quantScales[qp] / (1 << DISTORTION_PRECISION_ADJUSTMENT(2 * (bitDepths.recon[channelType] - 8)));
+}
+
+/** set quantized matrix coefficient for encode
+ * \param scalingList quantized matrix address
+ * \param listId List index
+ * \param sizeId size index
+ * \param qp Quantization parameter
+ * \param format chroma format
+ */
+Void TComTrQuant::xSetScalingListEnc(TComScalingList *scalingList, UInt listId, UInt sizeId, Int qp)
+{
+  UInt width  = g_scalingListSizeX[sizeId];
+  UInt height = g_scalingListSizeX[sizeId];
+  UInt ratio  = g_scalingListSizeX[sizeId]/min(MAX_MATRIX_SIZE_NUM,(Int)g_scalingListSizeX[sizeId]);
+  Int *quantcoeff;
+  Int *coeff  = scalingList->getScalingListAddress(sizeId,listId);
+  quantcoeff  = getQuantCoeff(listId, qp, sizeId);
+
+  Int quantScales = g_quantScales[qp];
+
+  processScalingListEnc(coeff,
+                        quantcoeff,
+                        (quantScales << LOG2_SCALING_LIST_NEUTRAL_VALUE),
+                        height, width, ratio,
+                        min(MAX_MATRIX_SIZE_NUM, (Int)g_scalingListSizeX[sizeId]),
+                        scalingList->getScalingListDC(sizeId,listId));
+}
+
+/** set quantized matrix coefficient for decode
+ * \param scalingList quantaized matrix address
+ * \param listId List index
+ * \param sizeId size index
+ * \param qp Quantization parameter
+ * \param format chroma format
+ */
+Void TComTrQuant::xSetScalingListDec(const TComScalingList &scalingList, UInt listId, UInt sizeId, Int qp)
+{
+  UInt width  = g_scalingListSizeX[sizeId];
+  UInt height = g_scalingListSizeX[sizeId];
+  UInt ratio  = g_scalingListSizeX[sizeId]/min(MAX_MATRIX_SIZE_NUM,(Int)g_scalingListSizeX[sizeId]);
+  Int *dequantcoeff;
+  const Int *coeff  = scalingList.getScalingListAddress(sizeId,listId);
+
+  dequantcoeff = getDequantCoeff(listId, qp, sizeId);
+
+  Int invQuantScale = g_invQuantScales[qp];
+
+  processScalingListDec(coeff,
+                        dequantcoeff,
+                        invQuantScale,
+                        height, width, ratio,
+                        min(MAX_MATRIX_SIZE_NUM, (Int)g_scalingListSizeX[sizeId]),
+                        scalingList.getScalingListDC(sizeId,listId));
+}
+
+/** set flat matrix value to quantized coefficient
+ */
+Void TComTrQuant::setFlatScalingList(const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE], const BitDepths &bitDepths)
+{
+  const Int minimumQp = 0;
+  const Int maximumQp = SCALING_LIST_REM_NUM;
+
+  for(UInt size = 0; size < SCALING_LIST_SIZE_NUM; size++)
+  {
+    for(UInt list = 0; list < SCALING_LIST_NUM; list++)
+    {
+      for(Int qp = minimumQp; qp < maximumQp; qp++)
+      {
+        xsetFlatScalingList(list,size,qp);
+        setErrScaleCoeff(list,size,qp,maxLog2TrDynamicRange, bitDepths);
+      }
+    }
+  }
+}
+
+/** set flat matrix value to quantized coefficient
+ * \param list List ID
+ * \param size size index
+ * \param qp Quantization parameter
+ * \param format chroma format
+ */
+Void TComTrQuant::xsetFlatScalingList(UInt list, UInt size, Int qp)
