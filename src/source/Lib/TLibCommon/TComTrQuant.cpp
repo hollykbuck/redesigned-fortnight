@@ -3198,3 +3198,103 @@ Void TComTrQuant::setFlatScalingList(const Int maxLog2TrDynamicRange[MAX_NUM_CHA
  * \param format chroma format
  */
 Void TComTrQuant::xsetFlatScalingList(UInt list, UInt size, Int qp)
+{
+  UInt i,num = g_scalingListSize[size];
+  Int *quantcoeff;
+  Int *dequantcoeff;
+
+  Int quantScales    = g_quantScales   [qp];
+  Int invQuantScales = g_invQuantScales[qp] << 4;
+
+  quantcoeff   = getQuantCoeff(list, qp, size);
+  dequantcoeff = getDequantCoeff(list, qp, size);
+
+  for(i=0;i<num;i++)
+  {
+    *quantcoeff++ = quantScales;
+    *dequantcoeff++ = invQuantScales;
+  }
+}
+
+/** set quantized matrix coefficient for encode
+ * \param coeff quantaized matrix address
+ * \param quantcoeff quantaized matrix address
+ * \param quantScales Q(QP%6)
+ * \param height height
+ * \param width width
+ * \param ratio ratio for upscale
+ * \param sizuNum matrix size
+ * \param dc dc parameter
+ */
+Void TComTrQuant::processScalingListEnc( Int *coeff, Int *quantcoeff, Int quantScales, UInt height, UInt width, UInt ratio, Int sizuNum, UInt dc)
+{
+  for(UInt j=0;j<height;j++)
+  {
+    for(UInt i=0;i<width;i++)
+    {
+      quantcoeff[j*width + i] = quantScales / coeff[sizuNum * (j / ratio) + i / ratio];
+    }
+  }
+
+  if(ratio > 1)
+  {
+    quantcoeff[0] = quantScales / dc;
+  }
+}
+
+/** set quantized matrix coefficient for decode
+ * \param coeff quantaized matrix address
+ * \param dequantcoeff quantaized matrix address
+ * \param invQuantScales IQ(QP%6))
+ * \param height height
+ * \param width width
+ * \param ratio ratio for upscale
+ * \param sizuNum matrix size
+ * \param dc dc parameter
+ */
+Void TComTrQuant::processScalingListDec( const Int *coeff, Int *dequantcoeff, Int invQuantScales, UInt height, UInt width, UInt ratio, Int sizuNum, UInt dc)
+{
+  for(UInt j=0;j<height;j++)
+  {
+    for(UInt i=0;i<width;i++)
+    {
+      dequantcoeff[j*width + i] = invQuantScales * coeff[sizuNum * (j / ratio) + i / ratio];
+    }
+  }
+
+  if(ratio > 1)
+  {
+    dequantcoeff[0] = invQuantScales * dc;
+  }
+}
+
+/** initialization process of scaling list array
+ */
+Void TComTrQuant::initScalingList()
+{
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt qp = 0; qp < SCALING_LIST_REM_NUM; qp++)
+    {
+      for(UInt listId = 0; listId < SCALING_LIST_NUM; listId++)
+      {
+        m_quantCoef   [sizeId][listId][qp] = new Int    [g_scalingListSize[sizeId]];
+        m_dequantCoef [sizeId][listId][qp] = new Int    [g_scalingListSize[sizeId]];
+        m_errScale    [sizeId][listId][qp] = new Double [g_scalingListSize[sizeId]];
+      } // listID loop
+    }
+  }
+}
+
+/** destroy quantization matrix array
+ */
+Void TComTrQuant::destroyScalingList()
+{
+  for(UInt sizeId = 0; sizeId < SCALING_LIST_SIZE_NUM; sizeId++)
+  {
+    for(UInt listId = 0; listId < SCALING_LIST_NUM; listId++)
+    {
+      for(UInt qp = 0; qp < SCALING_LIST_REM_NUM; qp++)
+      {
+        if(m_quantCoef[sizeId][listId][qp])
+        {
