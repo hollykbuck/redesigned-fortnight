@@ -3298,3 +3298,103 @@ Void TComTrQuant::destroyScalingList()
       {
         if(m_quantCoef[sizeId][listId][qp])
         {
+          delete [] m_quantCoef[sizeId][listId][qp];
+        }
+        if(m_dequantCoef[sizeId][listId][qp])
+        {
+          delete [] m_dequantCoef[sizeId][listId][qp];
+        }
+        if(m_errScale[sizeId][listId][qp])
+        {
+          delete [] m_errScale[sizeId][listId][qp];
+        }
+      }
+    }
+  }
+}
+
+Void TComTrQuant::transformSkipQuantOneSample(TComTU &rTu, const ComponentID compID, const TCoeff resiDiff, TCoeff* pcCoeff, const UInt uiPos, const QpParam &cQP, const Bool bUseHalfRoundingPoint)
+{
+        TComDataCU    *pcCU                           = rTu.getCU();
+  const UInt           uiAbsPartIdx                   = rTu.GetAbsPartIdxTU();
+  const TComRectangle &rect                           = rTu.getRect(compID);
+  const UInt           uiWidth                        = rect.width;
+  const UInt           uiHeight                       = rect.height;
+  const Int            maxLog2TrDynamicRange          = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+  const Int            channelBitDepth                = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+  const Int            iTransformShift                = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(compID), maxLog2TrDynamicRange);
+  const Int            scalingListType                = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+  const Bool           enableScalingLists             = getUseScalingList(uiWidth, uiHeight, true);
+  const Int            defaultQuantisationCoefficient = g_quantScales[cQP.rem];
+
+  assert( scalingListType < SCALING_LIST_NUM );
+  const Int *const piQuantCoeff = getQuantCoeff( scalingListType, cQP.rem, (rTu.GetEquivalentLog2TrSize(compID)-2) );
+
+
+  /* for 422 chroma blocks, the effective scaling applied during transformation is not a power of 2, hence it cannot be
+  * implemented as a bit-shift (the quantised result will be sqrt(2) * larger than required). Alternatively, adjust the
+  * uiLog2TrSize applied in iTransformShift, such that the result is 1/sqrt(2) the required result (i.e. smaller)
+  * Then a QP+3 (sqrt(2)) or QP-3 (1/sqrt(2)) method could be used to get the required result
+  */
+
+  const Int iQBits = QUANT_SHIFT + cQP.per + iTransformShift;
+  // QBits will be OK for any internal bit depth as the reduction in transform shift is balanced by an increase in Qp_per due to QpBDOffset
+
+  const Int iAdd = ( bUseHalfRoundingPoint ? 256 : (pcCU->getSlice()->getSliceType() == I_SLICE ? 171 : 85) ) << (iQBits - 9);
+
+  TCoeff transformedCoefficient;
+
+  // transform-skip
+  if (iTransformShift >= 0)
+  {
+    transformedCoefficient = resiDiff << iTransformShift;
+  }
+  else // for very high bit depths
+  {
+    const Int iTrShiftNeg  = -iTransformShift;
+    const Int offset       = 1 << (iTrShiftNeg - 1);
+    transformedCoefficient = ( resiDiff + offset ) >> iTrShiftNeg;
+  }
+
+  // quantization
+  const TCoeff iSign = (transformedCoefficient < 0 ? -1: 1);
+
+  const Int quantisationCoefficient = enableScalingLists ? piQuantCoeff[uiPos] : defaultQuantisationCoefficient;
+
+  const Int64 tmpLevel = (Int64)abs(transformedCoefficient) * quantisationCoefficient;
+
+  const TCoeff quantisedCoefficient = (TCoeff((tmpLevel + iAdd ) >> iQBits)) * iSign;
+
+  const TCoeff entropyCodingMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff entropyCodingMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+  pcCoeff[ uiPos ] = Clip3<TCoeff>( entropyCodingMinimum, entropyCodingMaximum, quantisedCoefficient );
+}
+
+
+Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TCoeff inSample, Pel &reconSample, const QpParam &cQP, UInt uiPos )
+{
+        TComDataCU    *pcCU               = rTu.getCU();
+  const UInt           uiAbsPartIdx       = rTu.GetAbsPartIdxTU();
+  const TComRectangle &rect               = rTu.getRect(compID);
+  const UInt           uiWidth            = rect.width;
+  const UInt           uiHeight           = rect.height;
+  const Int            QP_per             = cQP.per;
+  const Int            QP_rem             = cQP.rem;
+  const Int            maxLog2TrDynamicRange = pcCU->getSlice()->getSPS()->getMaxLog2TrDynamicRange(toChannelType(compID));
+#if O0043_BEST_EFFORT_DECODING
+  const Int            channelBitDepth    = pcCU->getSlice()->getSPS()->getStreamBitDepth(toChannelType(compID));
+#else
+  const Int            channelBitDepth    = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+#endif
+  const Int            iTransformShift    = getTransformShift(channelBitDepth, rTu.GetEquivalentLog2TrSize(compID), maxLog2TrDynamicRange);
+  const Int            scalingListType    = getScalingListType(pcCU->getPredictionMode(uiAbsPartIdx), compID);
+  const Bool           enableScalingLists = getUseScalingList(uiWidth, uiHeight, true);
+  const UInt           uiLog2TrSize       = rTu.GetEquivalentLog2TrSize(compID);
+
+  assert( scalingListType < SCALING_LIST_NUM );
+
+  const Int rightShift = (IQUANT_SHIFT - (iTransformShift + QP_per)) + (enableScalingLists ? LOG2_SCALING_LIST_NEUTRAL_VALUE : 0);
+
+  const TCoeff transformMinimum = -(1 << maxLog2TrDynamicRange);
+  const TCoeff transformMaximum =  (1 << maxLog2TrDynamicRange) - 1;
+
