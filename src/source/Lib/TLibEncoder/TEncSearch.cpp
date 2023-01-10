@@ -198,3 +198,103 @@ Void TEncSearch::destroy()
   }
   m_pcQTTempTransformSkipTComYuv.destroy();
 
+  m_tmpYuvPred.destroy();
+  m_isInitialized = false;
+}
+
+TEncSearch::~TEncSearch()
+{
+  if (m_isInitialized)
+  {
+    destroy();
+  }
+}
+
+
+
+
+Void TEncSearch::init(TEncCfg*       pcEncCfg,
+                      TComTrQuant*   pcTrQuant,
+                      Int            iSearchRange,
+                      Int            bipredSearchRange,
+                      MESearchMethod motionEstimationSearchMethod,
+                      const UInt     maxCUWidth,
+                      const UInt     maxCUHeight,
+                      const UInt     maxTotalCUDepth,
+                      TEncEntropy*   pcEntropyCoder,
+                      TComRdCost*    pcRdCost,
+                      TEncSbac***    pppcRDSbacCoder,
+                      TEncSbac*      pcRDGoOnSbacCoder
+                      )
+{
+  assert (!m_isInitialized);
+  m_pcEncCfg                     = pcEncCfg;
+  m_pcTrQuant                    = pcTrQuant;
+  m_iSearchRange                 = iSearchRange;
+  m_bipredSearchRange            = bipredSearchRange;
+  m_motionEstimationSearchMethod = motionEstimationSearchMethod;
+  m_pcEntropyCoder               = pcEntropyCoder;
+  m_pcRdCost                     = pcRdCost;
+
+  m_pppcRDSbacCoder              = pppcRDSbacCoder;
+  m_pcRDGoOnSbacCoder            = pcRDGoOnSbacCoder;
+
+  for (UInt iDir = 0; iDir < MAX_NUM_REF_LIST_ADAPT_SR; iDir++)
+  {
+    for (UInt iRefIdx = 0; iRefIdx < MAX_IDX_ADAPT_SR; iRefIdx++)
+    {
+      m_aaiAdaptSR[iDir][iRefIdx] = iSearchRange;
+    }
+  }
+
+  // initialize motion cost
+  for( Int iNum = 0; iNum < AMVP_MAX_NUM_CANDS+1; iNum++)
+  {
+    for( Int iIdx = 0; iIdx < AMVP_MAX_NUM_CANDS; iIdx++)
+    {
+      if (iIdx < iNum)
+      {
+        m_auiMVPIdxCost[iIdx][iNum] = xGetMvpIdxBits(iIdx, iNum);
+      }
+      else
+      {
+        m_auiMVPIdxCost[iIdx][iNum] = MAX_INT;
+      }
+    }
+  }
+
+  const ChromaFormat cform=pcEncCfg->getChromaFormatIdc();
+  initTempBuff(cform);
+
+  m_pTempPel = new Pel[maxCUWidth*maxCUHeight];
+
+  const UInt uiNumLayersToAllocate = pcEncCfg->getQuadtreeTULog2MaxSize()-pcEncCfg->getQuadtreeTULog2MinSize()+1;
+  const UInt uiNumPartitions = 1<<(maxTotalCUDepth<<1);
+  for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+  {
+    const UInt csx=::getComponentScaleX(ComponentID(ch), cform);
+    const UInt csy=::getComponentScaleY(ComponentID(ch), cform);
+    m_ppcQTTempCoeff[ch] = new TCoeff* [uiNumLayersToAllocate];
+#if ADAPTIVE_QP_SELECTION
+    m_ppcQTTempArlCoeff[ch]  = new TCoeff*[uiNumLayersToAllocate];
+#endif
+    m_puhQTTempCbf[ch] = new UChar  [uiNumPartitions];
+
+    for (UInt layer = 0; layer < uiNumLayersToAllocate; layer++)
+    {
+      m_ppcQTTempCoeff[ch][layer] = new TCoeff[(maxCUWidth*maxCUHeight)>>(csx+csy)];
+#if ADAPTIVE_QP_SELECTION
+      m_ppcQTTempArlCoeff[ch][layer]  = new TCoeff[(maxCUWidth*maxCUHeight)>>(csx+csy) ];
+#endif
+    }
+
+    m_phQTTempCrossComponentPredictionAlpha[ch]    = new SChar  [uiNumPartitions];
+    m_pSharedPredTransformSkip[ch]                 = new Pel   [MAX_CU_SIZE*MAX_CU_SIZE];
+    m_pcQTTempTUCoeff[ch]                          = new TCoeff[MAX_CU_SIZE*MAX_CU_SIZE];
+#if ADAPTIVE_QP_SELECTION
+    m_ppcQTTempTUArlCoeff[ch]                      = new TCoeff[MAX_CU_SIZE*MAX_CU_SIZE];
+#endif
+    m_puhQTTempTransformSkipFlag[ch]               = new UChar [uiNumPartitions];
+  }
+  m_puhQTTempTrIdx   = new UChar  [uiNumPartitions];
+  m_pcQTTempTComYuv  = new TComYuv[uiNumLayersToAllocate];
