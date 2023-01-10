@@ -98,3 +98,103 @@ static Void offsetSubTUCBFs(TComTU &rTu, const ComponentID compID)
   {
     const UInt subTUAbsPartIdx = uiAbsPartIdx + (subTU * partIdxesPerSubTU);
     const UChar compositeCBF = (subTUCBF[subTU] << 1) | combinedSubTUCBF;
+
+    pcCU->setCbfPartRange((compositeCBF << uiTrDepth), compID, subTUAbsPartIdx, partIdxesPerSubTU);
+  }
+}
+
+
+TEncSearch::TEncSearch()
+: m_puhQTTempTrIdx(NULL)
+, m_pcQTTempTComYuv(NULL)
+, m_pcEncCfg (NULL)
+, m_pcTrQuant (NULL)
+, m_pcRdCost (NULL)
+, m_pcEntropyCoder (NULL)
+, m_iSearchRange (0)
+, m_bipredSearchRange (0)
+, m_motionEstimationSearchMethod (MESEARCH_FULL)
+, m_pppcRDSbacCoder (NULL)
+, m_pcRDGoOnSbacCoder (NULL)
+, m_pTempPel (NULL)
+, m_isInitialized (false)
+{
+  for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+  {
+    m_ppcQTTempCoeff[ch]                           = NULL;
+#if ADAPTIVE_QP_SELECTION
+    m_ppcQTTempArlCoeff[ch]                        = NULL;
+#endif
+    m_puhQTTempCbf[ch]                             = NULL;
+    m_phQTTempCrossComponentPredictionAlpha[ch]    = NULL;
+    m_pSharedPredTransformSkip[ch]                 = NULL;
+    m_pcQTTempTUCoeff[ch]                          = NULL;
+#if ADAPTIVE_QP_SELECTION
+    m_ppcQTTempTUArlCoeff[ch]                      = NULL;
+#endif
+    m_puhQTTempTransformSkipFlag[ch]               = NULL;
+  }
+
+  for (Int i=0; i<MAX_NUM_REF_LIST_ADAPT_SR; i++)
+  {
+    memset (m_aaiAdaptSR[i], 0, MAX_IDX_ADAPT_SR * sizeof (Int));
+  }
+  for (Int i=0; i<AMVP_MAX_NUM_CANDS+1; i++)
+  {
+    memset (m_auiMVPIdxCost[i], 0, (AMVP_MAX_NUM_CANDS+1) * sizeof (UInt) );
+  }
+
+  setWpScalingDistParam( NULL, -1, REF_PIC_LIST_X );
+}
+
+
+Void TEncSearch::destroy()
+{
+  assert (m_isInitialized);
+  if ( m_pTempPel )
+  {
+    delete [] m_pTempPel;
+    m_pTempPel = NULL;
+  }
+
+  if ( m_pcEncCfg )
+  {
+    const UInt uiNumLayersAllocated = m_pcEncCfg->getQuadtreeTULog2MaxSize()-m_pcEncCfg->getQuadtreeTULog2MinSize()+1;
+
+    for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+    {
+      for (UInt layer = 0; layer < uiNumLayersAllocated; layer++)
+      {
+        delete[] m_ppcQTTempCoeff[ch][layer];
+#if ADAPTIVE_QP_SELECTION
+        delete[] m_ppcQTTempArlCoeff[ch][layer];
+#endif
+      }
+      delete[] m_ppcQTTempCoeff[ch];
+      delete[] m_puhQTTempCbf[ch];
+#if ADAPTIVE_QP_SELECTION
+      delete[] m_ppcQTTempArlCoeff[ch];
+#endif
+    }
+
+    for( UInt layer = 0; layer < uiNumLayersAllocated; layer++ )
+    {
+      m_pcQTTempTComYuv[layer].destroy();
+    }
+  }
+
+  delete[] m_puhQTTempTrIdx;
+  delete[] m_pcQTTempTComYuv;
+
+  for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+  {
+    delete[] m_pSharedPredTransformSkip[ch];
+    delete[] m_pcQTTempTUCoeff[ch];
+#if ADAPTIVE_QP_SELECTION
+    delete[] m_ppcQTTempTUArlCoeff[ch];
+#endif
+    delete[] m_phQTTempCrossComponentPredictionAlpha[ch];
+    delete[] m_puhQTTempTransformSkipFlag[ch];
+  }
+  m_pcQTTempTransformSkipTComYuv.destroy();
+
