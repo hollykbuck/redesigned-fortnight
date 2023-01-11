@@ -3398,3 +3398,103 @@ Void TComTrQuant::invTrSkipDeQuantOneSample( TComTU &rTu, ComponentID compID, TC
   const TCoeff transformMinimum = -(1 << maxLog2TrDynamicRange);
   const TCoeff transformMaximum =  (1 << maxLog2TrDynamicRange) - 1;
 
+  // Dequantisation
+
+  TCoeff dequantisedSample;
+
+  if(enableScalingLists)
+  {
+    const UInt             dequantCoefBits     = 1 + IQUANT_SHIFT + SCALING_LIST_BITS;
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - dequantCoefBits));
+
+    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
+    const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
+
+    Int *piDequantCoef = getDequantCoeff(scalingListType,QP_rem,uiLog2TrSize-2);
+
+    if(rightShift > 0)
+    {
+      const Intermediate_Int iAdd      = 1 << (rightShift - 1);
+      const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, inSample));
+      const Intermediate_Int iCoeffQ   = ((Intermediate_Int(clipQCoef) * piDequantCoef[uiPos]) + iAdd ) >> rightShift;
+
+      dequantisedSample = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+    }
+    else
+    {
+      const Int              leftShift = -rightShift;
+      const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, inSample));
+      const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * piDequantCoef[uiPos]) << leftShift;
+
+      dequantisedSample = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+    }
+  }
+  else
+  {
+    const Int scale     =  g_invQuantScales[QP_rem];
+    const Int scaleBits =     (IQUANT_SHIFT + 1)   ;
+
+    const UInt             targetInputBitDepth = std::min<UInt>((maxLog2TrDynamicRange + 1), (((sizeof(Intermediate_Int) * 8) + rightShift) - scaleBits));
+    const Intermediate_Int inputMinimum        = -(1 << (targetInputBitDepth - 1));
+    const Intermediate_Int inputMaximum        =  (1 << (targetInputBitDepth - 1)) - 1;
+
+    if (rightShift > 0)
+    {
+      const Intermediate_Int iAdd      = 1 << (rightShift - 1);
+      const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, inSample));
+      const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale + iAdd) >> rightShift;
+
+      dequantisedSample = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+    }
+    else
+    {
+      const Int              leftShift = -rightShift;
+      const TCoeff           clipQCoef = TCoeff(Clip3<Intermediate_Int>(inputMinimum, inputMaximum, inSample));
+      const Intermediate_Int iCoeffQ   = (Intermediate_Int(clipQCoef) * scale) << leftShift;
+
+      dequantisedSample = TCoeff(Clip3<Intermediate_Int>(transformMinimum,transformMaximum,iCoeffQ));
+    }
+  }
+
+  // Inverse transform-skip
+
+  if (iTransformShift >= 0)
+  {
+    const TCoeff offset = iTransformShift==0 ? 0 : (1 << (iTransformShift - 1));
+    reconSample =  Pel(( dequantisedSample + offset ) >> iTransformShift);
+  }
+  else //for very high bit depths
+  {
+    const Int iTrShiftNeg = -iTransformShift;
+    reconSample = Pel(dequantisedSample << iTrShiftNeg);
+  }
+}
+
+
+Void TComTrQuant::crossComponentPrediction(       TComTU      & rTu,
+                                            const ComponentID   compID,
+                                            const Pel         * piResiL,
+                                            const Pel         * piResiC,
+                                                  Pel         * piResiT,
+                                            const Int           width,
+                                            const Int           height,
+                                            const Int           strideL,
+                                            const Int           strideC,
+                                            const Int           strideT,
+                                            const Bool          reverse )
+{
+  const Pel *pResiL = piResiL;
+  const Pel *pResiC = piResiC;
+        Pel *pResiT = piResiT;
+
+  TComDataCU *pCU = rTu.getCU();
+  const Int alpha = pCU->getCrossComponentPredictionAlpha( rTu.GetAbsPartIdxTU( compID ), compID );
+  const Int diffBitDepth = pCU->getSlice()->getSPS()->getDifferentialLumaChromaBitDepth();
+
+  for( Int y = 0; y < height; y++ )
+  {
+    if (reverse)
+    {
+      // A constraint is to be added to the HEVC Standard to limit the size of pResiL and pResiC at this point.
+      // The likely form of the constraint is to either restrict the values to CoeffMin to CoeffMax,
+      // or to be representable in a bitDepthY+4 or bitDepthC+4 signed integer.
