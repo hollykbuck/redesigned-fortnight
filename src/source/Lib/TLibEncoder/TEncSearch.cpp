@@ -398,3 +398,103 @@ __inline Void TEncSearch::xTZSearchHelp( const TComPattern* const pcPatternKey, 
 
     uiSad = m_cDistParam.DistFunc( &m_cDistParam );
 
+    // only add motion cost if uiSad is smaller than best. Otherwise pointless
+    // to add motion cost.
+    if( uiSad < rcStruct.uiBestSad )
+    {
+      // motion cost
+      uiSad += m_pcRdCost->getCostOfVectorWithPredictor( iSearchX, iSearchY );
+
+      if( uiSad < rcStruct.uiBestSad )
+      {
+        rcStruct.uiBestSad      = uiSad;
+        rcStruct.iBestX         = iSearchX;
+        rcStruct.iBestY         = iSearchY;
+        rcStruct.uiBestDistance = uiDistance;
+        rcStruct.uiBestRound    = 0;
+        rcStruct.ucPointNr      = ucPointNr;
+        m_cDistParam.m_maximumDistortionForEarlyExit = uiSad;
+      }
+    }
+  }
+}
+
+__inline Void TEncSearch::xTZ2PointSearch( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const TComMv* const pcMvSrchRngLT, const TComMv* const pcMvSrchRngRB )
+{
+  Int   iSrchRngHorLeft   = pcMvSrchRngLT->getHor();
+  Int   iSrchRngHorRight  = pcMvSrchRngRB->getHor();
+  Int   iSrchRngVerTop    = pcMvSrchRngLT->getVer();
+  Int   iSrchRngVerBottom = pcMvSrchRngRB->getVer();
+
+  // 2 point search,                   //   1 2 3
+  // check only the 2 untested points  //   4 0 5
+  // around the start point            //   6 7 8
+  Int iStartX = rcStruct.iBestX;
+  Int iStartY = rcStruct.iBestY;
+  switch( rcStruct.ucPointNr )
+  {
+    case 1:
+    {
+      if ( (iStartX - 1) >= iSrchRngHorLeft )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY, 0, 2 );
+      }
+      if ( (iStartY - 1) >= iSrchRngVerTop )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iStartY - 1, 0, 2 );
+      }
+    }
+      break;
+    case 2:
+    {
+      if ( (iStartY - 1) >= iSrchRngVerTop )
+      {
+        if ( (iStartX - 1) >= iSrchRngHorLeft )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY - 1, 0, 2 );
+        }
+        if ( (iStartX + 1) <= iSrchRngHorRight )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY - 1, 0, 2 );
+        }
+      }
+    }
+      break;
+    case 3:
+    {
+      if ( (iStartY - 1) >= iSrchRngVerTop )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iStartY - 1, 0, 2 );
+      }
+      if ( (iStartX + 1) <= iSrchRngHorRight )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY, 0, 2 );
+      }
+    }
+      break;
+    case 4:
+    {
+      if ( (iStartX - 1) >= iSrchRngHorLeft )
+      {
+        if ( (iStartY + 1) <= iSrchRngVerBottom )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY + 1, 0, 2 );
+        }
+        if ( (iStartY - 1) >= iSrchRngVerTop )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY - 1, 0, 2 );
+        }
+      }
+    }
+      break;
+    case 5:
+    {
+      if ( (iStartX + 1) <= iSrchRngHorRight )
+      {
+        if ( (iStartY - 1) >= iSrchRngVerTop )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY - 1, 0, 2 );
+        }
+        if ( (iStartY + 1) <= iSrchRngVerBottom )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY + 1, 0, 2 );
