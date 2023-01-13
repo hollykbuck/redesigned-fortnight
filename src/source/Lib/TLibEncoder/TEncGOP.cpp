@@ -98,3 +98,103 @@ TEncGOP::TEncGOP()
   ::memset(m_ltRefPicPocLsbSps, 0, sizeof(m_ltRefPicPocLsbSps));
   ::memset(m_ltRefPicUsedByCurrPicFlag, 0, sizeof(m_ltRefPicUsedByCurrPicFlag));
   m_lastBPSEI         = 0;
+  m_bufferingPeriodSEIPresentInAU = false;
+  m_associatedIRAPType = NAL_UNIT_CODED_SLICE_IDR_N_LP;
+  m_associatedIRAPPOC  = 0;
+  m_pcDeblockingTempPicYuv = NULL;
+}
+
+TEncGOP::~TEncGOP()
+{
+}
+
+/** Create list to contain pointers to CTU start addresses of slice.
+ */
+Void  TEncGOP::create()
+{
+  m_bLongtermTestPictureHasBeenCoded = 0;
+  m_bLongtermTestPictureHasBeenCoded2 = 0;
+}
+
+Void  TEncGOP::destroy()
+{
+  if (m_pcDeblockingTempPicYuv)
+  {
+    m_pcDeblockingTempPicYuv->destroy();
+    delete m_pcDeblockingTempPicYuv;
+    m_pcDeblockingTempPicYuv = NULL;
+  }
+#if JVET_X0048_X0103_FILM_GRAIN
+  if (m_pcCfg->getFilmGrainAnalysisEnabled())
+  {
+    m_FGAnalyser.destroy();
+  }
+#endif
+}
+
+Void TEncGOP::init ( TEncTop* pcTEncTop )
+{
+  m_pcEncTop     = pcTEncTop;
+  m_pcCfg                = pcTEncTop;
+  m_seiEncoder.init(m_pcCfg, pcTEncTop, this);
+  m_pcSliceEncoder       = pcTEncTop->getSliceEncoder();
+  m_pcListPic            = pcTEncTop->getListPic();
+
+  m_pcEntropyCoder       = pcTEncTop->getEntropyCoder();
+  m_pcCavlcCoder         = pcTEncTop->getCavlcCoder();
+  m_pcSbacCoder          = pcTEncTop->getSbacCoder();
+  m_pcBinCABAC           = pcTEncTop->getBinCABAC();
+  m_pcLoopFilter         = pcTEncTop->getLoopFilter();
+
+  m_pcSAO                = pcTEncTop->getSAO();
+  m_pcRateCtrl           = pcTEncTop->getRateCtrl();
+  m_lastBPSEI          = 0;
+  m_totalCoded         = 0;
+#if JVET_X0048_X0103_FILM_GRAIN
+  if (m_pcCfg->getFilmGrainAnalysisEnabled())
+  {
+      m_FGAnalyser.init(m_pcCfg->getSourceWidth(), m_pcCfg->getSourceHeight(), m_pcCfg->getSourcePadding(0),
+          m_pcCfg->getSourcePadding(1), IPCOLOURSPACE_UNCHANGED, false, m_pcCfg->getChromaFormatIdc(),
+          *(BitDepths*)m_pcCfg->getBitDepthInput(), *(BitDepths*)m_pcCfg->getBitDepth(),
+          m_pcCfg->getFrameSkip(), m_pcCfg->getFGCSEICompModelPresent(),
+          m_pcCfg->getFilmGrainExternalMask(), m_pcCfg->getFilmGrainExternalDenoised());
+
+  }
+#endif
+
+}
+
+#if MCTS_EXTRACTION
+Void TEncGOP::generateVPS_RBSP(TComBitIf* rbsp, const TComVPS *vps)
+{
+  m_pcEntropyCoder->setBitstream(rbsp);
+  m_pcEntropyCoder->encodeVPS(vps);
+}
+
+Void TEncGOP::generateSPS_RBSP(TComBitIf* rbsp, const TComSPS *sps)
+{
+  m_pcEntropyCoder->setBitstream(rbsp);
+  m_pcEntropyCoder->encodeSPS(sps);
+}
+
+Void TEncGOP::generatePPS_RBSP(TComBitIf* rbsp, const TComPPS *pps)
+{
+  m_pcEntropyCoder->setBitstream(rbsp);
+  m_pcEntropyCoder->encodePPS(pps);
+}
+#endif
+
+Int TEncGOP::xWriteVPS (AccessUnit &accessUnit, const TComVPS *vps)
+{
+  OutputNALUnit nalu(NAL_UNIT_VPS);
+  m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
+  m_pcEntropyCoder->encodeVPS(vps);
+  accessUnit.push_back(new NALUnitEBSP(nalu));
+  return (Int)(accessUnit.back()->m_nalUnitData.str().size()) * 8;
+}
+
+Int TEncGOP::xWriteSPS (AccessUnit &accessUnit, const TComSPS *sps)
+{
+  OutputNALUnit nalu(NAL_UNIT_SPS);
+  m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
+  m_pcEntropyCoder->encodeSPS(sps);
