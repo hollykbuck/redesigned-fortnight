@@ -498,3 +498,103 @@ __inline Void TEncSearch::xTZ2PointSearch( const TComPattern* const pcPatternKey
         if ( (iStartY + 1) <= iSrchRngVerBottom )
         {
           xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY + 1, 0, 2 );
+        }
+      }
+    }
+      break;
+    case 6:
+    {
+      if ( (iStartX - 1) >= iSrchRngHorLeft )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY , 0, 2 );
+      }
+      if ( (iStartY + 1) <= iSrchRngVerBottom )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iStartY + 1, 0, 2 );
+      }
+    }
+      break;
+    case 7:
+    {
+      if ( (iStartY + 1) <= iSrchRngVerBottom )
+      {
+        if ( (iStartX - 1) >= iSrchRngHorLeft )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX - 1, iStartY + 1, 0, 2 );
+        }
+        if ( (iStartX + 1) <= iSrchRngHorRight )
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY + 1, 0, 2 );
+        }
+      }
+    }
+      break;
+    case 8:
+    {
+      if ( (iStartX + 1) <= iSrchRngHorRight )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX + 1, iStartY, 0, 2 );
+      }
+      if ( (iStartY + 1) <= iSrchRngVerBottom )
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iStartY + 1, 0, 2 );
+      }
+    }
+      break;
+    default:
+    {
+      assert( false );
+    }
+      break;
+  } // switch( rcStruct.ucPointNr )
+}
+
+
+
+
+__inline Void TEncSearch::xTZ8PointSquareSearch( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const TComMv* const pcMvSrchRngLT, const TComMv* const pcMvSrchRngRB, const Int iStartX, const Int iStartY, const Int iDist )
+{
+  const Int   iSrchRngHorLeft   = pcMvSrchRngLT->getHor();
+  const Int   iSrchRngHorRight  = pcMvSrchRngRB->getHor();
+  const Int   iSrchRngVerTop    = pcMvSrchRngLT->getVer();
+  const Int   iSrchRngVerBottom = pcMvSrchRngRB->getVer();
+
+  // 8 point search,                   //   1 2 3
+  // search around the start point     //   4 0 5
+  // with the required  distance       //   6 7 8
+  assert( iDist != 0 );
+  const Int iTop        = iStartY - iDist;
+  const Int iBottom     = iStartY + iDist;
+  const Int iLeft       = iStartX - iDist;
+  const Int iRight      = iStartX + iDist;
+  rcStruct.uiBestRound += 1;
+
+  if ( iTop >= iSrchRngVerTop ) // check top
+  {
+    if ( iLeft >= iSrchRngHorLeft ) // check top left
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iTop, 1, iDist );
+    }
+    // top middle
+    xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop, 2, iDist );
+
+    if ( iRight <= iSrchRngHorRight ) // check top right
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iRight, iTop, 3, iDist );
+    }
+  } // check top
+  if ( iLeft >= iSrchRngHorLeft ) // check middle left
+  {
+    xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iStartY, 4, iDist );
+  }
+  if ( iRight <= iSrchRngHorRight ) // check middle right
+  {
+    xTZSearchHelp( pcPatternKey, rcStruct, iRight, iStartY, 5, iDist );
+  }
+  if ( iBottom <= iSrchRngVerBottom ) // check bottom
+  {
+    if ( iLeft >= iSrchRngHorLeft ) // check bottom left
+    {
+      xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iBottom, 6, iDist );
+    }
+    // check bottom middle
