@@ -298,3 +298,103 @@ Void TEncGOP::xWriteLeadingSEIOrdered (SEIMessages& seiMessages, SEIMessages& du
     ( (*itNalu)->m_nalUnitType==NAL_UNIT_ACCESS_UNIT_DELIMITER 
     || (*itNalu)->m_nalUnitType==NAL_UNIT_VPS
     || (*itNalu)->m_nalUnitType==NAL_UNIT_SPS
+    || (*itNalu)->m_nalUnitType==NAL_UNIT_PPS
+    ))
+  {
+    itNalu++;
+  }
+
+  SEIMessages localMessages = seiMessages;
+  SEIMessages currentMessages;
+  
+#if ENC_DEC_TRACE
+  g_HLSTraceEnable = !testWrite;
+#endif
+  // The case that a specific SEI is not present is handled in xWriteSEI (empty list)
+#if JCTVC_AD0021_SEI_MANIFEST
+  // When SEI Manifest SEI message is present in an SEI NAL unit, the SEI Manifest SEI message shall be the first SEI message in the SEI NAL unit (D3.45 in ISO/IEC 23008-2).
+  if (m_pcCfg->getSEIManifestSEIEnabled())
+  {
+    currentMessages = extractSeisByType(localMessages, SEI::SEI_MANIFEST);
+    assert(currentMessages.size() <= 1);
+    xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+    xClearSEIs(currentMessages, !testWrite);
+  }
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  // When SEI Manifest SEI message is present in an SEI NAL unit, the SEI Manifest SEI message shall be the first SEI message in the SEI NAL unit (D3.45 in ISO/IEC 23008-2).
+  if (m_pcCfg->getSEIPrefixIndicationSEIEnabled())
+  {
+    currentMessages = extractSeisByType(localMessages, SEI::SEI_PREFIX_INDICATION);
+    xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+    xClearSEIs(currentMessages, !testWrite);
+  }
+#endif
+
+  // Active parameter sets SEI must always be the first SEI
+  currentMessages = extractSeisByType(localMessages, SEI::ACTIVE_PARAMETER_SETS);
+  assert (currentMessages.size() <= 1);
+  xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+  xClearSEIs(currentMessages, !testWrite);
+  
+  // Buffering period SEI must always be following active parameter sets
+  currentMessages = extractSeisByType(localMessages, SEI::BUFFERING_PERIOD);
+  assert (currentMessages.size() <= 1);
+  xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+  xClearSEIs(currentMessages, !testWrite);
+
+  // Picture timing SEI must always be following buffering period
+  currentMessages = extractSeisByType(localMessages, SEI::PICTURE_TIMING);
+  assert (currentMessages.size() <= 1);
+  xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+  xClearSEIs(currentMessages, !testWrite);
+
+  // Decoding unit info SEI must always be following picture timing
+  if (!duInfoSeiMessages.empty())
+  {
+    currentMessages.push_back(duInfoSeiMessages.front());
+    if (!testWrite)
+    {
+      duInfoSeiMessages.pop_front();
+    }
+    xWriteSEI(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+    xClearSEIs(currentMessages, !testWrite);
+  }
+
+  // Scalable nesting SEI must always be the following DU info
+  currentMessages = extractSeisByType(localMessages, SEI::SCALABLE_NESTING);
+  xWriteSEISeparately(NAL_UNIT_PREFIX_SEI, currentMessages, accessUnit, itNalu, temporalId, sps);
+  xClearSEIs(currentMessages, !testWrite);
+
+  // And finally everything else one by one
+  xWriteSEISeparately(NAL_UNIT_PREFIX_SEI, localMessages, accessUnit, itNalu, temporalId, sps);
+  xClearSEIs(localMessages, !testWrite);
+
+  if (!testWrite)
+  {
+    seiMessages.clear();
+  }
+}
+
+
+Void TEncGOP::xWriteLeadingSEIMessages (SEIMessages& seiMessages, SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, std::deque<DUData> &duData)
+{
+  AccessUnit testAU;
+  SEIMessages picTimingSEIs = getSeisByType(seiMessages, SEI::PICTURE_TIMING);
+  assert (picTimingSEIs.size() < 2);
+  SEIPictureTiming * picTiming = picTimingSEIs.empty() ? NULL : (SEIPictureTiming*) picTimingSEIs.front();
+
+  // test writing
+  xWriteLeadingSEIOrdered(seiMessages, duInfoSeiMessages, testAU, temporalId, sps, true);
+  // update Timing and DU info SEI
+  xUpdateDuData(testAU, duData);
+  xUpdateTimingSEI(picTiming, duData, sps);
+  xUpdateDuInfoSEI(duInfoSeiMessages, picTiming);
+  // actual writing
+  xWriteLeadingSEIOrdered(seiMessages, duInfoSeiMessages, accessUnit, temporalId, sps, false);
+
+  // testAU will automatically be cleaned up when losing scope
+}
+
+Void TEncGOP::xWriteTrailingSEIMessages (SEIMessages& seiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps)
+{
