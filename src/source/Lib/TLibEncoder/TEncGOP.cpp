@@ -198,3 +198,103 @@ Int TEncGOP::xWriteSPS (AccessUnit &accessUnit, const TComSPS *sps)
   OutputNALUnit nalu(NAL_UNIT_SPS);
   m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
   m_pcEntropyCoder->encodeSPS(sps);
+  accessUnit.push_back(new NALUnitEBSP(nalu));
+  return (Int)(accessUnit.back()->m_nalUnitData.str().size()) * 8;
+
+}
+
+Int TEncGOP::xWritePPS (AccessUnit &accessUnit, const TComPPS *pps)
+{
+  OutputNALUnit nalu(NAL_UNIT_PPS);
+  m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
+  m_pcEntropyCoder->encodePPS(pps);
+  accessUnit.push_back(new NALUnitEBSP(nalu));
+  return (Int)(accessUnit.back()->m_nalUnitData.str().size()) * 8;
+}
+
+
+Int TEncGOP::xWriteParameterSets (AccessUnit &accessUnit, TComSlice *slice, const Bool bSeqFirst)
+{
+  Int actualTotalBits = 0;
+
+  if (bSeqFirst)
+  {
+    actualTotalBits += xWriteVPS(accessUnit, m_pcEncTop->getVPS());
+  }
+  if (m_pcEncTop->SPSNeedsWriting(slice->getSPS()->getSPSId())) // Note this assumes that all changes to the SPS are made at the TEncTop level prior to picture creation (TEncTop::xGetNewPicBuffer).
+  {
+    assert(bSeqFirst); // Implementations that use more than 1 SPS need to be aware of activation issues.
+    actualTotalBits += xWriteSPS(accessUnit, slice->getSPS());
+  }
+  if (m_pcEncTop->PPSNeedsWriting(slice->getPPS()->getPPSId())) // Note this assumes that all changes to the PPS are made at the TEncTop level prior to picture creation (TEncTop::xGetNewPicBuffer).
+  {
+    actualTotalBits += xWritePPS(accessUnit, slice->getPPS());
+  }
+
+  return actualTotalBits;
+}
+
+Void TEncGOP::xWriteAccessUnitDelimiter (AccessUnit &accessUnit, TComSlice *slice)
+{
+  AUDWriter audWriter;
+  OutputNALUnit nalu(NAL_UNIT_ACCESS_UNIT_DELIMITER);
+
+  Int picType = slice->isIntra() ? 0 : (slice->isInterP() ? 1 : 2);
+
+  audWriter.codeAUD(nalu.m_Bitstream, picType);
+  accessUnit.push_front(new NALUnitEBSP(nalu));
+}
+
+// write SEI list into one NAL unit and add it to the Access unit at auPos
+Void TEncGOP::xWriteSEI (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, Int temporalId, const TComSPS *sps)
+{
+  // don't do anything, if we get an empty list
+  if (seiMessages.empty())
+  {
+    return;
+  }
+  OutputNALUnit nalu(naluType, temporalId);
+  m_seiWriter.writeSEImessages(nalu.m_Bitstream, seiMessages, sps, false);
+  auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
+  auPos++;
+}
+
+Void TEncGOP::xWriteSEISeparately (NalUnitType naluType, SEIMessages& seiMessages, AccessUnit &accessUnit, AccessUnit::iterator &auPos, Int temporalId, const TComSPS *sps)
+{
+  // don't do anything, if we get an empty list
+  if (seiMessages.empty())
+  {
+    return;
+  }
+  for (SEIMessages::const_iterator sei = seiMessages.begin(); sei!=seiMessages.end(); sei++ )
+  {
+    SEIMessages tmpMessages;
+    tmpMessages.push_back(*sei);
+    OutputNALUnit nalu(naluType, temporalId);
+    m_seiWriter.writeSEImessages(nalu.m_Bitstream, tmpMessages, sps, false);
+    auPos = accessUnit.insert(auPos, new NALUnitEBSP(nalu));
+    auPos++;
+  }
+}
+
+Void TEncGOP::xClearSEIs(SEIMessages& seiMessages, Bool deleteMessages)
+{
+  if (deleteMessages)
+  {
+    deleteSEIs(seiMessages);
+  }
+  else
+  {
+    seiMessages.clear();
+  }
+}
+
+// write SEI messages as separate NAL units ordered
+Void TEncGOP::xWriteLeadingSEIOrdered (SEIMessages& seiMessages, SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, Bool testWrite)
+{
+  AccessUnit::iterator itNalu = accessUnit.begin();
+
+  while ( (itNalu!=accessUnit.end())&&
+    ( (*itNalu)->m_nalUnitType==NAL_UNIT_ACCESS_UNIT_DELIMITER 
+    || (*itNalu)->m_nalUnitType==NAL_UNIT_VPS
+    || (*itNalu)->m_nalUnitType==NAL_UNIT_SPS
