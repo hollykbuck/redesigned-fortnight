@@ -398,3 +398,103 @@ Void TEncGOP::xWriteLeadingSEIMessages (SEIMessages& seiMessages, SEIMessages& d
 
 Void TEncGOP::xWriteTrailingSEIMessages (SEIMessages& seiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps)
 {
+  // Note: using accessUnit.end() works only as long as this function is called after slice coding and before EOS/EOB NAL units
+  AccessUnit::iterator pos = accessUnit.end();
+  xWriteSEISeparately(NAL_UNIT_SUFFIX_SEI, seiMessages, accessUnit, pos, temporalId, sps);
+  deleteSEIs(seiMessages);
+}
+
+Void TEncGOP::xWriteDuSEIMessages (SEIMessages& duInfoSeiMessages, AccessUnit &accessUnit, Int temporalId, const TComSPS *sps, std::deque<DUData> &duData)
+{
+  const TComHRD *hrd = sps->getVuiParameters()->getHrdParameters();
+
+  if( m_pcCfg->getDecodingUnitInfoSEIEnabled() && hrd->getSubPicCpbParamsPresentFlag() )
+  {
+    Int naluIdx = 0;
+    AccessUnit::iterator nalu = accessUnit.begin();
+
+    // skip over first DU, we have a DU info SEI there already
+    while (naluIdx < duData[0].accumNalsDU && nalu!=accessUnit.end())
+    {
+      naluIdx++;
+      nalu++;
+    }
+
+    SEIMessages::iterator duSEI = duInfoSeiMessages.begin();
+    // loop over remaining DUs
+    for (Int duIdx = 1; duIdx < duData.size(); duIdx++)
+    {
+      if (duSEI == duInfoSeiMessages.end())
+      {
+        // if the number of generated SEIs matches the number of DUs, this should not happen
+        assert (false);
+        return;
+      }
+      // write the next SEI
+      SEIMessages tmpSEI;
+      tmpSEI.push_back(*duSEI);
+      xWriteSEI(NAL_UNIT_PREFIX_SEI, tmpSEI, accessUnit, nalu, temporalId, sps);
+      // nalu points to the position after the SEI, so we have to increase the index as well
+      naluIdx++;
+      while ((naluIdx < duData[duIdx].accumNalsDU) && nalu!=accessUnit.end())
+      {
+        naluIdx++;
+        nalu++;
+      }
+      duSEI++;
+    }
+  }
+  deleteSEIs(duInfoSeiMessages);
+}
+
+#if MCTS_EXTRACTION
+Void TEncGOP::xCreateIRAPLeadingSEIMessages(SEIMessages& seiMessages, const TComVPS *vps, const TComSPS *sps, const TComPPS *pps)
+#else
+Void TEncGOP::xCreateIRAPLeadingSEIMessages (SEIMessages& seiMessages, const TComSPS *sps, const TComPPS *pps)
+#endif
+{
+  OutputNALUnit nalu(NAL_UNIT_PREFIX_SEI);
+
+  if(m_pcCfg->getActiveParameterSetsSEIEnabled())
+  {
+    SEIActiveParameterSets *sei = new SEIActiveParameterSets;
+    m_seiEncoder.initSEIActiveParameterSets (sei, m_pcCfg->getVPS(), sps);
+    seiMessages.push_back(sei);
+  }
+
+  if(m_pcCfg->getFramePackingArrangementSEIEnabled())
+  {
+    SEIFramePacking *sei = new SEIFramePacking;
+    m_seiEncoder.initSEIFramePacking (sei, m_iNumPicCoded);
+    seiMessages.push_back(sei);
+  }
+
+  if(m_pcCfg->getSegmentedRectFramePackingArrangementSEIEnabled())
+  {
+    SEISegmentedRectFramePacking *sei = new SEISegmentedRectFramePacking;
+    m_seiEncoder.initSEISegmentedRectFramePacking(sei);
+    seiMessages.push_back(sei);
+  }
+
+  if (m_pcCfg->getDisplayOrientationSEIAngle())
+  {
+    SEIDisplayOrientation *sei = new SEIDisplayOrientation;
+    m_seiEncoder.initSEIDisplayOrientation(sei);
+    seiMessages.push_back(sei);
+  }
+
+  if(m_pcCfg->getToneMappingInfoSEIEnabled())
+  {
+    SEIToneMappingInfo *sei = new SEIToneMappingInfo;
+    m_seiEncoder.initSEIToneMappingInfo (sei);
+    seiMessages.push_back(sei);
+  }
+
+  if(m_pcCfg->getTMCTSSEIEnabled())
+  {
+    SEITempMotionConstrainedTileSets *sei = new SEITempMotionConstrainedTileSets;
+    m_seiEncoder.initSEITempMotionConstrainedTileSets(sei, pps);
+    seiMessages.push_back(sei);
+  }
+#if MCTS_EXTRACTION
+  if (m_pcCfg->getTMCTSExtractionSEIEnabled())
