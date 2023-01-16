@@ -698,3 +698,103 @@ __inline Void TEncSearch::xTZ8PointDiamondSearch( const TComPattern*const  pcPat
         xTZSearchHelp( pcPatternKey, rcStruct, iStartX,  iTop,      2, iDist    );
         xTZSearchHelp( pcPatternKey, rcStruct, iLeft_2,  iTop_2,    1, iDist>>1 );
         xTZSearchHelp( pcPatternKey, rcStruct, iRight_2, iTop_2,    3, iDist>>1 );
+        xTZSearchHelp( pcPatternKey, rcStruct, iLeft,    iStartY,   4, iDist    );
+        xTZSearchHelp( pcPatternKey, rcStruct, iRight,   iStartY,   5, iDist    );
+        xTZSearchHelp( pcPatternKey, rcStruct, iLeft_2,  iBottom_2, 6, iDist>>1 );
+        xTZSearchHelp( pcPatternKey, rcStruct, iRight_2, iBottom_2, 8, iDist>>1 );
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX,  iBottom,   7, iDist    );
+      }
+      else // check border
+      {
+        if ( iTop >= iSrchRngVerTop ) // check top
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop, 2, iDist );
+        }
+        if ( iTop_2 >= iSrchRngVerTop ) // check half top
+        {
+          if ( iLeft_2 >= iSrchRngHorLeft ) // check half left
+          {
+            xTZSearchHelp( pcPatternKey, rcStruct, iLeft_2, iTop_2, 1, (iDist>>1) );
+          }
+          if ( iRight_2 <= iSrchRngHorRight ) // check half right
+          {
+            xTZSearchHelp( pcPatternKey, rcStruct, iRight_2, iTop_2, 3, (iDist>>1) );
+          }
+        } // check half top
+        if ( iLeft >= iSrchRngHorLeft ) // check left
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iStartY, 4, iDist );
+        }
+        if ( iRight <= iSrchRngHorRight ) // check right
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iRight, iStartY, 5, iDist );
+        }
+        if ( iBottom_2 <= iSrchRngVerBottom ) // check half bottom
+        {
+          if ( iLeft_2 >= iSrchRngHorLeft ) // check half left
+          {
+            xTZSearchHelp( pcPatternKey, rcStruct, iLeft_2, iBottom_2, 6, (iDist>>1) );
+          }
+          if ( iRight_2 <= iSrchRngHorRight ) // check half right
+          {
+            xTZSearchHelp( pcPatternKey, rcStruct, iRight_2, iBottom_2, 8, (iDist>>1) );
+          }
+        } // check half bottom
+        if ( iBottom <= iSrchRngVerBottom ) // check bottom
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 7, iDist );
+        }
+      } // check border
+    }
+    else // iDist > 8
+    {
+      if ( iTop >= iSrchRngVerTop && iLeft >= iSrchRngHorLeft &&
+          iRight <= iSrchRngHorRight && iBottom <= iSrchRngVerBottom ) // check border
+      {
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop,    0, iDist );
+        xTZSearchHelp( pcPatternKey, rcStruct, iLeft,   iStartY, 0, iDist );
+        xTZSearchHelp( pcPatternKey, rcStruct, iRight,  iStartY, 0, iDist );
+        xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 0, iDist );
+        for ( Int index = 1; index < 4; index++ )
+        {
+          const Int iPosYT = iTop    + ((iDist>>2) * index);
+          const Int iPosYB = iBottom - ((iDist>>2) * index);
+          const Int iPosXL = iStartX - ((iDist>>2) * index);
+          const Int iPosXR = iStartX + ((iDist>>2) * index);
+          xTZSearchHelp( pcPatternKey, rcStruct, iPosXL, iPosYT, 0, iDist );
+          xTZSearchHelp( pcPatternKey, rcStruct, iPosXR, iPosYT, 0, iDist );
+          xTZSearchHelp( pcPatternKey, rcStruct, iPosXL, iPosYB, 0, iDist );
+          xTZSearchHelp( pcPatternKey, rcStruct, iPosXR, iPosYB, 0, iDist );
+        }
+      }
+      else // check border
+      {
+        if ( iTop >= iSrchRngVerTop ) // check top
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iTop, 0, iDist );
+        }
+        if ( iLeft >= iSrchRngHorLeft ) // check left
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iLeft, iStartY, 0, iDist );
+        }
+        if ( iRight <= iSrchRngHorRight ) // check right
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iRight, iStartY, 0, iDist );
+        }
+        if ( iBottom <= iSrchRngVerBottom ) // check bottom
+        {
+          xTZSearchHelp( pcPatternKey, rcStruct, iStartX, iBottom, 0, iDist );
+        }
+        for ( Int index = 1; index < 4; index++ )
+        {
+          const Int iPosYT = iTop    + ((iDist>>2) * index);
+          const Int iPosYB = iBottom - ((iDist>>2) * index);
+          const Int iPosXL = iStartX - ((iDist>>2) * index);
+          const Int iPosXR = iStartX + ((iDist>>2) * index);
+
+          if ( iPosYT >= iSrchRngVerTop ) // check top
+          {
+            if ( iPosXL >= iSrchRngHorLeft ) // check left
+            {
+              xTZSearchHelp( pcPatternKey, rcStruct, iPosXL, iPosYT, 0, iDist );
+            }
