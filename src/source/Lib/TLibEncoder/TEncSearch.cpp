@@ -798,3 +798,103 @@ __inline Void TEncSearch::xTZ8PointDiamondSearch( const TComPattern*const  pcPat
             {
               xTZSearchHelp( pcPatternKey, rcStruct, iPosXL, iPosYT, 0, iDist );
             }
+            if ( iPosXR <= iSrchRngHorRight ) // check right
+            {
+              xTZSearchHelp( pcPatternKey, rcStruct, iPosXR, iPosYT, 0, iDist );
+            }
+          } // check top
+          if ( iPosYB <= iSrchRngVerBottom ) // check bottom
+          {
+            if ( iPosXL >= iSrchRngHorLeft ) // check left
+            {
+              xTZSearchHelp( pcPatternKey, rcStruct, iPosXL, iPosYB, 0, iDist );
+            }
+            if ( iPosXR <= iSrchRngHorRight ) // check right
+            {
+              xTZSearchHelp( pcPatternKey, rcStruct, iPosXR, iPosYB, 0, iDist );
+            }
+          } // check bottom
+        } // for ...
+      } // check border
+    } // iDist <= 8
+  } // iDist == 1
+}
+
+Distortion TEncSearch::xPatternRefinement( TComPattern* pcPatternKey,
+                                           TComMv baseRefMv,
+                                           Int iFrac, TComMv& rcMvFrac,
+                                           Bool bAllowUseOfHadamard
+                                         )
+{
+  Distortion  uiDist;
+  Distortion  uiDistBest  = std::numeric_limits<Distortion>::max();
+  UInt        uiDirecBest = 0;
+
+  Pel*  piRefPos;
+  Int iRefStride = m_filteredBlock[0][0].getStride(COMPONENT_Y);
+
+  m_pcRdCost->setDistParam( pcPatternKey, m_filteredBlock[0][0].getAddr(COMPONENT_Y), iRefStride, 1, m_cDistParam, m_pcEncCfg->getUseHADME() && bAllowUseOfHadamard );
+
+  const TComMv* pcMvRefine = (iFrac == 2 ? s_acMvRefineH : s_acMvRefineQ);
+
+#if MCTS_ENC_CHECK
+  UInt maxRefinements = 9;
+  Int mvShift = 2;
+
+  // filter length of sub-sample generation filter to be considered
+  const UInt LumaLTSampleOffset = 3;
+  const UInt LumaRBSampleOffset = 4;
+
+  if (m_pcEncCfg->getTMCTSSEITileConstraint())
+  {
+    // if close to tile borders
+    if ( pcPatternKey->getROIYPosX() + (baseRefMv.getHor() >> mvShift ) < pcPatternKey->getTileLeftTopPelPosX() +  LumaLTSampleOffset ||
+         pcPatternKey->getROIYPosY() + (baseRefMv.getVer() >> mvShift ) < pcPatternKey->getTileLeftTopPelPosY() +  LumaLTSampleOffset ||
+         pcPatternKey->getROIYPosX() + (baseRefMv.getHor() >> mvShift)  > pcPatternKey->getTileRightBottomPelPosX() - pcPatternKey->getROIYWidth() - LumaRBSampleOffset ||
+         pcPatternKey->getROIYPosY() + (baseRefMv.getVer() >> mvShift)  > pcPatternKey->getTileRightBottomPelPosY() - pcPatternKey->getROIYHeight() - LumaRBSampleOffset  
+       )
+    {
+      // only allow full pel positions to avoid filter dependency
+      maxRefinements = 1;
+    }
+  }  
+
+  for (UInt i = 0; i < maxRefinements; i++)
+#else
+  for (UInt i = 0; i < 9; i++)
+#endif
+  {
+    TComMv cMvTest = pcMvRefine[i];
+    cMvTest += baseRefMv;
+
+    Int horVal = cMvTest.getHor() * iFrac;
+    Int verVal = cMvTest.getVer() * iFrac;
+    piRefPos = m_filteredBlock[ verVal & 3 ][ horVal & 3 ].getAddr(COMPONENT_Y);
+    if ( horVal == 2 && ( verVal & 1 ) == 0 )
+    {
+      piRefPos += 1;
+    }
+    if ( ( horVal & 1 ) == 0 && verVal == 2 )
+    {
+      piRefPos += iRefStride;
+    }
+    cMvTest = pcMvRefine[i];
+    cMvTest += rcMvFrac;
+
+    setDistParamComp(COMPONENT_Y);
+
+    m_cDistParam.pCur = piRefPos;
+    m_cDistParam.bitDepth = pcPatternKey->getBitDepthY();
+    uiDist = m_cDistParam.DistFunc( &m_cDistParam );
+    uiDist += m_pcRdCost->getCostOfVectorWithPredictor( cMvTest.getHor(), cMvTest.getVer() );
+
+    if ( uiDist < uiDistBest )
+    {
+      uiDistBest  = uiDist;
+      uiDirecBest = i;
+      m_cDistParam.m_maximumDistortionForEarlyExit = uiDist;
+    }
+  }
+
+  rcMvFrac = pcMvRefine[uiDirecBest];
+
