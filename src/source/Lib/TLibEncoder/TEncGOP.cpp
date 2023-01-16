@@ -498,3 +498,103 @@ Void TEncGOP::xCreateIRAPLeadingSEIMessages (SEIMessages& seiMessages, const TCo
   }
 #if MCTS_EXTRACTION
   if (m_pcCfg->getTMCTSExtractionSEIEnabled())
+  {
+    SEIMCTSExtractionInfoSet *sei = new SEIMCTSExtractionInfoSet;
+    m_seiEncoder.initSEIMCTSExtractionInfo(sei, vps, sps, pps);
+    seiMessages.push_back(sei);
+  }
+#endif
+  if(m_pcCfg->getTimeCodeSEIEnabled())
+  {
+    SEITimeCode *seiTimeCode = new SEITimeCode;
+    m_seiEncoder.initSEITimeCode(seiTimeCode);
+    seiMessages.push_back(seiTimeCode);
+  }
+
+  if(m_pcCfg->getKneeSEIEnabled())
+  {
+    SEIKneeFunctionInfo *sei = new SEIKneeFunctionInfo;
+    m_seiEncoder.initSEIKneeFunctionInfo(sei);
+    seiMessages.push_back(sei);
+  }
+
+  if (m_pcCfg->getCcvSEIEnabled())
+  {
+    SEIContentColourVolume *seiContentColourVolume = new SEIContentColourVolume;
+    m_seiEncoder.initSEIContentColourVolume(seiContentColourVolume);
+    seiMessages.push_back(seiContentColourVolume);
+  }
+
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  if (m_pcCfg->getSiiSEIEnabled())
+  {
+    SEIShutterIntervalInfo *seiShutterInterval = new SEIShutterIntervalInfo;
+    m_seiEncoder.initSEIShutterIntervalInfo(seiShutterInterval);
+    seiMessages.push_back(seiShutterInterval);
+  }
+#endif
+
+#if SEI_ENCODER_CONTROL
+#if JVET_X0048_X0103_FILM_GRAIN
+  if (m_pcCfg->getFilmGrainCharactersticsSEIEnabled() && !m_pcCfg->getFilmGrainCharactersticsSEIPerPictureSEI())
+  {
+    SEIFilmGrainCharacteristics* seiFGC = new SEIFilmGrainCharacteristics;
+    m_seiEncoder.initSEIFilmGrainCharacteristics(seiFGC);
+    if (m_pcCfg->getFilmGrainAnalysisEnabled())
+    {
+      seiFGC->m_log2ScaleFactor = m_FGAnalyser.getLog2scaleFactor();
+      for (int compIdx = 0; compIdx < getNumberValidComponents(m_pcCfg->getChromaFormatIdc()); compIdx++)
+      {
+        if (seiFGC->m_compModel[compIdx].bPresentFlag)
+        {   // higher importance of presentFlag is from cfg file
+          seiFGC->m_compModel[compIdx] = m_FGAnalyser.getCompModel(compIdx);
+        }
+      }
+    }
+    seiMessages.push_back(seiFGC);
+}
+#else
+  // film grain
+  if (m_pcCfg->getFilmGrainCharactersticsSEIEnabled())
+  {
+    SEIFilmGrainCharacteristics *seiFGC = new SEIFilmGrainCharacteristics;
+    m_seiEncoder.initSEIFilmGrainCharacteristics(seiFGC);
+    seiMessages.push_back(seiFGC);
+  }
+#endif
+// content light level
+  if (m_pcCfg->getCLLSEIEnabled())
+  {
+    SEIContentLightLevelInfo *seiCLL = new SEIContentLightLevelInfo;
+    m_seiEncoder.initSEIContentLightLevel(seiCLL);
+    seiMessages.push_back(seiCLL);
+  }
+// ambient viewing environment
+  if (m_pcCfg->getAmbientViewingEnvironmentSEIEnabled())
+  {
+    SEIAmbientViewingEnvironment *seiAVE = new SEIAmbientViewingEnvironment;
+    m_seiEncoder.initSEIAmbientViewingEnvironment(seiAVE);
+    seiMessages.push_back(seiAVE);
+  }
+#endif
+  if (m_pcCfg->getErpSEIEnabled())
+  {
+    SEIEquirectangularProjection *sei = new SEIEquirectangularProjection;
+    m_seiEncoder.initSEIErp(sei);
+    seiMessages.push_back(sei);
+  }
+
+  if (m_pcCfg->getSphereRotationSEIEnabled())
+  {
+    SEISphereRotation *sei = new SEISphereRotation;
+    m_seiEncoder.initSEISphereRotation(sei);
+    seiMessages.push_back(sei);
+  }
+
+  if (m_pcCfg->getOmniViewportSEIEnabled())
+  {
+    SEIOmniViewport *sei = new SEIOmniViewport;
+    m_seiEncoder.initSEIOmniViewport(sei);
+    seiMessages.push_back(sei);
+  }
+  if (m_pcCfg->getCmpSEIEnabled())
