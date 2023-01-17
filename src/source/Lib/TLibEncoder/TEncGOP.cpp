@@ -598,3 +598,103 @@ Void TEncGOP::xCreateIRAPLeadingSEIMessages (SEIMessages& seiMessages, const TCo
     seiMessages.push_back(sei);
   }
   if (m_pcCfg->getCmpSEIEnabled())
+  {
+    SEICubemapProjection *seiCubemapProjection = new SEICubemapProjection;
+    m_seiEncoder.initSEICubemapProjection(seiCubemapProjection);
+    seiMessages.push_back(seiCubemapProjection);
+  }
+  if (m_pcCfg->getRwpSEIEnabled())
+  {
+    SEIRegionWisePacking *seiRegionWisePacking = new SEIRegionWisePacking;
+    m_seiEncoder.initSEIRegionWisePacking(seiRegionWisePacking);
+    seiMessages.push_back(seiRegionWisePacking);
+  }
+  if (m_pcCfg->getFviSEIEnabled())
+  {
+    SEIFisheyeVideoInfo *sei = new SEIFisheyeVideoInfo;
+    m_seiEncoder.initSEIFisheyeVideoInfo(sei);
+    seiMessages.push_back(sei);
+  }
+    
+  if(m_pcCfg->getMasteringDisplaySEI().colourVolumeSEIEnabled)
+  {
+    const TComSEIMasteringDisplay &seiCfg=m_pcCfg->getMasteringDisplaySEI();
+    SEIMasteringDisplayColourVolume *sei = new SEIMasteringDisplayColourVolume;
+    sei->values = seiCfg;
+    seiMessages.push_back(sei);
+  }
+  if(m_pcCfg->getChromaResamplingFilterHintEnabled())
+  {
+    SEIChromaResamplingFilterHint *seiChromaResamplingFilterHint = new SEIChromaResamplingFilterHint;
+    m_seiEncoder.initSEIChromaResamplingFilterHint(seiChromaResamplingFilterHint, m_pcCfg->getChromaResamplingHorFilterIdc(), m_pcCfg->getChromaResamplingVerFilterIdc());
+    seiMessages.push_back(seiChromaResamplingFilterHint);
+  }
+  if(m_pcCfg->getSEIAlternativeTransferCharacteristicsSEIEnable())
+  {
+    SEIAlternativeTransferCharacteristics *seiAlternativeTransferCharacteristics = new SEIAlternativeTransferCharacteristics;
+    m_seiEncoder.initSEIAlternativeTransferCharacteristics(seiAlternativeTransferCharacteristics);
+    seiMessages.push_back(seiAlternativeTransferCharacteristics);
+  }
+}
+
+Void TEncGOP::xCreatePerPictureSEIMessages (Int picInGOP, SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, TComSlice *slice)
+{
+  if( ( m_pcCfg->getBufferingPeriodSEIEnabled() ) && ( slice->getSliceType() == I_SLICE ) &&
+    ( slice->getSPS()->getVuiParametersPresentFlag() ) &&
+    ( ( slice->getSPS()->getVuiParameters()->getHrdParameters()->getNalHrdParametersPresentFlag() )
+    || ( slice->getSPS()->getVuiParameters()->getHrdParameters()->getVclHrdParametersPresentFlag() ) ) )
+  {
+    SEIBufferingPeriod *bufferingPeriodSEI = new SEIBufferingPeriod();
+    m_seiEncoder.initSEIBufferingPeriod(bufferingPeriodSEI, slice);
+    seiMessages.push_back(bufferingPeriodSEI);
+    m_bufferingPeriodSEIPresentInAU = true;
+
+    if (m_pcCfg->getScalableNestingSEIEnabled())
+    {
+      SEIBufferingPeriod *bufferingPeriodSEIcopy = new SEIBufferingPeriod();
+      bufferingPeriodSEI->copyTo(*bufferingPeriodSEIcopy);
+      nestedSeiMessages.push_back(bufferingPeriodSEIcopy);
+    }
+  }
+
+  if (picInGOP ==0 && m_pcCfg->getSOPDescriptionSEIEnabled() ) // write SOP description SEI (if enabled) at the beginning of GOP
+  {
+    SEISOPDescription* sopDescriptionSEI = new SEISOPDescription();
+    m_seiEncoder.initSEISOPDescription(sopDescriptionSEI, slice, picInGOP, m_iLastIDR, m_iGopSize);
+    seiMessages.push_back(sopDescriptionSEI);
+  }
+
+  if( ( m_pcEncTop->getRecoveryPointSEIEnabled() ) && ( slice->getSliceType() == I_SLICE ) )
+  {
+    if( m_pcEncTop->getGradualDecodingRefreshInfoEnabled() && !slice->getRapPicFlag() )
+    {
+      // Gradual decoding refresh SEI
+      SEIRegionRefreshInfo *gradualDecodingRefreshInfoSEI = new SEIRegionRefreshInfo();
+      gradualDecodingRefreshInfoSEI->m_gdrForegroundFlag = true; // Indicating all "foreground"
+      seiMessages.push_back(gradualDecodingRefreshInfoSEI);
+    }
+    // Recovery point SEI
+    SEIRecoveryPoint *recoveryPointSEI = new SEIRecoveryPoint();
+    m_seiEncoder.initSEIRecoveryPoint(recoveryPointSEI, slice);
+    seiMessages.push_back(recoveryPointSEI);
+  }
+  if (m_pcCfg->getTemporalLevel0IndexSEIEnabled())
+  {
+    SEITemporalLevel0Index *temporalLevel0IndexSEI = new SEITemporalLevel0Index();
+    m_seiEncoder.initTemporalLevel0IndexSEI(temporalLevel0IndexSEI, slice);
+    seiMessages.push_back(temporalLevel0IndexSEI);
+  }
+
+  if( m_pcEncTop->getNoDisplaySEITLayer() && ( slice->getTLayer() >= m_pcEncTop->getNoDisplaySEITLayer() ) )
+  {
+    SEINoDisplay *seiNoDisplay = new SEINoDisplay;
+    seiNoDisplay->m_noDisplay = true;
+    seiMessages.push_back(seiNoDisplay);
+  }
+
+  // insert one Colour Remapping Info SEI for the picture (if the file exists)
+  if (!m_pcCfg->getColourRemapInfoSEIFileRoot().empty())
+  {
+    SEIColourRemappingInfo *seiColourRemappingInfo = new SEIColourRemappingInfo();
+    const Bool success = m_seiEncoder.initSEIColourRemappingInfo(seiColourRemappingInfo, slice->getPOC() );
+
