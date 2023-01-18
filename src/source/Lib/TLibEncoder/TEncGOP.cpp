@@ -698,3 +698,103 @@ Void TEncGOP::xCreatePerPictureSEIMessages (Int picInGOP, SEIMessages& seiMessag
     SEIColourRemappingInfo *seiColourRemappingInfo = new SEIColourRemappingInfo();
     const Bool success = m_seiEncoder.initSEIColourRemappingInfo(seiColourRemappingInfo, slice->getPOC() );
 
+    if(success)
+    {
+      seiMessages.push_back(seiColourRemappingInfo);
+    }
+    else
+    {
+      delete seiColourRemappingInfo;
+    }
+  }
+
+  // insert one Annotated Region SEI for the picture (if the file exists)
+  if (!m_pcCfg->getAnnotatedRegionSEIFileRoot().empty())
+  {
+    SEIAnnotatedRegions *seiAnnotatedRegions = new SEIAnnotatedRegions();
+    const Bool success = m_seiEncoder.initSEIAnnotatedRegions(seiAnnotatedRegions, slice->getPOC());
+
+    if (success)
+    {
+      seiMessages.push_back(seiAnnotatedRegions);
+    }
+    else
+    {
+      delete seiAnnotatedRegions;
+    }
+  }
+  // insert one Regional Nesting SEI for the picture (if the file exists)
+  if (!m_pcCfg->getRegionalNestingSEIFileRoot().empty())
+  {
+    SEIRegionalNesting *seiRegionalNesting= new SEIRegionalNesting();
+    const Bool success = m_seiEncoder.initSEIRegionalNesting(seiRegionalNesting, slice->getPOC() );
+
+    if(success)
+    {
+      seiMessages.push_back(seiRegionalNesting);
+    }
+    else
+    {
+      delete seiRegionalNesting;
+    }
+  }
+#if JVET_X0048_X0103_FILM_GRAIN
+  // Film Grain Characteristics SEI insertion at at frame level
+  if (m_pcCfg->getFilmGrainCharactersticsSEIEnabled() && m_pcCfg->getFilmGrainCharactersticsSEIPerPictureSEI())
+  {
+    SEIFilmGrainCharacteristics* fgcSEI = new SEIFilmGrainCharacteristics;
+    m_seiEncoder.initSEIFilmGrainCharacteristics(fgcSEI);
+    if (m_pcCfg->getFilmGrainAnalysisEnabled())
+    {
+      fgcSEI->m_log2ScaleFactor = m_FGAnalyser.getLog2scaleFactor();
+      for (int compIdx = 0; compIdx < getNumberValidComponents(m_pcCfg->getChromaFormatIdc()); compIdx++)
+      {
+        if (fgcSEI->m_compModel[compIdx].bPresentFlag)
+        {   // higher importance of presentFlag is from cfg file
+          fgcSEI->m_compModel[compIdx] = m_FGAnalyser.getCompModel(compIdx);
+        }
+      }
+    }
+    seiMessages.push_back(fgcSEI);
+  }
+#endif
+
+#if JCTVC_AD0021_SEI_MANIFEST
+  // Make sure that sei_manifest and sei_prefix are the last two initialized sei_msg, otherwise it will cause these two
+  // Sei messages to not be able to enter all SEI messages
+  if (m_pcCfg->getSEIManifestSEIEnabled())
+  {
+    SEIManifest* seiSEIManifest = new SEIManifest;
+    m_seiEncoder.initSEISEIManifest(seiSEIManifest, seiMessages);
+    seiMessages.push_back(seiSEIManifest);
+  }
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  if (m_pcCfg->getSEIPrefixIndicationSEIEnabled())
+  {
+    int NumOfSEIPrefixMsg = 0;
+    for (auto& it : seiMessages)
+    {
+      if (it->payloadType() == SEI::SEI_MANIFEST)
+      {
+        break;
+      }
+      NumOfSEIPrefixMsg++;
+    }
+    for (auto& it : seiMessages)
+    {
+      if (NumOfSEIPrefixMsg == 0 || it->payloadType() == SEI::SEI_MANIFEST)
+      {
+        break;
+      }
+      SEIPrefixIndication* seiSEIPrefixIndication = new SEIPrefixIndication;
+      m_seiEncoder.initSEISEIPrefixIndication(seiSEIPrefixIndication, it);
+      seiMessages.push_back(seiSEIPrefixIndication);
+      NumOfSEIPrefixMsg--;
+    }
+  }
+#endif
+}
+
+Void TEncGOP::xCreateScalableNestingSEI (SEIMessages& seiMessages, SEIMessages& nestedSeiMessages)
+{
