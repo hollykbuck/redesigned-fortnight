@@ -798,3 +798,103 @@ Void TEncGOP::xCreatePerPictureSEIMessages (Int picInGOP, SEIMessages& seiMessag
 
 Void TEncGOP::xCreateScalableNestingSEI (SEIMessages& seiMessages, SEIMessages& nestedSeiMessages)
 {
+  SEIMessages tmpMessages;
+  while (!nestedSeiMessages.empty())
+  {
+    SEI* sei=nestedSeiMessages.front();
+    nestedSeiMessages.pop_front();
+    tmpMessages.push_back(sei);
+    SEIScalableNesting *nestingSEI = new SEIScalableNesting();
+    m_seiEncoder.initSEIScalableNesting(nestingSEI, tmpMessages);
+    seiMessages.push_back(nestingSEI);
+    tmpMessages.clear();
+  }
+}
+
+Void TEncGOP::xCreatePictureTimingSEI  (Int IRAPGOPid, SEIMessages& seiMessages, SEIMessages& nestedSeiMessages, SEIMessages& duInfoSeiMessages, TComSlice *slice, Bool isField, std::deque<DUData> &duData)
+{
+  const TComVUI *vui = slice->getSPS()->getVuiParameters();
+  const TComHRD *hrd = vui->getHrdParameters();
+
+  // update decoding unit parameters
+  if( ( m_pcCfg->getPictureTimingSEIEnabled() || m_pcCfg->getDecodingUnitInfoSEIEnabled() ) &&
+    ( slice->getSPS()->getVuiParametersPresentFlag() ) &&
+    (  hrd->getNalHrdParametersPresentFlag() || hrd->getVclHrdParametersPresentFlag() ) )
+  {
+    Int picSptDpbOutputDuDelay = 0;
+    SEIPictureTiming *pictureTimingSEI = new SEIPictureTiming();
+
+    // DU parameters
+    if( hrd->getSubPicCpbParamsPresentFlag() )
+    {
+      UInt numDU = (UInt) duData.size();
+      pictureTimingSEI->m_numDecodingUnitsMinus1     = ( numDU - 1 );
+      pictureTimingSEI->m_duCommonCpbRemovalDelayFlag = false;
+      pictureTimingSEI->m_numNalusInDuMinus1.resize( numDU );
+      pictureTimingSEI->m_duCpbRemovalDelayMinus1.resize( numDU );
+    }
+    pictureTimingSEI->m_auCpbRemovalDelay = std::min<Int>(std::max<Int>(1, m_totalCoded - m_lastBPSEI), static_cast<Int>(pow(2, static_cast<Double>(hrd->getCpbRemovalDelayLengthMinus1()+1)))); // Syntax element signalled as minus, hence the .
+    pictureTimingSEI->m_picDpbOutputDelay = slice->getSPS()->getNumReorderPics(slice->getSPS()->getMaxTLayers()-1) + slice->getPOC() - m_totalCoded;
+    if(m_pcCfg->getEfficientFieldIRAPEnabled() && IRAPGOPid > 0 && IRAPGOPid < m_iGopSize)
+    {
+      // if pictures have been swapped there is likely one more picture delay on their tid. Very rough approximation
+      pictureTimingSEI->m_picDpbOutputDelay ++;
+    }
+    Int factor = hrd->getTickDivisorMinus2() + 2;
+    pictureTimingSEI->m_picDpbOutputDuDelay = factor * pictureTimingSEI->m_picDpbOutputDelay;
+    if( m_pcCfg->getDecodingUnitInfoSEIEnabled() )
+    {
+      picSptDpbOutputDuDelay = factor * pictureTimingSEI->m_picDpbOutputDelay;
+    }
+    if (m_bufferingPeriodSEIPresentInAU)
+    {
+      m_lastBPSEI = m_totalCoded;
+    }
+
+    if( hrd->getSubPicCpbParamsPresentFlag() )
+    {
+      Int i;
+      UInt64 ui64Tmp;
+      UInt uiPrev = 0;
+      UInt numDU = ( pictureTimingSEI->m_numDecodingUnitsMinus1 + 1 );
+      std::vector<UInt> &rDuCpbRemovalDelayMinus1 = pictureTimingSEI->m_duCpbRemovalDelayMinus1;
+      UInt maxDiff = ( hrd->getTickDivisorMinus2() + 2 ) - 1;
+
+      for( i = 0; i < numDU; i ++ )
+      {
+        pictureTimingSEI->m_numNalusInDuMinus1[ i ]       = ( i == 0 ) ? ( duData[i].accumNalsDU - 1 ) : ( duData[i].accumNalsDU- duData[i-1].accumNalsDU - 1 );
+      }
+
+      if( numDU == 1 )
+      {
+        rDuCpbRemovalDelayMinus1[ 0 ] = 0; /* don't care */
+      }
+      else
+      {
+        rDuCpbRemovalDelayMinus1[ numDU - 1 ] = 0;/* by definition */
+        UInt tmp = 0;
+        UInt accum = 0;
+
+        for( i = ( numDU - 2 ); i >= 0; i -- )
+        {
+          ui64Tmp = ( ( ( duData[numDU - 1].accumBitsDU  - duData[i].accumBitsDU ) * ( vui->getTimingInfo()->getTimeScale() / vui->getTimingInfo()->getNumUnitsInTick() ) * ( hrd->getTickDivisorMinus2() + 2 ) ) / ( m_pcCfg->getTargetBitrate() ) );
+          if( (UInt)ui64Tmp > maxDiff )
+          {
+            tmp ++;
+          }
+        }
+        uiPrev = 0;
+
+        UInt flag = 0;
+        for( i = ( numDU - 2 ); i >= 0; i -- )
+        {
+          flag = 0;
+          ui64Tmp = ( ( ( duData[numDU - 1].accumBitsDU  - duData[i].accumBitsDU ) * ( vui->getTimingInfo()->getTimeScale() / vui->getTimingInfo()->getNumUnitsInTick() ) * ( hrd->getTickDivisorMinus2() + 2 ) ) / ( m_pcCfg->getTargetBitrate() ) );
+
+          if( (UInt)ui64Tmp > maxDiff )
+          {
+            if(uiPrev >= maxDiff - tmp)
+            {
+              ui64Tmp = uiPrev + 1;
+              flag = 1;
+            }
