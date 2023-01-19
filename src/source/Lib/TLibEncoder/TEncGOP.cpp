@@ -898,3 +898,103 @@ Void TEncGOP::xCreatePictureTimingSEI  (Int IRAPGOPid, SEIMessages& seiMessages,
               ui64Tmp = uiPrev + 1;
               flag = 1;
             }
+            else                            ui64Tmp = maxDiff - tmp + 1;
+          }
+          rDuCpbRemovalDelayMinus1[ i ] = (UInt)ui64Tmp - uiPrev - 1;
+          if( (Int)rDuCpbRemovalDelayMinus1[ i ] < 0 )
+          {
+            rDuCpbRemovalDelayMinus1[ i ] = 0;
+          }
+          else if (tmp > 0 && flag == 1)
+          {
+            tmp --;
+          }
+          accum += rDuCpbRemovalDelayMinus1[ i ] + 1;
+          uiPrev = accum;
+        }
+      }
+    }
+    
+    if( m_pcCfg->getPictureTimingSEIEnabled() )
+    {
+      pictureTimingSEI->m_picStruct = (isField && slice->getPic()->isTopField())? 1 : isField? 2 : 0;
+      seiMessages.push_back(pictureTimingSEI);
+
+      if ( m_pcCfg->getScalableNestingSEIEnabled() ) // put picture timing SEI into scalable nesting SEI
+      {
+        SEIPictureTiming *pictureTimingSEIcopy = new SEIPictureTiming();
+        pictureTimingSEI->copyTo(*pictureTimingSEIcopy);
+        nestedSeiMessages.push_back(pictureTimingSEIcopy);
+      }
+    }
+
+    if( m_pcCfg->getDecodingUnitInfoSEIEnabled() && hrd->getSubPicCpbParamsPresentFlag() )
+    {
+      for( Int i = 0; i < ( pictureTimingSEI->m_numDecodingUnitsMinus1 + 1 ); i ++ )
+      {
+        SEIDecodingUnitInfo *duInfoSEI = new SEIDecodingUnitInfo();
+        duInfoSEI->m_decodingUnitIdx = i;
+        duInfoSEI->m_duSptCpbRemovalDelay = pictureTimingSEI->m_duCpbRemovalDelayMinus1[i] + 1;
+        duInfoSEI->m_dpbOutputDuDelayPresentFlag = false;
+        duInfoSEI->m_picSptDpbOutputDuDelay = picSptDpbOutputDuDelay;
+
+        duInfoSeiMessages.push_back(duInfoSEI);
+      }
+    }
+
+    if( !m_pcCfg->getPictureTimingSEIEnabled() && pictureTimingSEI )
+    {
+      delete pictureTimingSEI;
+    }
+  }
+}
+
+Void TEncGOP::xUpdateDuData(AccessUnit &testAU, std::deque<DUData> &duData)
+{
+  if (duData.empty())
+  {
+    return;
+  }
+  // fix first 
+  UInt numNalUnits = (UInt)testAU.size();
+  UInt numRBSPBytes = 0;
+  for (AccessUnit::const_iterator it = testAU.begin(); it != testAU.end(); it++)
+  {
+    numRBSPBytes += UInt((*it)->m_nalUnitData.str().size());
+  }
+  duData[0].accumBitsDU += ( numRBSPBytes << 3 );
+  duData[0].accumNalsDU += numNalUnits;
+
+  // adapt cumulative sums for all following DUs
+  // and add one DU info SEI, if enabled
+  for (Int i=1; i<duData.size(); i++)
+  {
+    if (m_pcCfg->getDecodingUnitInfoSEIEnabled())
+    {
+      numNalUnits  += 1;
+      numRBSPBytes += ( 5 << 3 );
+    }
+    duData[i].accumBitsDU += numRBSPBytes; // probably around 5 bytes
+    duData[i].accumNalsDU += numNalUnits;
+  }
+
+  // The last DU may have a trailing SEI
+  if (m_pcCfg->getDecodedPictureHashSEIType()!=HASHTYPE_NONE)
+  {
+    duData.back().accumBitsDU += ( 20 << 3 ); // probably around 20 bytes - should be further adjusted, e.g. by type
+    duData.back().accumNalsDU += 1;
+  }
+
+}
+Void TEncGOP::xUpdateTimingSEI(SEIPictureTiming *pictureTimingSEI, std::deque<DUData> &duData, const TComSPS *sps)
+{
+  if (!pictureTimingSEI)
+  {
+    return;
+  }
+  const TComVUI *vui = sps->getVuiParameters();
+  const TComHRD *hrd = vui->getHrdParameters();
+  if( hrd->getSubPicCpbParamsPresentFlag() )
+  {
+    Int i;
+    UInt64 ui64Tmp;
