@@ -998,3 +998,103 @@ Void TEncGOP::xUpdateTimingSEI(SEIPictureTiming *pictureTimingSEI, std::deque<DU
   {
     Int i;
     UInt64 ui64Tmp;
+    UInt uiPrev = 0;
+    UInt numDU = ( pictureTimingSEI->m_numDecodingUnitsMinus1 + 1 );
+    std::vector<UInt> &rDuCpbRemovalDelayMinus1 = pictureTimingSEI->m_duCpbRemovalDelayMinus1;
+    UInt maxDiff = ( hrd->getTickDivisorMinus2() + 2 ) - 1;
+
+    for( i = 0; i < numDU; i ++ )
+    {
+      pictureTimingSEI->m_numNalusInDuMinus1[ i ]       = ( i == 0 ) ? ( duData[i].accumNalsDU - 1 ) : ( duData[i].accumNalsDU- duData[i-1].accumNalsDU - 1 );
+    }
+
+    if( numDU == 1 )
+    {
+      rDuCpbRemovalDelayMinus1[ 0 ] = 0; /* don't care */
+    }
+    else
+    {
+      rDuCpbRemovalDelayMinus1[ numDU - 1 ] = 0;/* by definition */
+      UInt tmp = 0;
+      UInt accum = 0;
+
+      for( i = ( numDU - 2 ); i >= 0; i -- )
+      {
+        ui64Tmp = ( ( ( duData[numDU - 1].accumBitsDU  - duData[i].accumBitsDU ) * ( vui->getTimingInfo()->getTimeScale() / vui->getTimingInfo()->getNumUnitsInTick() ) * ( hrd->getTickDivisorMinus2() + 2 ) ) / ( m_pcCfg->getTargetBitrate() ) );
+        if( (UInt)ui64Tmp > maxDiff )
+        {
+          tmp ++;
+        }
+      }
+      uiPrev = 0;
+
+      UInt flag = 0;
+      for( i = ( numDU - 2 ); i >= 0; i -- )
+      {
+        flag = 0;
+        ui64Tmp = ( ( ( duData[numDU - 1].accumBitsDU  - duData[i].accumBitsDU ) * ( vui->getTimingInfo()->getTimeScale() / vui->getTimingInfo()->getNumUnitsInTick() ) * ( hrd->getTickDivisorMinus2() + 2 ) ) / ( m_pcCfg->getTargetBitrate() ) );
+
+        if( (UInt)ui64Tmp > maxDiff )
+        {
+          if(uiPrev >= maxDiff - tmp)
+          {
+            ui64Tmp = uiPrev + 1;
+            flag = 1;
+          }
+          else                            ui64Tmp = maxDiff - tmp + 1;
+        }
+        rDuCpbRemovalDelayMinus1[ i ] = (UInt)ui64Tmp - uiPrev - 1;
+        if( (Int)rDuCpbRemovalDelayMinus1[ i ] < 0 )
+        {
+          rDuCpbRemovalDelayMinus1[ i ] = 0;
+        }
+        else if (tmp > 0 && flag == 1)
+        {
+          tmp --;
+        }
+        accum += rDuCpbRemovalDelayMinus1[ i ] + 1;
+        uiPrev = accum;
+      }
+    }
+  }
+}
+Void TEncGOP::xUpdateDuInfoSEI(SEIMessages &duInfoSeiMessages, SEIPictureTiming *pictureTimingSEI)
+{
+  if (duInfoSeiMessages.empty() || (pictureTimingSEI == NULL))
+  {
+    return;
+  }
+
+  Int i=0;
+
+  for (SEIMessages::iterator du = duInfoSeiMessages.begin(); du!= duInfoSeiMessages.end(); du++)
+  {
+    SEIDecodingUnitInfo *duInfoSEI = (SEIDecodingUnitInfo*) (*du);
+    duInfoSEI->m_decodingUnitIdx = i;
+    duInfoSEI->m_duSptCpbRemovalDelay = pictureTimingSEI->m_duCpbRemovalDelayMinus1[i] + 1;
+    duInfoSEI->m_dpbOutputDuDelayPresentFlag = false;
+    i++;
+  }
+}
+
+static Void
+cabac_zero_word_padding(TComSlice *const pcSlice, TComPic *const pcPic, const std::size_t binCountsInNalUnits, const std::size_t numBytesInVclNalUnits, std::ostringstream &nalUnitData, const Bool cabacZeroWordPaddingEnabled)
+{
+  const TComSPS &sps=*(pcSlice->getSPS());
+  const Int log2subWidthCxsubHeightC = (pcPic->getComponentScaleX(COMPONENT_Cb)+pcPic->getComponentScaleY(COMPONENT_Cb));
+  const Int minCuWidth  = pcPic->getMinCUWidth();
+  const Int minCuHeight = pcPic->getMinCUHeight();
+  const Int paddedWidth = ((sps.getPicWidthInLumaSamples()  + minCuWidth  - 1) / minCuWidth) * minCuWidth;
+  const Int paddedHeight= ((sps.getPicHeightInLumaSamples() + minCuHeight - 1) / minCuHeight) * minCuHeight;
+  const Int rawBits = paddedWidth * paddedHeight *
+                         (sps.getBitDepth(CHANNEL_TYPE_LUMA) + ((2*sps.getBitDepth(CHANNEL_TYPE_CHROMA))>>log2subWidthCxsubHeightC));
+  const std::size_t threshold = (32/3)*numBytesInVclNalUnits + (rawBits/32);
+  if (binCountsInNalUnits >= threshold)
+  {
+    // need to add additional cabac zero words (each one accounts for 3 bytes (=00 00 03)) to increase numBytesInVclNalUnits
+    const std::size_t targetNumBytesInVclNalUnits = ((binCountsInNalUnits - (rawBits/32))*3+31)/32;
+
+    if (targetNumBytesInVclNalUnits>numBytesInVclNalUnits) // It should be!
+    {
+      const std::size_t numberOfAdditionalBytesNeeded=targetNumBytesInVclNalUnits - numBytesInVclNalUnits;
+      const std::size_t numberOfAdditionalCabacZeroWords=(numberOfAdditionalBytesNeeded+2)/3;
