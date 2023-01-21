@@ -1298,3 +1298,103 @@ Void TEncSearch::xIntraCodingTUBlock(       TComYuv*    pcOrgYuv,
   m_pcTrQuant->selectLambda     (compID);
 #endif
 
+  m_pcTrQuant->transformNxN     ( rTu, compID, piResi, uiStride, pcCoeff,
+#if ADAPTIVE_QP_SELECTION
+    pcArlCoeff,
+#endif
+    uiAbsSum, cQP
+    );
+
+  //--- inverse transform ---
+
+#if DEBUG_STRING
+  if ( (uiAbsSum > 0) || (DebugOptionList::DebugString_InvTran.getInt()&debugPredModeMask) )
+#else
+  if ( uiAbsSum > 0 )
+#endif
+  {
+    m_pcTrQuant->invTransformNxN ( rTu, compID, piResi, uiStride, pcCoeff, cQP DEBUG_STRING_PASS_INTO_OPTIONAL(&sDebug, (DebugOptionList::DebugString_InvTran.getInt()&debugPredModeMask)) );
+  }
+  else
+  {
+    Pel* pResi = piResi;
+    memset( pcCoeff, 0, sizeof( TCoeff ) * uiWidth * uiHeight );
+    for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+    {
+      memset( pResi, 0, sizeof( Pel ) * uiWidth );
+      pResi += uiStride;
+    }
+  }
+
+
+  //===== reconstruction =====
+  {
+    Pel* pPred      = piPred;
+    Pel* pResi      = piResi;
+    Pel* pReco      = piReco;
+    Pel* pRecQt     = piRecQt;
+    Pel* pRecIPred  = piRecIPred;
+
+    if (pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+    {
+      if (bUseCrossCPrediction)
+      {
+        TComTrQuant::crossComponentPrediction( rTu, compID, reconstructedLumaResidual, piResi, piResi, uiWidth, uiHeight, MAX_CU_SIZE, uiStride, uiStride, true );
+      }
+      else if (isLuma(compID))
+      {
+        xStoreCrossComponentPredictionResult( reconstructedLumaResidual, piResi, rTu, 0, 0, MAX_CU_SIZE, uiStride );
+      }
+    }
+
+ #if DEBUG_STRING
+    std::stringstream ss(stringstream::out);
+    const Bool bDebugPred=((DebugOptionList::DebugString_Pred.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+    const Bool bDebugResi=((DebugOptionList::DebugString_Resi.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+    const Bool bDebugReco=((DebugOptionList::DebugString_Reco.getInt()&debugPredModeMask) && DEBUG_STRING_CHANNEL_CONDITION(compID));
+
+    if (bDebugPred || bDebugResi || bDebugReco)
+    {
+      ss << "###: " << "CompID: " << compID << " pred mode (ch/fin): " << uiChPredMode << "/" << uiChFinalMode << " absPartIdx: " << rTu.GetAbsPartIdxTU() << "\n";
+      for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+      {
+        ss << "###: ";
+        if (bDebugPred)
+        {
+          ss << " - pred: ";
+          for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+          {
+            ss << pPred[ uiX ] << ", ";
+          }
+        }
+        if (bDebugResi)
+        {
+          ss << " - resi: ";
+        }
+        for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+        {
+          if (bDebugResi)
+          {
+            ss << pResi[ uiX ] << ", ";
+          }
+          pReco    [ uiX ] = Pel(ClipBD<Int>( Int(pPred[uiX]) + Int(pResi[uiX]), bitDepth ));
+          pRecQt   [ uiX ] = pReco[ uiX ];
+          pRecIPred[ uiX ] = pReco[ uiX ];
+        }
+        if (bDebugReco)
+        {
+          ss << " - reco: ";
+          for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+          {
+            ss << pReco[ uiX ] << ", ";
+          }
+        }
+        pPred     += uiStride;
+        pResi     += uiStride;
+        pReco     += uiStride;
+        pRecQt    += uiRecQtStride;
+        pRecIPred += uiRecIPredStride;
+        ss << "\n";
+      }
+      DEBUG_STRING_APPEND(sDebug, ss.str())
+    }
