@@ -1298,3 +1298,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
   // TODO: Split this function up.
 
   TComPic*        pcPic = NULL;
+  TComPicYuv*     pcPicYuvRecOut;
+  TComSlice*      pcSlice;
+  TComOutputBitstream  *pcBitstreamRedirect;
+  pcBitstreamRedirect = new TComOutputBitstream;
+  AccessUnit::iterator  itLocationToPushSliceHeaderNALU; // used to store location where NALU containing slice header is to be inserted
+
+  xInitGOP( iPOCLast, iNumPicRcvd, isField );
+
+  m_iNumPicCoded = 0;
+  SEIMessages leadingSeiMessages;
+  SEIMessages nestedSeiMessages;
+  SEIMessages duInfoSeiMessages;
+  SEIMessages trailingSeiMessages;
+  std::deque<DUData> duData;
+  SEIDecodingUnitInfo decodingUnitInfoSEI;
+
+  EfficientFieldIRAPMapping effFieldIRAPMap;
+  if (m_pcCfg->getEfficientFieldIRAPEnabled())
+  {
+    effFieldIRAPMap.initialize(isField, m_iGopSize, iPOCLast, iNumPicRcvd, m_iLastIDR, this, m_pcCfg);
+  }
+
+  // reset flag indicating whether pictures have been encoded
+  for ( Int iGOPid=0; iGOPid < m_iGopSize; iGOPid++ )
+  {
+    m_pcCfg->setEncodedFlag(iGOPid, false);
+  }
+
+  for ( Int iGOPid=0; iGOPid < m_iGopSize; iGOPid++ )
+  {
+    if (m_pcCfg->getEfficientFieldIRAPEnabled())
+    {
+      iGOPid=effFieldIRAPMap.adjustGOPid(iGOPid);
+    }
+
+    //-- For time output for each slice
+    clock_t iBeforeTime = clock();
+
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////// Initial to start encoding
+    Int iTimeOffset;
+    Int pocCurr;
+
+    if(iPOCLast == 0) //case first frame or first top field
+    {
+      pocCurr=0;
+      iTimeOffset = 1;
+    }
+    else if(iPOCLast == 1 && isField) //case first bottom field, just like the first frame, the poc computation is not right anymore, we set the right value
+    {
+      pocCurr = 1;
+      iTimeOffset = 1;
+    }
+    else
+    {
+      pocCurr = iPOCLast - iNumPicRcvd + m_pcCfg->getGOPEntry(iGOPid).m_POC - ((isField && m_iGopSize>1) ? 1:0);
+      iTimeOffset = m_pcCfg->getGOPEntry(iGOPid).m_POC;
+    }
+
+    if(pocCurr>=m_pcCfg->getFramesToBeEncoded())
+    {
+      if (m_pcCfg->getEfficientFieldIRAPEnabled())
+      {
+        iGOPid=effFieldIRAPMap.restoreGOPid(iGOPid);
+      }
+      continue;
+    }
+
+    if( getNalUnitType(pocCurr, m_iLastIDR, isField) == NAL_UNIT_CODED_SLICE_IDR_W_RADL || getNalUnitType(pocCurr, m_iLastIDR, isField) == NAL_UNIT_CODED_SLICE_IDR_N_LP )
+    {
+      m_iLastIDR = pocCurr;
+    }
+    // start a new access unit: create an entry in the list of output access units
+    accessUnitsInGOP.push_back(AccessUnit());
+    AccessUnit& accessUnit = accessUnitsInGOP.back();
+    xGetBuffer( rcListPic, rcListPicYuvRecOut, iNumPicRcvd, iTimeOffset, pcPic, pcPicYuvRecOut, pocCurr, isField );
+
+#if REDUCED_ENCODER_MEMORY
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+    pcPic->prepareForReconstruction( m_pcCfg->getShutterFilterFlag() );
+#else
+    pcPic->prepareForReconstruction();
+#endif
+
+#endif
+    //  Slice data initialization
+    pcPic->clearSliceBuffer();
+    pcPic->allocateNewSlice();
+    m_pcSliceEncoder->setSliceIdx(0);
+    pcPic->setCurrSliceIdx(0);
+
+    m_pcSliceEncoder->initEncSlice ( pcPic, iPOCLast, pocCurr, iGOPid, pcSlice, isField );
+
+    pcSlice->setLastIDR(m_iLastIDR);
+    pcSlice->setSliceIdx(0);
+    //set default slice level flag to the same as SPS level flag
+    pcSlice->setLFCrossSliceBoundaryFlag(  pcSlice->getPPS()->getLoopFilterAcrossSlicesEnabledFlag()  );
+
+    if(pcSlice->getSliceType()==B_SLICE&&m_pcCfg->getGOPEntry(iGOPid).m_sliceType=='P')
+    {
