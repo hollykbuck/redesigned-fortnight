@@ -1198,3 +1198,103 @@ Int EfficientFieldIRAPMapping::adjustGOPid(const Int GOPid)
         return IRAPGOPid;
       }
     }
+    else
+    {
+      if(GOPid == IRAPGOPid -1)
+      {
+        return IRAPGOPid;
+      }
+      else if(GOPid == IRAPGOPid)
+      {
+        return IRAPGOPid -1;
+      }
+    }
+  }
+  return GOPid;
+}
+
+Int EfficientFieldIRAPMapping::restoreGOPid(const Int GOPid)
+{
+  if(IRAPtoReorder)
+  {
+    if(swapIRAPForward)
+    {
+      if(GOPid == IRAPGOPid)
+      {
+        IRAPtoReorder = false;
+        return IRAPGOPid +1;
+      }
+      else if(GOPid == IRAPGOPid +1)
+      {
+        return GOPid -1;
+      }
+    }
+    else
+    {
+      if(GOPid == IRAPGOPid)
+      {
+        return IRAPGOPid -1;
+      }
+      else if(GOPid == IRAPGOPid -1)
+      {
+        IRAPtoReorder = false;
+        return IRAPGOPid;
+      }
+    }
+  }
+  return GOPid;
+}
+
+
+static UInt calculateCollocatedFromL0Flag(const TComSlice *pSlice)
+{
+  const Int refIdx = 0; // Zero always assumed
+  const TComPic *refPicL0 = pSlice->getRefPic(REF_PIC_LIST_0, refIdx);
+  const TComPic *refPicL1 = pSlice->getRefPic(REF_PIC_LIST_1, refIdx);
+  return refPicL0->getSlice(0)->getSliceQp() > refPicL1->getSlice(0)->getSliceQp();
+}
+
+
+static Void
+printHash(const HashType hashType, const std::string &digestStr)
+{
+  const TChar *decodedPictureHashModeName;
+  switch (hashType)
+  {
+    case HASHTYPE_MD5:
+      decodedPictureHashModeName = "MD5";
+      break;
+    case HASHTYPE_CRC:
+      decodedPictureHashModeName = "CRC";
+      break;
+    case HASHTYPE_CHECKSUM:
+      decodedPictureHashModeName = "Checksum";
+      break;
+    default:
+      decodedPictureHashModeName = NULL;
+      break;
+  }
+  if (decodedPictureHashModeName != NULL)
+  {
+    if (digestStr.empty())
+    {
+      printf(" [%s:%s]", decodedPictureHashModeName, "?");
+    }
+    else
+    {
+      printf(" [%s:%s]", decodedPictureHashModeName, digestStr.c_str());
+    }
+  }
+}
+
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rcListPic,
+                           TComList<TComPicYuv*>& rcListPicYuvRecOut, std::list<AccessUnit>& accessUnitsInGOP,
+                           Bool isField, Bool isTff, const InputColourSpaceConversion ip_conversion, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl )
+{
+  // TODO: Split this function up.
+
+  TComPic*        pcPic = NULL;
