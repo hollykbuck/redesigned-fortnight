@@ -1098,3 +1098,103 @@ cabac_zero_word_padding(TComSlice *const pcSlice, TComPic *const pcPic, const st
     {
       const std::size_t numberOfAdditionalBytesNeeded=targetNumBytesInVclNalUnits - numBytesInVclNalUnits;
       const std::size_t numberOfAdditionalCabacZeroWords=(numberOfAdditionalBytesNeeded+2)/3;
+      const std::size_t numberOfAdditionalCabacZeroBytes=numberOfAdditionalCabacZeroWords*3;
+      if (cabacZeroWordPaddingEnabled)
+      {
+        std::vector<UChar> zeroBytesPadding(numberOfAdditionalCabacZeroBytes, UChar(0));
+        for(std::size_t i=0; i<numberOfAdditionalCabacZeroWords; i++)
+        {
+          zeroBytesPadding[i*3+2]=3;  // 00 00 03
+        }
+        nalUnitData.write(reinterpret_cast<const TChar*>(&(zeroBytesPadding[0])), numberOfAdditionalCabacZeroBytes);
+        printf("Adding %d bytes of padding\n", UInt(numberOfAdditionalCabacZeroWords*3));
+      }
+      else
+      {
+        printf("Standard would normally require adding %d bytes of padding\n", UInt(numberOfAdditionalCabacZeroWords*3));
+      }
+    }
+  }
+}
+
+class EfficientFieldIRAPMapping
+{
+  private:
+    Int  IRAPGOPid;
+    Bool IRAPtoReorder;
+    Bool swapIRAPForward;
+
+  public:
+    EfficientFieldIRAPMapping() :
+      IRAPGOPid(-1),
+      IRAPtoReorder(false),
+      swapIRAPForward(false)
+    { }
+
+    Void initialize(const Bool isField, const Int gopSize, const Int POCLast, const Int numPicRcvd, const Int lastIDR, TEncGOP *pEncGop, TEncCfg *pCfg);
+
+    Int adjustGOPid(const Int gopID);
+    Int restoreGOPid(const Int gopID);
+    Int GetIRAPGOPid() const { return IRAPGOPid; }
+};
+
+Void EfficientFieldIRAPMapping::initialize(const Bool isField, const Int gopSize, const Int POCLast, const Int numPicRcvd, const Int lastIDR, TEncGOP *pEncGop, TEncCfg *pCfg )
+{
+  if(isField)
+  {
+    Int pocCurr;
+    for ( Int iGOPid=0; iGOPid < gopSize; iGOPid++ )
+    {
+      // determine actual POC
+      if(POCLast == 0) //case first frame or first top field
+      {
+        pocCurr=0;
+      }
+      else if(POCLast == 1 && isField) //case first bottom field, just like the first frame, the poc computation is not right anymore, we set the right value
+      {
+        pocCurr = 1;
+      }
+      else
+      {
+        pocCurr = POCLast - numPicRcvd + pCfg->getGOPEntry(iGOPid).m_POC - isField;
+      }
+
+      // check if POC corresponds to IRAP
+      NalUnitType tmpUnitType = pEncGop->getNalUnitType(pocCurr, lastIDR, isField);
+      if(tmpUnitType >= NAL_UNIT_CODED_SLICE_BLA_W_LP && tmpUnitType <= NAL_UNIT_CODED_SLICE_CRA) // if picture is an IRAP
+      {
+        if(pocCurr%2 == 0 && iGOPid < gopSize-1 && pCfg->getGOPEntry(iGOPid).m_POC == pCfg->getGOPEntry(iGOPid+1).m_POC-1)
+        { // if top field and following picture in enc order is associated bottom field
+          IRAPGOPid = iGOPid;
+          IRAPtoReorder = true;
+          swapIRAPForward = true; 
+          break;
+        }
+        if(pocCurr%2 != 0 && iGOPid > 0 && pCfg->getGOPEntry(iGOPid).m_POC == pCfg->getGOPEntry(iGOPid-1).m_POC+1)
+        {
+          // if picture is an IRAP remember to process it first
+          IRAPGOPid = iGOPid;
+          IRAPtoReorder = true;
+          swapIRAPForward = false; 
+          break;
+        }
+      }
+    }
+  }
+}
+
+Int EfficientFieldIRAPMapping::adjustGOPid(const Int GOPid)
+{
+  if(IRAPtoReorder)
+  {
+    if(swapIRAPForward)
+    {
+      if(GOPid == IRAPGOPid)
+      {
+        return IRAPGOPid +1;
+      }
+      else if(GOPid == IRAPGOPid +1)
+      {
+        return IRAPGOPid;
+      }
+    }
