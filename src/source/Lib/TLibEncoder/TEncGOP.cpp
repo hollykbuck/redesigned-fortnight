@@ -1398,3 +1398,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
 
     if(pcSlice->getSliceType()==B_SLICE&&m_pcCfg->getGOPEntry(iGOPid).m_sliceType=='P')
     {
+      pcSlice->setSliceType(P_SLICE);
+    }
+    if(pcSlice->getSliceType()==B_SLICE&&m_pcCfg->getGOPEntry(iGOPid).m_sliceType=='I')
+    {
+      pcSlice->setSliceType(I_SLICE);
+    }
+    
+    // Set the nal unit type
+    pcSlice->setNalUnitType(getNalUnitType(pocCurr, m_iLastIDR, isField));
+    if(pcSlice->getTemporalLayerNonReferenceFlag())
+    {
+      if (pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_TRAIL_R &&
+          !(m_iGopSize == 1 && pcSlice->getSliceType() == I_SLICE))
+        // Add this condition to avoid POC issues with encoder_intra_main.cfg configuration (see #1127 in bug tracker)
+      {
+        pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_TRAIL_N);
+      }
+      if(pcSlice->getNalUnitType()==NAL_UNIT_CODED_SLICE_RADL_R)
+      {
+        pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_RADL_N);
+      }
+      if(pcSlice->getNalUnitType()==NAL_UNIT_CODED_SLICE_RASL_R)
+      {
+        pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_RASL_N);
+      }
+    }
+
+    if (m_pcCfg->getEfficientFieldIRAPEnabled())
+    {
+      if ( pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA )  // IRAP picture
+      {
+        m_associatedIRAPType = pcSlice->getNalUnitType();
+        m_associatedIRAPPOC = pocCurr;
+      }
+      pcSlice->setAssociatedIRAPType(m_associatedIRAPType);
+      pcSlice->setAssociatedIRAPPOC(m_associatedIRAPPOC);
+    }
+    // Do decoding refresh marking if any
+    pcSlice->decodingRefreshMarking(m_pocCRA, m_bRefreshPending, rcListPic, m_pcCfg->getEfficientFieldIRAPEnabled());
+    m_pcEncTop->selectReferencePictureSet(pcSlice, pocCurr, iGOPid);
+    if (!m_pcCfg->getEfficientFieldIRAPEnabled())
+    {
+      if ( pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA )  // IRAP picture
+      {
+        m_associatedIRAPType = pcSlice->getNalUnitType();
+        m_associatedIRAPPOC = pocCurr;
+      }
+      pcSlice->setAssociatedIRAPType(m_associatedIRAPType);
+      pcSlice->setAssociatedIRAPPOC(m_associatedIRAPPOC);
+    }
+
+    if ((pcSlice->checkThatAllRefPicsAreAvailable(rcListPic, pcSlice->getRPS(), false, m_iLastRecoveryPicPOC, m_pcCfg->getDecodingRefreshType() == 3) != 0) || (pcSlice->isIRAP()) 
+      || (m_pcCfg->getEfficientFieldIRAPEnabled() && isField && pcSlice->getAssociatedIRAPType() >= NAL_UNIT_CODED_SLICE_BLA_W_LP && pcSlice->getAssociatedIRAPType() <= NAL_UNIT_CODED_SLICE_CRA && pcSlice->getAssociatedIRAPPOC() == pcSlice->getPOC()+1)
+      )
+    {
+      pcSlice->createExplicitReferencePictureSetFromReference(rcListPic, pcSlice->getRPS(), pcSlice->isIRAP(), m_iLastRecoveryPicPOC, m_pcCfg->getDecodingRefreshType() == 3, m_pcCfg->getEfficientFieldIRAPEnabled());
+    }
+
+    pcSlice->applyReferencePictureSet(rcListPic, pcSlice->getRPS());
+
+    if(pcSlice->getTLayer() > 0 
+      &&  !( pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_RADL_N     // Check if not a leading picture
+          || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_RADL_R
+          || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_N
+          || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_R )
+        )
+    {
+      if(pcSlice->isTemporalLayerSwitchingPoint(rcListPic) || pcSlice->getSPS()->getTemporalIdNestingFlag())
+      {
+        if(pcSlice->getTemporalLayerNonReferenceFlag())
+        {
+          pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_TSA_N);
+        }
+        else
+        {
+          pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_TSA_R);
+        }
+      }
+      else if(pcSlice->isStepwiseTemporalLayerSwitchingPointCandidate(rcListPic))
+      {
+        Bool isSTSA=true;
+        for(Int ii=iGOPid+1;(ii<m_pcCfg->getGOPSize() && isSTSA==true);ii++)
+        {
+          Int lTid= m_pcCfg->getGOPEntry(ii).m_temporalId;
+          if(lTid==pcSlice->getTLayer())
+          {
+            const TComReferencePictureSet* nRPS = pcSlice->getSPS()->getRPSList()->getReferencePictureSet(ii);
+            for(Int jj=0;jj<nRPS->getNumberOfPictures();jj++)
+            {
+              if(nRPS->getUsed(jj))
