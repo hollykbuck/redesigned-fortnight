@@ -1398,3 +1398,103 @@ Void TEncSearch::xIntraCodingTUBlock(       TComYuv*    pcOrgYuv,
       }
       DEBUG_STRING_APPEND(sDebug, ss.str())
     }
+    else
+#endif
+    {
+
+      for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+      {
+        for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+        {
+          pReco    [ uiX ] = Pel(ClipBD<Int>( Int(pPred[uiX]) + Int(pResi[uiX]), bitDepth ));
+          pRecQt   [ uiX ] = pReco[ uiX ];
+          pRecIPred[ uiX ] = pReco[ uiX ];
+        }
+        pPred     += uiStride;
+        pResi     += uiStride;
+        pReco     += uiStride;
+        pRecQt    += uiRecQtStride;
+        pRecIPred += uiRecIPredStride;
+      }
+    }
+  }
+
+  //===== update distortion =====
+  ruiDist += m_pcRdCost->getDistPart( bitDepth, piReco, uiStride, piOrg, uiStride, uiWidth, uiHeight, compID );
+}
+
+
+
+
+Void
+TEncSearch::xRecurIntraCodingLumaQT(TComYuv*    pcOrgYuv,
+                                    TComYuv*    pcPredYuv,
+                                    TComYuv*    pcResiYuv,
+                                    Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                    Distortion& ruiDistY,
+#if HHI_RQT_INTRA_SPEEDUP
+                                    Bool        bCheckFirst,
+#endif
+                                    Double&     dRDCost,
+                                    TComTU&     rTu
+                                    DEBUG_STRING_FN_DECLARE(sDebug))
+{
+  TComDataCU   *pcCU          = rTu.getCU();
+  const UInt    uiAbsPartIdx  = rTu.GetAbsPartIdxTU();
+  const UInt    uiFullDepth   = rTu.GetTransformDepthTotal();
+  const UInt    uiTrDepth     = rTu.GetTransformDepthRel();
+  const UInt    uiLog2TrSize  = rTu.GetLog2LumaTrSize();
+        Bool    bCheckFull    = ( uiLog2TrSize  <= pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() );
+        Bool    bCheckSplit   = ( uiLog2TrSize  >  pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) );
+
+        Pel     resiLumaSplit [NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE];
+        Pel     resiLumaSingle[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE];
+
+        Bool    bMaintainResidual[NUMBER_OF_STORED_RESIDUAL_TYPES];
+        for (UInt residualTypeIndex = 0; residualTypeIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; residualTypeIndex++)
+        {
+          bMaintainResidual[residualTypeIndex] = true; //assume true unless specified otherwise
+        }
+
+        bMaintainResidual[RESIDUAL_ENCODER_SIDE] = !(m_pcEncCfg->getUseReconBasedCrossCPredictionEstimate());
+
+#if HHI_RQT_INTRA_SPEEDUP
+  Int maxTuSize = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize();
+  Int isIntraSlice = (pcCU->getSlice()->getSliceType() == I_SLICE);
+  // don't check split if TU size is less or equal to max TU size
+  Bool noSplitIntraMaxTuSize = bCheckFull;
+  if(m_pcEncCfg->getRDpenalty() && ! isIntraSlice)
+  {
+    // in addition don't check split if TU size is less or equal to 16x16 TU size for non-intra slice
+    noSplitIntraMaxTuSize = ( uiLog2TrSize  <= min(maxTuSize,4) );
+
+    // if maximum RD-penalty don't check TU size 32x32
+    if(m_pcEncCfg->getRDpenalty()==2)
+    {
+      bCheckFull    = ( uiLog2TrSize  <= min(maxTuSize,4));
+    }
+  }
+  if( bCheckFirst && noSplitIntraMaxTuSize )
+
+  {
+    bCheckSplit = false;
+  }
+#else
+  Int maxTuSize = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize();
+  Int isIntraSlice = (pcCU->getSlice()->getSliceType() == I_SLICE);
+  // if maximum RD-penalty don't check TU size 32x32
+  if((m_pcEncCfg->getRDpenalty()==2)  && !isIntraSlice)
+  {
+    bCheckFull    = ( uiLog2TrSize  <= min(maxTuSize,4));
+  }
+#endif
+  Double     dSingleCost                        = MAX_DOUBLE;
+  Distortion uiSingleDistLuma                   = 0;
+  UInt       uiSingleCbfLuma                    = 0;
+  Bool       checkTransformSkip  = pcCU->getSlice()->getPPS()->getUseTransformSkip();
+  Int        bestModeId[MAX_NUM_COMPONENT] = { 0, 0, 0};
+  checkTransformSkip           &= TUCompRectHasAssociatedTransformSkipFlag(rTu.getRect(COMPONENT_Y), pcCU->getSlice()->getPPS()->getPpsRangeExtension().getLog2MaxTransformSkipBlockSize());
+  checkTransformSkip           &= (!pcCU->getCUTransquantBypass(0));
+
+  assert (rTu.ProcessComponentSection(COMPONENT_Y));
+  const UInt totalAdjustedDepthChan   = rTu.GetTransformDepthTotalAdj(COMPONENT_Y);
