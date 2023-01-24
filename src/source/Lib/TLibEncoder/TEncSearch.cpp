@@ -1598,3 +1598,103 @@ TEncSearch::xRecurIntraCodingLumaQT(TComYuv*    pcOrgYuv,
         m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
       }
       //----- code luma/chroma block with given intra prediction mode and store Cbf-----
+      dSingleCost   = 0.0;
+
+      pcCU ->setTransformSkipSubParts ( 0, COMPONENT_Y, uiAbsPartIdx, totalAdjustedDepthChan );
+      xIntraCodingTUBlock( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaSingle, false, uiSingleDistLuma, COMPONENT_Y, rTu DEBUG_STRING_PASS_INTO(sDebug));
+
+      if( bCheckSplit )
+      {
+        uiSingleCbfLuma = pcCU->getCbf( uiAbsPartIdx, COMPONENT_Y, uiTrDepth );
+      }
+      //----- determine rate and r-d cost -----
+      UInt uiSingleBits = xGetIntraBitsQT( rTu, true, false, false );
+
+      if(m_pcEncCfg->getRDpenalty() && (uiLog2TrSize==5) && !isIntraSlice)
+      {
+        uiSingleBits=uiSingleBits*4;
+      }
+
+      dSingleCost       = m_pcRdCost->calcRdCost( uiSingleBits, uiSingleDistLuma );
+
+      if (pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+      {
+        const Int xOffset = rTu.getRect( COMPONENT_Y ).x0;
+        const Int yOffset = rTu.getRect( COMPONENT_Y ).y0;
+        for (UInt storedResidualIndex = 0; storedResidualIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; storedResidualIndex++)
+        {
+          if (bMaintainResidual[storedResidualIndex])
+          {
+            xStoreCrossComponentPredictionResult(resiLuma[storedResidualIndex], resiLumaSingle[storedResidualIndex], rTu, xOffset, yOffset, MAX_CU_SIZE, MAX_CU_SIZE);
+          }
+        }
+      }
+    }
+  }
+
+  if( bCheckSplit )
+  {
+    //----- store full entropy coding status, load original entropy coding status -----
+    if( bCheckFull )
+    {
+      m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_TEST ] );
+      m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+    }
+    else
+    {
+      m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+    }
+    //----- code splitted block -----
+    Double     dSplitCost      = 0.0;
+    Distortion uiSplitDistLuma = 0;
+    UInt       uiSplitCbfLuma  = 0;
+
+    TComTURecurse tuRecurseChild(rTu, false);
+    DEBUG_STRING_NEW(sSplit)
+    do
+    {
+      DEBUG_STRING_NEW(sChild)
+#if HHI_RQT_INTRA_SPEEDUP
+      xRecurIntraCodingLumaQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaSplit, uiSplitDistLuma, bCheckFirst, dSplitCost, tuRecurseChild DEBUG_STRING_PASS_INTO(sChild) );
+#else
+      xRecurIntraCodingLumaQT( pcOrgYuv, pcPredYuv, pcResiYuv, resiLumaSplit, uiSplitDistLuma, dSplitCost, tuRecurseChild DEBUG_STRING_PASS_INTO(sChild) );
+#endif
+      DEBUG_STRING_APPEND(sSplit, sChild)
+      uiSplitCbfLuma |= pcCU->getCbf( tuRecurseChild.GetAbsPartIdxTU(), COMPONENT_Y, tuRecurseChild.GetTransformDepthRel() );
+    } while (tuRecurseChild.nextSection(rTu) );
+
+    UInt    uiPartsDiv     = rTu.GetAbsPartIdxNumParts();
+    {
+      if (uiSplitCbfLuma)
+      {
+        const UInt flag=1<<uiTrDepth;
+        UChar *pBase=pcCU->getCbf( COMPONENT_Y );
+        for( UInt uiOffs = 0; uiOffs < uiPartsDiv; uiOffs++ )
+        {
+          pBase[ uiAbsPartIdx + uiOffs ] |= flag;
+        }
+      }
+    }
+    //----- restore context states -----
+    m_pcRDGoOnSbacCoder->load ( m_pppcRDSbacCoder[ uiFullDepth ][ CI_QT_TRAFO_ROOT ] );
+    
+    //----- determine rate and r-d cost -----
+    UInt uiSplitBits = xGetIntraBitsQT( rTu, true, false, false );
+    dSplitCost       = m_pcRdCost->calcRdCost( uiSplitBits, uiSplitDistLuma );
+
+    //===== compare and set best =====
+    if( dSplitCost < dSingleCost )
+    {
+      //--- update cost ---
+      DEBUG_STRING_SWAP(sSplit, sDebug)
+      ruiDistY += uiSplitDistLuma;
+      dRDCost  += dSplitCost;
+
+      if (pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag())
+      {
+        const Int xOffset = rTu.getRect( COMPONENT_Y ).x0;
+        const Int yOffset = rTu.getRect( COMPONENT_Y ).y0;
+        for (UInt storedResidualIndex = 0; storedResidualIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; storedResidualIndex++)
+        {
+          if (bMaintainResidual[storedResidualIndex])
+          {
