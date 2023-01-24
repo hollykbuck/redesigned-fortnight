@@ -1498,3 +1498,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
             for(Int jj=0;jj<nRPS->getNumberOfPictures();jj++)
             {
               if(nRPS->getUsed(jj))
+              {
+                Int tPoc=m_pcCfg->getGOPEntry(ii).m_POC+nRPS->getDeltaPOC(jj);
+                Int kk=0;
+                for(kk=0;kk<m_pcCfg->getGOPSize();kk++)
+                {
+                  if(m_pcCfg->getGOPEntry(kk).m_POC==tPoc)
+                  {
+                    break;
+                  }
+                }
+                Int tTid=m_pcCfg->getGOPEntry(kk).m_temporalId;
+                if(tTid >= pcSlice->getTLayer())
+                {
+                  isSTSA=false;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        if(isSTSA==true)
+        {
+          if(pcSlice->getTemporalLayerNonReferenceFlag())
+          {
+            pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_STSA_N);
+          }
+          else
+          {
+            pcSlice->setNalUnitType(NAL_UNIT_CODED_SLICE_STSA_R);
+          }
+        }
+      }
+    }
+    arrangeLongtermPicturesInRPS(pcSlice, rcListPic);
+    TComRefPicListModification* refPicListModification = pcSlice->getRefPicListModification();
+    refPicListModification->setRefPicListModificationFlagL0(0);
+    refPicListModification->setRefPicListModificationFlagL1(0);
+    pcSlice->setNumRefIdx(REF_PIC_LIST_0,min(m_pcCfg->getGOPEntry(iGOPid).m_numRefPicsActive,pcSlice->getRPS()->getNumberOfPictures()));
+    pcSlice->setNumRefIdx(REF_PIC_LIST_1,min(m_pcCfg->getGOPEntry(iGOPid).m_numRefPicsActive,pcSlice->getRPS()->getNumberOfPictures()));
+
+    //  Set reference list
+    pcSlice->setRefPicList ( rcListPic );
+
+    //  Slice info. refinement
+    if ( (pcSlice->getSliceType() == B_SLICE) && (pcSlice->getNumRefIdx(REF_PIC_LIST_1) == 0) )
+    {
+      pcSlice->setSliceType ( P_SLICE );
+    }
+
+
+    if (pcSlice->getPOC() > m_RASPOCforResetEncoder && m_pcCfg->getResetEncoderStateAfterIRAP())
+    {
+      // need to reset encoder decisions.
+      m_pcSliceEncoder->resetEncoderDecisions();
+
+      if (pcSlice->getSPS()->getUseSAO())
+      {
+        m_pcSAO->resetEncoderDecisions();
+      }
+      m_RASPOCforResetEncoder=MAX_INT;
+    }
+    if (pcSlice->isIRAP())
+    {
+      m_RASPOCforResetEncoder = pcSlice->getPOC();
+    }
+
+    pcSlice->setEncCABACTableIdx(m_pcSliceEncoder->getEncCABACTableIdx());
+#if MCTS_EXTRACTION
+    SliceType  encCABACTableIdx = pcSlice->getEncCABACTableIdx();
+    Bool encCabacInitFlag = (pcSlice->getSliceType() != encCABACTableIdx && encCABACTableIdx != I_SLICE) ? true : false;
+    pcSlice->setCabacInitFlag(encCabacInitFlag);
+#endif
+
+    if (pcSlice->getSliceType() == B_SLICE)
+    {
+      const UInt uiColFromL0 = calculateCollocatedFromL0Flag(pcSlice);
+      pcSlice->setColFromL0Flag(uiColFromL0);
+      Bool bLowDelay = true;
+      Int  iCurrPOC  = pcSlice->getPOC();
+      Int iRefIdx = 0;
+
+      for (iRefIdx = 0; iRefIdx < pcSlice->getNumRefIdx(REF_PIC_LIST_0) && bLowDelay; iRefIdx++)
+      {
+        if ( pcSlice->getRefPic(REF_PIC_LIST_0, iRefIdx)->getPOC() > iCurrPOC )
+        {
+          bLowDelay = false;
+        }
+      }
+      for (iRefIdx = 0; iRefIdx < pcSlice->getNumRefIdx(REF_PIC_LIST_1) && bLowDelay; iRefIdx++)
+      {
+        if ( pcSlice->getRefPic(REF_PIC_LIST_1, iRefIdx)->getPOC() > iCurrPOC )
+        {
+          bLowDelay = false;
+        }
+      }
+
+      pcSlice->setCheckLDC(bLowDelay);
+    }
+    else
+    {
