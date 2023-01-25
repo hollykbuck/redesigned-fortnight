@@ -1598,3 +1598,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
     }
     else
     {
+      pcSlice->setCheckLDC(true);
+    }
+
+
+    //-------------------------------------------------------------
+    pcSlice->setRefPOCList();
+
+    pcSlice->setList1IdxToList0Idx();
+
+    if (m_pcEncTop->getTMVPModeId() == 2)
+    {
+      if (iGOPid == 0) // first picture in SOP (i.e. forward B)
+      {
+        pcSlice->setEnableTMVPFlag(0);
+      }
+      else
+      {
+        // Note: pcSlice->getColFromL0Flag() is assumed to be always 0 and getcolRefIdx() is always 0.
+        pcSlice->setEnableTMVPFlag(1);
+      }
+    }
+    else if (m_pcEncTop->getTMVPModeId() == 1)
+    {
+      pcSlice->setEnableTMVPFlag(1);
+    }
+    else
+    {
+      pcSlice->setEnableTMVPFlag(0);
+    }
+    
+    // set adaptive search range for non-intra-slices
+    if (m_pcCfg->getUseASR() && pcSlice->getSliceType()!=I_SLICE)
+    {
+      m_pcSliceEncoder->setSearchRange(pcSlice);
+    }
+
+    Bool bGPBcheck=false;
+    if ( pcSlice->getSliceType() == B_SLICE)
+    {
+      if ( pcSlice->getNumRefIdx(RefPicList( 0 ) ) == pcSlice->getNumRefIdx(RefPicList( 1 ) ) )
+      {
+        bGPBcheck=true;
+        Int i;
+        for ( i=0; i < pcSlice->getNumRefIdx(RefPicList( 1 ) ); i++ )
+        {
+          if ( pcSlice->getRefPOC(RefPicList(1), i) != pcSlice->getRefPOC(RefPicList(0), i) )
+          {
+            bGPBcheck=false;
+            break;
+          }
+        }
+      }
+    }
+    if(bGPBcheck)
+    {
+      pcSlice->setMvdL1ZeroFlag(true);
+    }
+    else
+    {
+      pcSlice->setMvdL1ZeroFlag(false);
+    }
+
+
+    Double lambda            = 0.0;
+    Int actualHeadBits       = 0;
+    Int actualTotalBits      = 0;
+    Int estimatedBits        = 0;
+    Int tmpBitsBeforeWriting = 0;
+    if ( m_pcCfg->getUseRateCtrl() ) // TODO: does this work with multiple slices and slice-segments?
+    {
+      Int frameLevel = m_pcRateCtrl->getRCSeq()->getGOPID2Level( iGOPid );
+      if ( pcPic->getSlice(0)->getSliceType() == I_SLICE )
+      {
+        frameLevel = 0;
+      }
+      m_pcRateCtrl->initRCPic( frameLevel );
+      estimatedBits = m_pcRateCtrl->getRCPic()->getTargetBits();
+
+      if (m_pcRateCtrl->getCpbSaturationEnabled() && frameLevel != 0)
+      {
+        Int estimatedCpbFullness = m_pcRateCtrl->getCpbState() + m_pcRateCtrl->getBufferingRate();
+
+        // prevent overflow
+        if (estimatedCpbFullness - estimatedBits > (Int)(m_pcRateCtrl->getCpbSize()*0.9f))
+        {
+          estimatedBits = estimatedCpbFullness - (Int)(m_pcRateCtrl->getCpbSize()*0.9f);
+        }
+
+        estimatedCpbFullness -= m_pcRateCtrl->getBufferingRate();
+        // prevent underflow
+        if (estimatedCpbFullness - estimatedBits < m_pcRateCtrl->getRCPic()->getLowerBound())
+        {
+          estimatedBits = max(200, estimatedCpbFullness - m_pcRateCtrl->getRCPic()->getLowerBound());
+        }
+
+        m_pcRateCtrl->getRCPic()->setTargetBits(estimatedBits);
+      }
+
+      Int sliceQP = m_pcCfg->getInitialQP();
+      if ( ( pcSlice->getPOC() == 0 && m_pcCfg->getInitialQP() > 0 ) || ( frameLevel == 0 && m_pcCfg->getForceIntraQP() ) ) // QP is specified
