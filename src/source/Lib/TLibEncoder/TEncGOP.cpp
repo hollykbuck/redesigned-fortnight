@@ -1698,3 +1698,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
 
       Int sliceQP = m_pcCfg->getInitialQP();
       if ( ( pcSlice->getPOC() == 0 && m_pcCfg->getInitialQP() > 0 ) || ( frameLevel == 0 && m_pcCfg->getForceIntraQP() ) ) // QP is specified
+      {
+        Int    NumberBFrames = ( m_pcCfg->getGOPSize() - 1 );
+        Double dLambda_scale = 1.0 - Clip3( 0.0, 0.5, 0.05*(Double)NumberBFrames );
+        Double dQPFactor     = 0.57*dLambda_scale;
+        Int    SHIFT_QP      = 12;
+        Int    bitdepth_luma_qp_scale = 0;
+        Double qp_temp = (Double) sliceQP + bitdepth_luma_qp_scale - SHIFT_QP;
+        lambda = dQPFactor*pow( 2.0, qp_temp/3.0 );
+      }
+      else if ( frameLevel == 0 )   // intra case, but use the model
+      {
+        m_pcSliceEncoder->calCostSliceI(pcPic); // TODO: This only analyses the first slice segment - what about the others?
+
+        if ( m_pcCfg->getIntraPeriod() != 1 )   // do not refine allocated bits for all intra case
+        {
+          Int bits = m_pcRateCtrl->getRCSeq()->getLeftAverageBits();
+          bits = m_pcRateCtrl->getRCPic()->getRefineBitsForIntra( bits );
+
+          if (m_pcRateCtrl->getCpbSaturationEnabled() )
+          {
+            Int estimatedCpbFullness = m_pcRateCtrl->getCpbState() + m_pcRateCtrl->getBufferingRate();
+
+            // prevent overflow
+            if (estimatedCpbFullness - bits > (Int)(m_pcRateCtrl->getCpbSize()*0.9f))
+            {
+              bits = estimatedCpbFullness - (Int)(m_pcRateCtrl->getCpbSize()*0.9f);
+            }
+
+            estimatedCpbFullness -= m_pcRateCtrl->getBufferingRate();
+            // prevent underflow
+            if (estimatedCpbFullness - bits < m_pcRateCtrl->getRCPic()->getLowerBound())
+            {
+              bits = estimatedCpbFullness - m_pcRateCtrl->getRCPic()->getLowerBound();
+            }
+          }
+
+          if ( bits < 200 )
+          {
+            bits = 200;
+          }
+          m_pcRateCtrl->getRCPic()->setTargetBits( bits );
+        }
+
+        list<TEncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
+        m_pcRateCtrl->getRCPic()->getLCUInitTargetBits();
+        lambda  = m_pcRateCtrl->getRCPic()->estimatePicLambda( listPreviousPicture, pcSlice->getSliceType());
+        sliceQP = m_pcRateCtrl->getRCPic()->estimatePicQP( lambda, listPreviousPicture );
+      }
+      else    // normal case
+      {
+        list<TEncRCPic*> listPreviousPicture = m_pcRateCtrl->getPicList();
+        lambda  = m_pcRateCtrl->getRCPic()->estimatePicLambda( listPreviousPicture, pcSlice->getSliceType());
+        sliceQP = m_pcRateCtrl->getRCPic()->estimatePicQP( lambda, listPreviousPicture );
+      }
+
+      sliceQP = Clip3( -pcSlice->getSPS()->getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, sliceQP );
+      m_pcRateCtrl->getRCPic()->setPicEstQP( sliceQP );
+
+      m_pcSliceEncoder->resetQP( pcPic, sliceQP, lambda );
+    }
+
+    UInt uiNumSliceSegments = 1;
+
+    // Allocate some coders, now the number of tiles are known.
+    const Int numSubstreamsColumns = (pcSlice->getPPS()->getNumTileColumnsMinus1() + 1);
+    const Int numSubstreamRows     = pcSlice->getPPS()->getEntropyCodingSyncEnabledFlag() ? pcPic->getFrameHeightInCtus() : (pcSlice->getPPS()->getNumTileRowsMinus1() + 1);
+    const Int numSubstreams        = numSubstreamRows * numSubstreamsColumns;
+    std::vector<TComOutputBitstream> substreamsOut(numSubstreams);
+
+    // now compress (trial encode) the various slice segments (slices, and dependent slices)
+    {
+      const UInt numberOfCtusInFrame=pcPic->getPicSym()->getNumberOfCtusInFrame();
+      pcSlice->setSliceCurStartCtuTsAddr( 0 );
+      pcSlice->setSliceSegmentCurStartCtuTsAddr( 0 );
+
+      for(UInt nextCtuTsAddr = 0; nextCtuTsAddr < numberOfCtusInFrame; )
+      {
+        m_pcSliceEncoder->precompressSlice( pcPic );
+        m_pcSliceEncoder->compressSlice   ( pcPic, false, false );
+
+        const UInt curSliceSegmentEnd = pcSlice->getSliceSegmentCurEndCtuTsAddr();
+        if (curSliceSegmentEnd < numberOfCtusInFrame)
+        {
+          const Bool bNextSegmentIsDependentSlice=curSliceSegmentEnd<pcSlice->getSliceCurEndCtuTsAddr();
+          const UInt sliceBits=pcSlice->getSliceBits();
+          pcPic->allocateNewSlice();
+          // prepare for next slice
+          pcPic->setCurrSliceIdx                    ( uiNumSliceSegments );
+          m_pcSliceEncoder->setSliceIdx             ( uiNumSliceSegments   );
+          pcSlice = pcPic->getSlice                 ( uiNumSliceSegments   );
+          assert(pcSlice->getPPS()!=0);
+          pcSlice->copySliceInfo                    ( pcPic->getSlice(uiNumSliceSegments-1)  );
+          pcSlice->setSliceIdx                      ( uiNumSliceSegments   );
+          if (bNextSegmentIsDependentSlice)
+          {
+            pcSlice->setSliceBits(sliceBits);
+          }
+          else
+          {
+            pcSlice->setSliceCurStartCtuTsAddr      ( curSliceSegmentEnd );
