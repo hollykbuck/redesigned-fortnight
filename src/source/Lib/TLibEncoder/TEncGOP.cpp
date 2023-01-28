@@ -1798,3 +1798,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
           else
           {
             pcSlice->setSliceCurStartCtuTsAddr      ( curSliceSegmentEnd );
+            pcSlice->setSliceBits(0);
+          }
+          pcSlice->setDependentSliceSegmentFlag(bNextSegmentIsDependentSlice);
+          pcSlice->setSliceSegmentCurStartCtuTsAddr ( curSliceSegmentEnd );
+          // TODO: optimise cabac_init during compress slice to improve multi-slice operation
+          // pcSlice->setEncCABACTableIdx(m_pcSliceEncoder->getEncCABACTableIdx());
+          uiNumSliceSegments ++;
+        }
+        nextCtuTsAddr = curSliceSegmentEnd;
+      }
+    }
+
+    duData.clear();
+    pcSlice = pcPic->getSlice(0);
+
+    // SAO parameter estimation using non-deblocked pixels for CTU bottom and right boundary areas
+    if( pcSlice->getSPS()->getUseSAO() && m_pcCfg->getSaoCtuBoundary() )
+    {
+      m_pcSAO->getPreDBFStatistics(pcPic);
+    }
+
+    //-- Loop filter
+    Bool bLFCrossTileBoundary = pcSlice->getPPS()->getLoopFilterAcrossTilesEnabledFlag();
+    m_pcLoopFilter->setCfg(bLFCrossTileBoundary);
+    if ( m_pcCfg->getDeblockingFilterMetric() )
+    {
+      if ( m_pcCfg->getDeblockingFilterMetric()==2 )
+      {
+        applyDeblockingFilterParameterSelection(pcPic, uiNumSliceSegments, iGOPid);
+      }
+      else
+      {
+        applyDeblockingFilterMetric(pcPic, uiNumSliceSegments);
+      }
+    }
+    m_pcLoopFilter->loopFilterPic( pcPic );
+
+#if JVET_X0048_X0103_FILM_GRAIN
+    if (m_pcCfg->getFilmGrainAnalysisEnabled())
+    {
+      int  filteredFrame = m_pcCfg->getIntraPeriod() < 1 ? 2 * m_pcCfg->getFrameRate() : m_pcCfg->getIntraPeriod();
+      bool ready_to_analyze = pcPic->getPOC() % filteredFrame ? false : true; // either it is mctf denoising or external source for film grain analysis. note: if mctf is used, it is different from mctf for encoding.
+      if (ready_to_analyze)
+      {
+          m_FGAnalyser.initBufs(pcPic);
+          m_FGAnalyser.estimate_grain(pcPic);
+      }
+    }
+#endif
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////// File writing
+    // Set entropy coder
+    m_pcEntropyCoder->setEntropyCoder   ( m_pcCavlcCoder );
+
+    // write various parameter sets
+    //bool writePS = m_bSeqFirst || (m_pcCfg->getReWriteParamSetsFlag() && (pcPic->getSlice(0)->getSliceType() == I_SLICE));
+    bool writePS = m_bSeqFirst || (m_pcCfg->getReWriteParamSetsFlag() && (pcSlice->isIRAP()));
+    if (writePS)
+    {
+      m_pcEncTop->setParamSetChanged(pcSlice->getSPS()->getSPSId(), pcSlice->getPPS()->getPPSId());
+    }
+    actualTotalBits += xWriteParameterSets(accessUnit, pcSlice, writePS);
+
+    if (writePS)
+    {
+      // create prefix SEI messages at the beginning of the sequence
+      assert(leadingSeiMessages.empty());
+#if MCTS_EXTRACTION
+      xCreateIRAPLeadingSEIMessages(leadingSeiMessages, m_pcEncTop->getVPS(),  pcSlice->getSPS(), pcSlice->getPPS());
+#else
+      xCreateIRAPLeadingSEIMessages(leadingSeiMessages, pcSlice->getSPS(), pcSlice->getPPS());
+#endif
+
+      m_bSeqFirst = false;
+    }
+    if (m_pcCfg->getAccessUnitDelimiter())
+    {
+      xWriteAccessUnitDelimiter(accessUnit, pcSlice);
+    }
+
+    // reset presence of BP SEI indication
+    m_bufferingPeriodSEIPresentInAU = false;
+    // create prefix SEI associated with a picture
+    xCreatePerPictureSEIMessages(iGOPid, leadingSeiMessages, nestedSeiMessages, pcSlice);
+
+    /* use the main bitstream buffer for storing the marshalled picture */
+    m_pcEntropyCoder->setBitstream(NULL);
+
+    pcSlice = pcPic->getSlice(0);
+
+    if (pcSlice->getSPS()->getUseSAO())
+    {
+      Bool sliceEnabled[MAX_NUM_COMPONENT];
+      TComBitCounter tempBitCounter;
+      tempBitCounter.resetBits();
+      m_pcEncTop->getRDGoOnSbacCoder()->setBitstream(&tempBitCounter);
+      m_pcSAO->initRDOCabacCoder(m_pcEncTop->getRDGoOnSbacCoder(), pcSlice);
+      m_pcSAO->SAOProcess(pcPic, sliceEnabled, pcPic->getSlice(0)->getLambdas(),
+                          m_pcCfg->getTestSAODisableAtPictureLevel(),
+                          m_pcCfg->getSaoEncodingRate(),
