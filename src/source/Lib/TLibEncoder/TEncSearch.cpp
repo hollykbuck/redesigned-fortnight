@@ -1898,3 +1898,103 @@ TEncSearch::xCalcCrossComponentPredictionAlpha(       TComTU &rTu,
                                                 const Int         height,
                                                 const Int         strideL,
                                                 const Int         strideC )
+{
+  const Pel *pResiL = piResiL;
+  const Pel *pResiC = piResiC;
+
+        TComDataCU *pCU = rTu.getCU();
+  const Int  absPartIdx = rTu.GetAbsPartIdxTU( compID );
+  const Int diffBitDepth = pCU->getSlice()->getSPS()->getDifferentialLumaChromaBitDepth();
+
+  SChar alpha = 0;
+  Int SSxy  = 0;
+  Int SSxx  = 0;
+
+  for( UInt uiY = 0; uiY < height; uiY++ )
+  {
+    for( UInt uiX = 0; uiX < width; uiX++ )
+    {
+      const Pel scaledResiL = rightShift( pResiL[ uiX ], diffBitDepth );
+      SSxy += ( scaledResiL * pResiC[ uiX ] );
+      SSxx += ( scaledResiL * scaledResiL   );
+    }
+
+    pResiL += strideL;
+    pResiC += strideC;
+  }
+
+  if( SSxx != 0 )
+  {
+    Double dAlpha = SSxy / Double( SSxx );
+    alpha = SChar(Clip3<Int>(-16, 16, (Int)(dAlpha * 16)));
+
+    static const SChar alphaQuant[17] = {0, 1, 1, 2, 2, 2, 4, 4, 4, 4, 4, 4, 8, 8, 8, 8, 8};
+
+    alpha = (alpha < 0) ? -alphaQuant[Int(-alpha)] : alphaQuant[Int(alpha)];
+  }
+  pCU->setCrossComponentPredictionAlphaPartRange( alpha, compID, absPartIdx, rTu.GetAbsPartIdxNumParts( compID ) );
+
+  return alpha;
+}
+
+Void
+TEncSearch::xRecurIntraChromaCodingQT(TComYuv*    pcOrgYuv,
+                                      TComYuv*    pcPredYuv,
+                                      TComYuv*    pcResiYuv,
+                                      Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                      Distortion& ruiDist,
+                                      TComTU&     rTu
+                                      DEBUG_STRING_FN_DECLARE(sDebug))
+{
+  TComDataCU         *pcCU                  = rTu.getCU();
+  const UInt          uiTrDepth             = rTu.GetTransformDepthRel();
+  const UInt          uiAbsPartIdx          = rTu.GetAbsPartIdxTU();
+  const ChromaFormat  format                = rTu.GetChromaFormat();
+  UInt                uiTrMode              = pcCU->getTransformIdx( uiAbsPartIdx );
+  const UInt          numberValidComponents = getNumberValidComponents(format);
+
+  if(  uiTrMode == uiTrDepth )
+  {
+    if (!rTu.ProcessChannelSection(CHANNEL_TYPE_CHROMA))
+    {
+      return;
+    }
+
+    const UInt uiFullDepth = rTu.GetTransformDepthTotal();
+
+    Bool checkTransformSkip = pcCU->getSlice()->getPPS()->getUseTransformSkip();
+    checkTransformSkip &= TUCompRectHasAssociatedTransformSkipFlag(rTu.getRect(COMPONENT_Cb), pcCU->getSlice()->getPPS()->getPpsRangeExtension().getLog2MaxTransformSkipBlockSize());
+
+    if ( m_pcEncCfg->getUseTransformSkipFast() )
+    {
+      checkTransformSkip &= TUCompRectHasAssociatedTransformSkipFlag(rTu.getRect(COMPONENT_Y), pcCU->getSlice()->getPPS()->getPpsRangeExtension().getLog2MaxTransformSkipBlockSize());
+
+      if (checkTransformSkip)
+      {
+        Int nbLumaSkip = 0;
+        const UInt maxAbsPartIdxSub=uiAbsPartIdx + (rTu.ProcessingAllQuadrants(COMPONENT_Cb)?1:4);
+        for(UInt absPartIdxSub = uiAbsPartIdx; absPartIdxSub < maxAbsPartIdxSub; absPartIdxSub ++)
+        {
+          nbLumaSkip += pcCU->getTransformSkip(absPartIdxSub, COMPONENT_Y);
+        }
+        checkTransformSkip &= (nbLumaSkip > 0);
+      }
+    }
+
+
+    for (UInt ch=COMPONENT_Cb; ch<numberValidComponents; ch++)
+    {
+      const ComponentID compID = ComponentID(ch);
+      DEBUG_STRING_NEW(sDebugBestMode)
+
+      //use RDO to decide whether Cr/Cb takes TS
+      m_pcRDGoOnSbacCoder->store( m_pppcRDSbacCoder[uiFullDepth][CI_QT_TRAFO_ROOT] );
+
+      const Bool splitIntoSubTUs = rTu.getRect(compID).width != rTu.getRect(compID).height;
+
+      TComTURecurse TUIterator(rTu, false, (splitIntoSubTUs ? TComTU::VERTICAL_SPLIT : TComTU::DONT_SPLIT), true, compID);
+
+      const UInt partIdxesPerSubTU = TUIterator.GetAbsPartIdxNumParts(compID);
+
+      do
+      {
