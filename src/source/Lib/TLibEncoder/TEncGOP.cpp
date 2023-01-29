@@ -2098,3 +2098,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
     }
     xWriteLeadingSEIMessages(leadingSeiMessages, duInfoSeiMessages, accessUnit, pcSlice->getTLayer(), pcSlice->getSPS(), duData);
     xWriteDuSEIMessages(duInfoSeiMessages, accessUnit, pcSlice->getTLayer(), pcSlice->getSPS(), duData);
+
+    pcPic->getPicYuvRec()->copyToPic(pcPicYuvRecOut);
+
+    pcPic->setReconMark   ( true );
+    m_bFirst = false;
+    m_iNumPicCoded++;
+    m_totalCoded ++;
+    /* logging: insert a newline at end of picture period */
+    printf("\n");
+    fflush(stdout);
+
+    if (m_pcCfg->getEfficientFieldIRAPEnabled())
+    {
+      iGOPid=effFieldIRAPMap.restoreGOPid(iGOPid);
+    }
+#if REDUCED_ENCODER_MEMORY
+
+    pcPic->releaseReconstructionIntermediateData();
+    if (!isField) // don't release the source data for field-coding because the fields are dealt with in pairs. // TODO: release source data for interlace simulations.
+    {
+      pcPic->releaseEncoderSourceImageData();
+    }
+
+#endif
+  } // iGOPid-loop
+
+  delete pcBitstreamRedirect;
+
+  assert ( (m_iNumPicCoded == iNumPicRcvd) );
+}
+
+Void TEncGOP::printOutSummary(UInt uiNumAllPicCoded, Bool isField, const TEncAnalyze::OutputLogControl &outputLogCtrl, const BitDepths &bitDepths)
+{
+  assert (uiNumAllPicCoded == m_gcAnalyzeAll.getNumPic());
+
+
+  //--CFG_KDY
+  const Int rateMultiplier=(isField?2:1);
+  m_gcAnalyzeAll.setFrmRate( m_pcCfg->getFrameRate()*rateMultiplier / (Double)m_pcCfg->getTemporalSubsampleRatio());
+  m_gcAnalyzeI.setFrmRate( m_pcCfg->getFrameRate()*rateMultiplier / (Double)m_pcCfg->getTemporalSubsampleRatio());
+  m_gcAnalyzeP.setFrmRate( m_pcCfg->getFrameRate()*rateMultiplier / (Double)m_pcCfg->getTemporalSubsampleRatio());
+  m_gcAnalyzeB.setFrmRate( m_pcCfg->getFrameRate()*rateMultiplier / (Double)m_pcCfg->getTemporalSubsampleRatio());
+  const ChromaFormat chFmt = m_pcCfg->getChromaFormatIdc();
+
+  //-- all
+  printf( "\n\nSUMMARY --------------------------------------------------------\n" );
+  m_gcAnalyzeAll.printOut('a', chFmt, outputLogCtrl, bitDepths);
+
+  printf( "\n\nI Slices--------------------------------------------------------\n" );
+  m_gcAnalyzeI.printOut('i', chFmt, outputLogCtrl, bitDepths);
+
+  printf( "\n\nP Slices--------------------------------------------------------\n" );
+  m_gcAnalyzeP.printOut('p', chFmt, outputLogCtrl, bitDepths);
+
+  printf( "\n\nB Slices--------------------------------------------------------\n" );
+  m_gcAnalyzeB.printOut('b', chFmt, outputLogCtrl, bitDepths);
+
+  if (!m_pcCfg->getSummaryOutFilename().empty())
+  {
+    m_gcAnalyzeAll.printSummary(chFmt, outputLogCtrl, bitDepths, m_pcCfg->getSummaryOutFilename());
+  }
+
+  if (!m_pcCfg->getSummaryPicFilenameBase().empty())
+  {
+    m_gcAnalyzeI.printSummary(chFmt, outputLogCtrl, bitDepths, m_pcCfg->getSummaryPicFilenameBase()+"I.txt");
+    m_gcAnalyzeP.printSummary(chFmt, outputLogCtrl, bitDepths, m_pcCfg->getSummaryPicFilenameBase()+"P.txt");
+    m_gcAnalyzeB.printSummary(chFmt, outputLogCtrl, bitDepths, m_pcCfg->getSummaryPicFilenameBase()+"B.txt");
+  }
+
+  if(isField)
+  {
+    //-- interlaced summary
+    m_gcAnalyzeAll_in.setFrmRate( m_pcCfg->getFrameRate() / (Double)m_pcCfg->getTemporalSubsampleRatio());
+    m_gcAnalyzeAll_in.setBits(m_gcAnalyzeAll.getBits());
+    // prior to the above statement, the interlace analyser does not contain the correct total number of bits.
+
+    printf( "\n\nSUMMARY INTERLACED ---------------------------------------------\n" );
+    m_gcAnalyzeAll_in.printOut('a', chFmt, outputLogCtrl, bitDepths);
+
+    if (!m_pcCfg->getSummaryOutFilename().empty())
+    {
+      m_gcAnalyzeAll_in.printSummary(chFmt, outputLogCtrl, bitDepths, m_pcCfg->getSummaryOutFilename());
+    }
+  }
+
+  printf("\nRVM: %.3lf\n" , xCalculateRVM());
+}
+
+Void TEncGOP::preLoopFilterPicAll( TComPic* pcPic, UInt64& ruiDist )
+{
+  Bool bCalcDist = false;
+  m_pcLoopFilter->setCfg(m_pcCfg->getLFCrossTileBoundaryFlag());
+  m_pcLoopFilter->loopFilterPic( pcPic );
+
+  if (!bCalcDist)
+  {
+    ruiDist = xFindDistortionFrame(pcPic->getPicYuvOrg(), pcPic->getPicYuvRec(), pcPic->getPicSym()->getSPS().getBitDepths());
+  }
+}
+
