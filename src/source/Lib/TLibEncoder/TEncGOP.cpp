@@ -1998,3 +1998,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
       // If current NALU is the first NALU of slice (containing slice header) and more NALUs exist (due to multiple dependent slices) then buffer it.
       // If current NALU is the last NALU of slice and a NALU was buffered, then (a) Write current NALU (b) Update an write buffered NALU at approproate location in NALU list.
       Bool bNALUAlignedWrittenToList    = false; // used to ensure current NALU is not written more than once to the NALU list.
+      xAttachSliceDataToNalUnit(nalu, pcBitstreamRedirect);
+      accessUnit.push_back(new NALUnitEBSP(nalu));
+      actualTotalBits += UInt(accessUnit.back()->m_nalUnitData.str().size()) * 8;
+      numBytesInVclNalUnits += (std::size_t)(accessUnit.back()->m_nalUnitData.str().size());
+      bNALUAlignedWrittenToList = true;
+
+      if (!bNALUAlignedWrittenToList)
+      {
+        nalu.m_Bitstream.writeAlignZero();
+        accessUnit.push_back(new NALUnitEBSP(nalu));
+      }
+
+      if( ( m_pcCfg->getPictureTimingSEIEnabled() || m_pcCfg->getDecodingUnitInfoSEIEnabled() ) &&
+          ( pcSlice->getSPS()->getVuiParametersPresentFlag() ) &&
+          ( ( pcSlice->getSPS()->getVuiParameters()->getHrdParameters()->getNalHrdParametersPresentFlag() )
+         || ( pcSlice->getSPS()->getVuiParameters()->getHrdParameters()->getVclHrdParametersPresentFlag() ) ) &&
+          ( pcSlice->getSPS()->getVuiParameters()->getHrdParameters()->getSubPicCpbParamsPresentFlag() ) )
+      {
+          UInt numNalus = 0;
+        UInt numRBSPBytes = 0;
+        for (AccessUnit::const_iterator it = accessUnit.begin(); it != accessUnit.end(); it++)
+        {
+          numRBSPBytes += UInt((*it)->m_nalUnitData.str().size());
+          numNalus ++;
+        }
+        duData.push_back(DUData());
+        duData.back().accumBitsDU = ( numRBSPBytes << 3 );
+        duData.back().accumNalsDU = numNalus;
+      }
+    } // end iteration over slices
+
+    // cabac_zero_words processing
+    cabac_zero_word_padding(pcSlice, pcPic, binCountsInNalUnits, numBytesInVclNalUnits, accessUnit.back()->m_nalUnitData, m_pcCfg->getCabacZeroWordPaddingEnabled());
+
+    pcPic->compressMotion();
+
+    //-- For time output for each slice
+    Double dEncTime = (Double)(clock()-iBeforeTime) / CLOCKS_PER_SEC;
+
+    std::string digestStr;
+    if (m_pcCfg->getDecodedPictureHashSEIType()!=HASHTYPE_NONE)
+    {
+      SEIDecodedPictureHash *decodedPictureHashSei = new SEIDecodedPictureHash();
+      m_seiEncoder.initDecodedPictureHashSEI(decodedPictureHashSei, pcPic, digestStr, pcSlice->getSPS()->getBitDepths());
+      trailingSeiMessages.push_back(decodedPictureHashSei);
+    }
+
+    m_pcCfg->setEncodedFlag(iGOPid, true);
+
+    Double PSNR_Y;
+
+    xCalculateAddPSNRs( isField, isTff, iGOPid, pcPic, accessUnit, rcListPic, dEncTime, ip_conversion, snr_conversion, outputLogCtrl, &PSNR_Y );
+    
+    // Only produce the Green Metadata SEI message with the last picture.
+    if( m_pcCfg->getSEIGreenMetadataInfoSEIEnable() && pcSlice->getPOC() == ( m_pcCfg->getFramesToBeEncoded() - 1 )  )
+    {
+      SEIGreenMetadataInfo *seiGreenMetadataInfo = new SEIGreenMetadataInfo;
+      m_seiEncoder.initSEIGreenMetadataInfo(seiGreenMetadataInfo, (UInt)(PSNR_Y * 100 + 0.5));
+      trailingSeiMessages.push_back(seiGreenMetadataInfo);
+    }
+    
+    xWriteTrailingSEIMessages(trailingSeiMessages, accessUnit, pcSlice->getTLayer(), pcSlice->getSPS());
+    
+    printHash(m_pcCfg->getDecodedPictureHashSEIType(), digestStr);
+
+    if ( m_pcCfg->getUseRateCtrl() )
+    {
+      Double avgQP     = m_pcRateCtrl->getRCPic()->calAverageQP();
+      Double avgLambda = m_pcRateCtrl->getRCPic()->calAverageLambda();
+      if ( avgLambda < 0.0 )
+      {
+        avgLambda = lambda;
+      }
+
+      m_pcRateCtrl->getRCPic()->updateAfterPicture( actualHeadBits, actualTotalBits, avgQP, avgLambda, pcSlice->getSliceType());
+      m_pcRateCtrl->getRCPic()->addToPictureLsit( m_pcRateCtrl->getPicList() );
+
+      m_pcRateCtrl->getRCSeq()->updateAfterPic( actualTotalBits );
+      if ( pcSlice->getSliceType() != I_SLICE )
+      {
+        m_pcRateCtrl->getRCGOP()->updateAfterPicture( actualTotalBits );
+      }
+      else    // for intra picture, the estimated bits are used to update the current status in the GOP
+      {
+        m_pcRateCtrl->getRCGOP()->updateAfterPicture( estimatedBits );
+      }
+      if (m_pcRateCtrl->getCpbSaturationEnabled())
+      {
+        m_pcRateCtrl->updateCpbState(actualTotalBits);
+        printf(" [CPB %6d bits]", m_pcRateCtrl->getCpbState());
+      }
+    }
+
+    xCreatePictureTimingSEI(m_pcCfg->getEfficientFieldIRAPEnabled()?effFieldIRAPMap.GetIRAPGOPid():0, leadingSeiMessages, nestedSeiMessages, duInfoSeiMessages, pcSlice, isField, duData);
+    if (m_pcCfg->getScalableNestingSEIEnabled())
+    {
+      xCreateScalableNestingSEI (leadingSeiMessages, nestedSeiMessages);
+    }
+    xWriteLeadingSEIMessages(leadingSeiMessages, duInfoSeiMessages, accessUnit, pcSlice->getTLayer(), pcSlice->getSPS(), duData);
+    xWriteDuSEIMessages(duInfoSeiMessages, accessUnit, pcSlice->getTLayer(), pcSlice->getSPS(), duData);
