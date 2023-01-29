@@ -1898,3 +1898,103 @@ Void TEncGOP::compressGOP( Int iPOCLast, Int iNumPicRcvd, TComList<TComPic*>& rc
       m_pcSAO->SAOProcess(pcPic, sliceEnabled, pcPic->getSlice(0)->getLambdas(),
                           m_pcCfg->getTestSAODisableAtPictureLevel(),
                           m_pcCfg->getSaoEncodingRate(),
+                          m_pcCfg->getSaoEncodingRateChroma(),
+                          m_pcCfg->getSaoCtuBoundary());
+      m_pcSAO->PCMLFDisableProcess(pcPic);
+      m_pcEncTop->getRDGoOnSbacCoder()->setBitstream(NULL);
+
+      //assign SAO slice header
+      for(Int s=0; s< uiNumSliceSegments; s++)
+      {
+        pcPic->getSlice(s)->setSaoEnabledFlag(CHANNEL_TYPE_LUMA, sliceEnabled[COMPONENT_Y]);
+        assert(sliceEnabled[COMPONENT_Cb] == sliceEnabled[COMPONENT_Cr]);
+        pcPic->getSlice(s)->setSaoEnabledFlag(CHANNEL_TYPE_CHROMA, sliceEnabled[COMPONENT_Cb]);
+      }
+    }
+
+    // pcSlice is currently slice 0.
+    std::size_t binCountsInNalUnits   = 0; // For implementation of cabac_zero_word stuffing (section 7.4.3.10)
+    std::size_t numBytesInVclNalUnits = 0; // For implementation of cabac_zero_word stuffing (section 7.4.3.10)
+
+    for( UInt sliceSegmentStartCtuTsAddr = 0, sliceIdxCount=0; sliceSegmentStartCtuTsAddr < pcPic->getPicSym()->getNumberOfCtusInFrame(); sliceIdxCount++, sliceSegmentStartCtuTsAddr=pcSlice->getSliceSegmentCurEndCtuTsAddr() )
+    {
+      pcSlice = pcPic->getSlice(sliceIdxCount);
+      if(sliceIdxCount > 0 && pcSlice->getSliceType()!= I_SLICE)
+      {
+        pcSlice->checkColRefIdx(sliceIdxCount, pcPic);
+      }
+      pcPic->setCurrSliceIdx(sliceIdxCount);
+      m_pcSliceEncoder->setSliceIdx(sliceIdxCount);
+
+      pcSlice->setRPS(pcPic->getSlice(0)->getRPS());
+      pcSlice->setRPSidx(pcPic->getSlice(0)->getRPSidx());
+
+      for ( UInt ui = 0 ; ui < numSubstreams; ui++ )
+      {
+        substreamsOut[ui].clear();
+      }
+
+      m_pcEntropyCoder->setEntropyCoder   ( m_pcCavlcCoder );
+      m_pcEntropyCoder->resetEntropy      ( pcSlice );
+      /* start slice NALunit */
+      OutputNALUnit nalu( pcSlice->getNalUnitType(), pcSlice->getTLayer() );
+      m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
+
+      pcSlice->setNoRaslOutputFlag(false);
+      if (pcSlice->isIRAP())
+      {
+        if (pcSlice->getNalUnitType() >= NAL_UNIT_CODED_SLICE_BLA_W_LP && pcSlice->getNalUnitType() <= NAL_UNIT_CODED_SLICE_IDR_N_LP)
+        {
+          pcSlice->setNoRaslOutputFlag(true);
+        }
+        //the inference for NoOutputPriorPicsFlag
+        // KJS: This cannot happen at the encoder
+        if (!m_bFirst && pcSlice->isIRAP() && pcSlice->getNoRaslOutputFlag())
+        {
+          if (pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA)
+          {
+            pcSlice->setNoOutputPriorPicsFlag(true);
+          }
+        }
+      }
+
+      pcSlice->setEncCABACTableIdx(m_pcSliceEncoder->getEncCABACTableIdx());
+#if MCTS_EXTRACTION
+      encCABACTableIdx = pcSlice->getEncCABACTableIdx();
+      encCabacInitFlag = (pcSlice->getSliceType() != encCABACTableIdx && encCABACTableIdx != I_SLICE) ? true : false;
+      pcSlice->setCabacInitFlag(encCabacInitFlag);
+#endif
+      tmpBitsBeforeWriting = m_pcEntropyCoder->getNumberOfWrittenBits();
+      m_pcEntropyCoder->encodeSliceHeader(pcSlice);
+      actualHeadBits += ( m_pcEntropyCoder->getNumberOfWrittenBits() - tmpBitsBeforeWriting );
+
+      pcSlice->setFinalized(true);
+
+      pcSlice->clearSubstreamSizes(  );
+      {
+        UInt numBinsCoded = 0;
+        m_pcSliceEncoder->encodeSlice(pcPic, &(substreamsOut[0]), numBinsCoded);
+        binCountsInNalUnits+=numBinsCoded;
+      }
+
+      {
+        // Construct the final bitstream by concatenating substreams.
+        // The final bitstream is either nalu.m_Bitstream or pcBitstreamRedirect;
+        // Complete the slice header info.
+        m_pcEntropyCoder->setEntropyCoder   ( m_pcCavlcCoder );
+        m_pcEntropyCoder->setBitstream(&nalu.m_Bitstream);
+        m_pcEntropyCoder->encodeTilesWPPEntryPoint( pcSlice );
+
+        // Append substreams...
+        TComOutputBitstream *pcOut = pcBitstreamRedirect;
+        const Int numZeroSubstreamsAtStartOfSlice  = pcPic->getSubstreamForCtuAddr(pcSlice->getSliceSegmentCurStartCtuTsAddr(), false, pcSlice);
+        const Int numSubstreamsToCode  = pcSlice->getNumberOfSubstreamSizes()+1;
+        for ( UInt ui = 0 ; ui < numSubstreamsToCode; ui++ )
+        {
+          pcOut->addSubstream(&(substreamsOut[ui+numZeroSubstreamsAtStartOfSlice]));
+        }
+      }
+
+      // If current NALU is the first NALU of slice (containing slice header) and more NALUs exist (due to multiple dependent slices) then buffer it.
+      // If current NALU is the last NALU of slice and a NALU was buffered, then (a) Write current NALU (b) Update an write buffered NALU at approproate location in NALU list.
+      Bool bNALUAlignedWrittenToList    = false; // used to ensure current NALU is not written more than once to the NALU list.
