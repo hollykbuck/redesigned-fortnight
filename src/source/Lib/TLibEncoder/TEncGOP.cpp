@@ -2198,3 +2198,103 @@ Void TEncGOP::preLoopFilterPicAll( TComPic* pcPic, UInt64& ruiDist )
   }
 }
 
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+
+Void TEncGOP::xInitGOP( Int iPOCLast, Int iNumPicRcvd, Bool isField )
+{
+  assert( iNumPicRcvd > 0 );
+  //  Exception for the first frames
+  if ( ( isField && (iPOCLast == 0 || iPOCLast == 1) ) || (!isField  && (iPOCLast == 0))  )
+  {
+    m_iGopSize    = 1;
+  }
+  else
+  {
+    m_iGopSize    = m_pcCfg->getGOPSize();
+  }
+  assert (m_iGopSize > 0);
+
+  return;
+}
+
+
+Void TEncGOP::xGetBuffer( TComList<TComPic*>&      rcListPic,
+                         TComList<TComPicYuv*>&    rcListPicYuvRecOut,
+                         Int                       iNumPicRcvd,
+                         Int                       iTimeOffset,
+                         TComPic*&                 rpcPic,
+                         TComPicYuv*&              rpcPicYuvRecOut,
+                         Int                       pocCurr,
+                         Bool                      isField)
+{
+  Int i;
+  //  Rec. output
+  TComList<TComPicYuv*>::iterator     iterPicYuvRec = rcListPicYuvRecOut.end();
+
+  if (isField && pocCurr > 1 && m_iGopSize!=1)
+  {
+    iTimeOffset--;
+  }
+
+  for ( i = 0; i < (iNumPicRcvd - iTimeOffset + 1); i++ )
+  {
+    iterPicYuvRec--;
+  }
+
+  rpcPicYuvRecOut = *(iterPicYuvRec);
+
+  //  Current pic.
+  TComList<TComPic*>::iterator        iterPic       = rcListPic.begin();
+  while (iterPic != rcListPic.end())
+  {
+    rpcPic = *(iterPic);
+    rpcPic->setCurrSliceIdx(0);
+    if (rpcPic->getPOC() == pocCurr)
+    {
+      break;
+    }
+    iterPic++;
+  }
+
+  assert (rpcPic != NULL);
+  assert (rpcPic->getPOC() == pocCurr);
+
+  return;
+}
+
+UInt64 TEncGOP::xFindDistortionFrame (TComPicYuv* pcPic0, TComPicYuv* pcPic1, const BitDepths &bitDepths)
+{
+  UInt64  uiTotalDiff = 0;
+
+  for(Int chan=0; chan<pcPic0 ->getNumberValidComponents(); chan++)
+  {
+    const ComponentID ch=ComponentID(chan);
+    Pel*  pSrc0   = pcPic0 ->getAddr(ch);
+    Pel*  pSrc1   = pcPic1 ->getAddr(ch);
+    UInt  uiShift     = 2 * DISTORTION_PRECISION_ADJUSTMENT(bitDepths.recon[toChannelType(ch)]-8);
+
+    const Int   iStride = pcPic0->getStride(ch);
+    const Int   iWidth  = pcPic0->getWidth(ch);
+    const Int   iHeight = pcPic0->getHeight(ch);
+
+    for(Int y = 0; y < iHeight; y++ )
+    {
+      for(Int x = 0; x < iWidth; x++ )
+      {
+        Intermediate_Int iTemp = pSrc0[x] - pSrc1[x];
+        uiTotalDiff += UInt64((iTemp*iTemp) >> uiShift);
+      }
+      pSrc0 += iStride;
+      pSrc1 += iStride;
+    }
+  }
+
+  return uiTotalDiff;
+}
+
+Void TEncGOP::xCalculateAddPSNRs( const Bool isField, const Bool isFieldTopFieldFirst, const Int iGOPid, TComPic* pcPic, const AccessUnit&accessUnit, TComList<TComPic*> &rcListPic, const Double dEncTime, const InputColourSpaceConversion ip_conversion, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl, Double* PSNR_Y )
+{
+  xCalculateAddPSNR( pcPic, pcPic->getPicYuvRec(), accessUnit, dEncTime, ip_conversion, snr_conversion, outputLogCtrl, PSNR_Y );
