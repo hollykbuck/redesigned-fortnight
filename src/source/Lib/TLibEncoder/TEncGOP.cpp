@@ -2298,3 +2298,103 @@ UInt64 TEncGOP::xFindDistortionFrame (TComPicYuv* pcPic0, TComPicYuv* pcPic1, co
 Void TEncGOP::xCalculateAddPSNRs( const Bool isField, const Bool isFieldTopFieldFirst, const Int iGOPid, TComPic* pcPic, const AccessUnit&accessUnit, TComList<TComPic*> &rcListPic, const Double dEncTime, const InputColourSpaceConversion ip_conversion, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl, Double* PSNR_Y )
 {
   xCalculateAddPSNR( pcPic, pcPic->getPicYuvRec(), accessUnit, dEncTime, ip_conversion, snr_conversion, outputLogCtrl, PSNR_Y );
+  //In case of field coding, compute the interlaced PSNR for both fields
+  if(isField)
+  {
+    Bool bothFieldsAreEncoded = false;
+    Int correspondingFieldPOC = pcPic->getPOC();
+    Int currentPicGOPPoc = m_pcCfg->getGOPEntry(iGOPid).m_POC;
+    if(pcPic->getPOC() == 0)
+    {
+      // particular case for POC 0 and 1.
+      // If they are not encoded first and separately from other pictures, we need to change this
+      // POC 0 is always encoded first then POC 1 is encoded
+      bothFieldsAreEncoded = false;
+    }
+    else if(pcPic->getPOC() == 1)
+    {
+      // if we are at POC 1, POC 0 has been encoded for sure
+      correspondingFieldPOC = 0;
+      bothFieldsAreEncoded = true;
+    }
+    else
+    {
+      if(pcPic->getPOC()%2 == 1)
+      {
+        correspondingFieldPOC -= 1; // all odd POC are associated with the preceding even POC (e.g poc 1 is associated to poc 0)
+        currentPicGOPPoc      -= 1;
+      }
+      else
+      {
+        correspondingFieldPOC += 1; // all even POC are associated with the following odd POC (e.g poc 0 is associated to poc 1)
+        currentPicGOPPoc      += 1;
+      }
+      for(Int i = 0; i < m_iGopSize; i ++)
+      {
+        if(m_pcCfg->getGOPEntry(i).m_POC == currentPicGOPPoc)
+        {
+          bothFieldsAreEncoded = m_pcCfg->getGOPEntry(i).m_isEncoded;
+          break;
+        }
+      }
+    }
+
+    if(bothFieldsAreEncoded)
+    {
+      //get complementary top field
+      TComList<TComPic*>::iterator   iterPic = rcListPic.begin();
+      while ((*iterPic)->getPOC() != correspondingFieldPOC)
+      {
+        iterPic ++;
+      }
+      TComPic* correspondingFieldPic = *(iterPic);
+
+      if( (pcPic->isTopField() && isFieldTopFieldFirst) || (!pcPic->isTopField() && !isFieldTopFieldFirst))
+      {
+        xCalculateInterlacedAddPSNR(pcPic, correspondingFieldPic, pcPic->getPicYuvRec(), correspondingFieldPic->getPicYuvRec(), snr_conversion, outputLogCtrl, PSNR_Y );
+      }
+      else
+      {
+        xCalculateInterlacedAddPSNR(correspondingFieldPic, pcPic, correspondingFieldPic->getPicYuvRec(), pcPic->getPicYuvRec(), snr_conversion, outputLogCtrl, PSNR_Y );
+      }
+    }
+  }
+}
+
+Void TEncGOP::xCalculateAddPSNR( TComPic* pcPic, TComPicYuv* pcPicD, const AccessUnit& accessUnit, Double dEncTime, const InputColourSpaceConversion ip_conversion, const InputColourSpaceConversion snr_conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl, Double* PSNR_Y )
+{
+  TEncAnalyze::ResultData result;
+
+  // calculate colour space of reconstructed data
+
+  TComPicYuv cscd;
+
+  if (snr_conversion!=IPCOLOURSPACE_UNCHANGED)
+  {
+    cscd.createWithoutCUInfo(pcPicD->getWidth(COMPONENT_Y), pcPicD->getHeight(COMPONENT_Y), pcPicD->getChromaFormat() );
+    TVideoIOYuv::ColourSpaceConvert(*pcPicD, cscd, snr_conversion, false);
+  }
+  TComPicYuv &picd=(snr_conversion==IPCOLOURSPACE_UNCHANGED)?*pcPicD : cscd;
+
+  // calculate colour space of source data
+
+  TComPicYuv tmpTrueOrgInInternalMap;
+  const TComPicYuv *pOrgPicYuv=0;
+
+  const bool bOrgDataHasBeenAdjusted=m_pcCfg->getGopBasedTemporalFilterEnabled();
+  if (snr_conversion==IPCOLOURSPACE_UNCHANGED)
+  {
+    // Comparison in same colour space as internal.
+    if (bOrgDataHasBeenAdjusted)
+    {
+      // have to map true original data into internal data format
+      tmpTrueOrgInInternalMap.createWithoutCUInfo(pcPicD->getWidth(COMPONENT_Y), pcPicD->getHeight(COMPONENT_Y), pcPicD->getChromaFormat());
+      TVideoIOYuv::ColourSpaceConvert(*pcPic->getPicYuvTrueOrg(), tmpTrueOrgInInternalMap, ip_conversion, true);
+      pOrgPicYuv = &tmpTrueOrgInInternalMap;
+    }
+    else
+    {
+      // original data not corrupted, so just use original
+      pOrgPicYuv = pcPic->getPicYuvOrg();
+    }
+  }
