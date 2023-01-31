@@ -2198,3 +2198,103 @@ TEncSearch::xSetIntraResultChromaQT(TComYuv*    pcRecoYuv, TComTU &rTu)
 }
 
 
+
+Void
+TEncSearch::estIntraPredLumaQT(TComDataCU* pcCU,
+                               TComYuv*    pcOrgYuv,
+                               TComYuv*    pcPredYuv,
+                               TComYuv*    pcResiYuv,
+                               TComYuv*    pcRecoYuv,
+                               Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE]
+                               DEBUG_STRING_FN_DECLARE(sDebug))
+{
+  const UInt         uiDepth               = pcCU->getDepth(0);
+  const UInt         uiInitTrDepth         = pcCU->getPartitionSize(0) == SIZE_2Nx2N ? 0 : 1;
+  const UInt         uiNumPU               = 1<<(2*uiInitTrDepth);
+  const UInt         uiQNumParts           = pcCU->getTotalNumPart() >> 2;
+  const UInt         uiWidthBit            = pcCU->getIntraSizeIdx(0);
+  const ChromaFormat chFmt                 = pcCU->getPic()->getChromaFormat();
+  const UInt         numberValidComponents = getNumberValidComponents(chFmt);
+  const TComSPS     &sps                   = *(pcCU->getSlice()->getSPS());
+  const TComPPS     &pps                   = *(pcCU->getSlice()->getPPS());
+        Distortion   uiOverallDistY        = 0;
+        UInt         CandNum;
+        Double       CandCostList[ FAST_UDI_MAX_RDMODE_NUM ];
+        Pel          resiLumaPU[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE];
+
+        Bool    bMaintainResidual[NUMBER_OF_STORED_RESIDUAL_TYPES];
+        for (UInt residualTypeIndex = 0; residualTypeIndex < NUMBER_OF_STORED_RESIDUAL_TYPES; residualTypeIndex++)
+        {
+          bMaintainResidual[residualTypeIndex] = true; //assume true unless specified otherwise
+        }
+
+        bMaintainResidual[RESIDUAL_ENCODER_SIDE] = !(m_pcEncCfg->getUseReconBasedCrossCPredictionEstimate());
+
+  // Lambda calculation at equivalent Qp of 4 is recommended because at that Qp, the quantisation divisor is 1.
+#if FULL_NBIT
+  const Double sqrtLambdaForFirstPass= (m_pcEncCfg->getCostMode()==COST_MIXED_LOSSLESS_LOSSY_CODING && pcCU->getCUTransquantBypass(0)) ?
+                sqrt(0.57 * pow(2.0, ((LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME - 12) / 3.0)))
+              : m_pcRdCost->getSqrtLambda();
+#else
+  const Double sqrtLambdaForFirstPass= (m_pcEncCfg->getCostMode()==COST_MIXED_LOSSLESS_LOSSY_CODING && pcCU->getCUTransquantBypass(0)) ?
+                sqrt(0.57 * pow(2.0, ((LOSSLESS_AND_MIXED_LOSSLESS_RD_COST_TEST_QP_PRIME - 12 - 6 * (sps.getBitDepth(CHANNEL_TYPE_LUMA) - 8)) / 3.0)))
+              : m_pcRdCost->getSqrtLambda();
+#endif
+
+  //===== set QP and clear Cbf =====
+  if ( pps.getUseDQP() == true)
+  {
+    pcCU->setQPSubParts( pcCU->getQP(0), 0, uiDepth );
+  }
+  else
+  {
+    pcCU->setQPSubParts( pcCU->getSlice()->getSliceQp(), 0, uiDepth );
+  }
+
+  //===== loop over partitions =====
+  TComTURecurse tuRecurseCU(pcCU, 0);
+  TComTURecurse tuRecurseWithPU(tuRecurseCU, false, (uiInitTrDepth==0)?TComTU::DONT_SPLIT : TComTU::QUAD_SPLIT);
+
+  do
+  {
+    const UInt uiPartOffset=tuRecurseWithPU.GetAbsPartIdxTU();
+//  for( UInt uiPU = 0, uiPartOffset=0; uiPU < uiNumPU; uiPU++, uiPartOffset += uiQNumParts )
+  //{
+    //===== init pattern for luma prediction =====
+    DEBUG_STRING_NEW(sTemp2)
+
+    //===== determine set of modes to be tested (using prediction signal only) =====
+    Int numModesAvailable     = 35; //total number of Intra modes
+    UInt uiRdModeList[FAST_UDI_MAX_RDMODE_NUM];
+    Int numModesForFullRD = m_pcEncCfg->getFastUDIUseMPMEnabled()?g_aucIntraModeNumFast_UseMPM[ uiWidthBit ] : g_aucIntraModeNumFast_NotUseMPM[ uiWidthBit ];
+
+    // this should always be true
+    assert (tuRecurseWithPU.ProcessComponentSection(COMPONENT_Y));
+    initIntraPatternChType( tuRecurseWithPU, COMPONENT_Y, true DEBUG_STRING_PASS_INTO(sTemp2) );
+
+    Bool doFastSearch = (numModesForFullRD != numModesAvailable);
+    if (doFastSearch)
+    {
+      assert(numModesForFullRD < numModesAvailable);
+
+      for( Int i=0; i < numModesForFullRD; i++ )
+      {
+        CandCostList[ i ] = MAX_DOUBLE;
+      }
+      CandNum = 0;
+
+      const TComRectangle &puRect=tuRecurseWithPU.getRect(COMPONENT_Y);
+      const UInt uiAbsPartIdx=tuRecurseWithPU.GetAbsPartIdxTU();
+
+      Pel* piOrg         = pcOrgYuv ->getAddr( COMPONENT_Y, uiAbsPartIdx );
+      Pel* piPred        = pcPredYuv->getAddr( COMPONENT_Y, uiAbsPartIdx );
+      UInt uiStride      = pcPredYuv->getStride( COMPONENT_Y );
+      DistParam distParam;
+      const Bool bUseHadamard=pcCU->getCUTransquantBypass(0) == 0;
+      m_pcRdCost->setDistParam(distParam, sps.getBitDepth(CHANNEL_TYPE_LUMA), piOrg, uiStride, piPred, uiStride, puRect.width, puRect.height, bUseHadamard);
+      distParam.bApplyWeight = false;
+      for( Int modeIdx = 0; modeIdx < numModesAvailable; modeIdx++ )
+      {
+        UInt       uiMode = modeIdx;
+        Distortion uiSad  = 0;
+
