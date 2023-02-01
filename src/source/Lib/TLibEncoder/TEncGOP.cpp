@@ -2498,3 +2498,103 @@ Void TEncGOP::xCalculateAddPSNR( TComPic* pcPic, TComPicYuv* pcPicD, const Acces
       const Int   iRecStride = picd.getStride(ch);
       const Int   iWidth  = pcPicD->getWidth (ch) - (m_pcEncTop->getSourcePadding(0) >> pcPic->getComponentScaleX(ch));
       const Int   iHeight = pcPicD->getHeight(ch) - ((m_pcEncTop->getSourcePadding(1) >> (pcPic->isField()?1:0)) >> pcPic->getComponentScaleY(ch));
+
+      Int   iSize   = iWidth*iHeight;
+
+      UInt64 uiSSDtemp=0;
+      for(Int y = 0; y < iHeight; y++ )
+      {
+        for(Int x = 0; x < iWidth; x++ )
+        {
+          Intermediate_Int iDiff = (Intermediate_Int)( pOrg[x] - pRec[x] );
+          uiSSDtemp   += iDiff * iDiff;
+        }
+        pOrg += iOrgStride;
+        pRec += iRecStride;
+      }
+      const Int maxval = 255 << (pcPic->getPicSym()->getSPS().getBitDepth(toChannelType(ch)) - 8);
+      const Double fRefValue = (Double) maxval * maxval * iSize;
+      result.psnr[ch]         = ( uiSSDtemp ? 10.0 * log10( fRefValue / (Double)uiSSDtemp ) : 999.99 );
+      result.MSEyuvframe[ch]   = (Double)uiSSDtemp/(iSize);
+    }
+  }
+#if EXTENSION_360_VIDEO
+  m_ext360.calculatePSNRs(pcPic);
+#endif
+
+  //===== calculate MS-SSIM =====
+  if (outputLogCtrl.printMSSSIM)
+  {
+    for(Int chan=0; chan<pcPicD->getNumberValidComponents(); chan++)
+    {
+      const ComponentID ch  = ComponentID(chan);
+      const Pel*  pOrg      = pOrgPicYuv->getAddr(ch);
+      const Int   orgStride = pOrgPicYuv->getStride(ch);
+      const Pel*  pRec      = picd.getAddr(ch);
+      const Int   recStride = picd.getStride(ch);
+      const Int   width     = pcPicD->getWidth (ch) - (m_pcEncTop->getSourcePadding(0) >> pcPic->getComponentScaleX(ch));
+      const Int   height    = pcPicD->getHeight(ch) - ((m_pcEncTop->getSourcePadding(1) >> (pcPic->isField()?1:0)) >> pcPic->getComponentScaleY(ch));
+      const UInt  bitDepth  = pcPic->getPicSym()->getSPS().getBitDepth(toChannelType(ch));
+ 
+      result.MSSSIM[ch] = xCalculateMSSSIM (pOrg, orgStride, pRec, recStride, width, height, bitDepth);
+    }
+  }
+
+  /* calculate the size of the access unit, excluding:
+   *  - SEI NAL units
+   */
+  UInt numRBSPBytes = 0;
+  for (AccessUnit::const_iterator it = accessUnit.begin(); it != accessUnit.end(); it++)
+  {
+    UInt numRBSPBytes_nal = UInt((*it)->m_nalUnitData.str().size());
+    if (m_pcCfg->getSummaryVerboseness() > 0)
+    {
+      printf("*** %6s numBytesInNALunit: %u\n", nalUnitTypeToString((*it)->m_nalUnitType), numRBSPBytes_nal);
+    }
+    if ((*it)->m_nalUnitType != NAL_UNIT_PREFIX_SEI && (*it)->m_nalUnitType != NAL_UNIT_SUFFIX_SEI)
+    {
+      numRBSPBytes += numRBSPBytes_nal;
+      // add start code bytes (Annex B)
+      if (it == accessUnit.begin() || (*it)->m_nalUnitType == NAL_UNIT_VPS || (*it)->m_nalUnitType == NAL_UNIT_SPS || (*it)->m_nalUnitType == NAL_UNIT_PPS)
+      {
+        numRBSPBytes += 4;
+      }
+      else
+      {
+        numRBSPBytes += 3;
+      }
+    }
+  }
+
+  UInt uibits = numRBSPBytes * 8;
+  m_vRVM_RP.push_back( uibits );
+
+  //===== add distortion metrics =====
+  result.bits=(Double)uibits;
+  m_gcAnalyzeAll.addResult (result);
+
+#if EXTENSION_360_VIDEO
+  m_ext360.addResult(m_gcAnalyzeAll);
+#endif
+
+  TComSlice*  pcSlice = pcPic->getSlice(0);
+  if (pcSlice->isIntra())
+  {
+    m_gcAnalyzeI.addResult (result);
+#if EXTENSION_360_VIDEO
+    m_ext360.addResult(m_gcAnalyzeI);
+#endif
+    *PSNR_Y = result.psnr[COMPONENT_Y];
+  }
+  if (pcSlice->isInterP())
+  {
+    m_gcAnalyzeP.addResult (result);
+#if EXTENSION_360_VIDEO
+    m_ext360.addResult(m_gcAnalyzeP);
+#endif
+    *PSNR_Y = result.psnr[COMPONENT_Y];
+  }
+  if (pcSlice->isInterB())
+  {
+    m_gcAnalyzeB.addResult (result);
+#if EXTENSION_360_VIDEO
