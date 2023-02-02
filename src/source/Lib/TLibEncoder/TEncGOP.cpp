@@ -2598,3 +2598,103 @@ Void TEncGOP::xCalculateAddPSNR( TComPic* pcPic, TComPicYuv* pcPicD, const Acces
   {
     m_gcAnalyzeB.addResult (result);
 #if EXTENSION_360_VIDEO
+    m_ext360.addResult(m_gcAnalyzeB);
+#endif
+    *PSNR_Y = result.psnr[COMPONENT_Y];
+  }
+
+  TChar c = (pcSlice->isIntra() ? 'I' : pcSlice->isInterP() ? 'P' : 'B');
+  if (!pcSlice->isReferenced())
+  {
+    c += 32;
+  }
+
+#if ADAPTIVE_QP_SELECTION
+  printf("POC %4d TId: %1d ( %c-SLICE, nQP %d QP %d ) %10d bits",
+         pcSlice->getPOC(),
+         pcSlice->getTLayer(),
+         c,
+         pcSlice->getSliceQpBase(),
+         pcSlice->getSliceQp(),
+         uibits );
+#else
+  printf("POC %4d TId: %1d ( %c-SLICE, QP %d ) %10d bits",
+         pcSlice->getPOC()-pcSlice->getLastIDR(),
+         pcSlice->getTLayer(),
+         c,
+         pcSlice->getSliceQp(),
+         uibits );
+#endif
+
+  printf(" [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", result.psnr[COMPONENT_Y], result.psnr[COMPONENT_Cb], result.psnr[COMPONENT_Cr] );
+
+  if (outputLogCtrl.printHexPerPOCPSNRs)
+  {
+    uint64_t xPsnr[MAX_NUM_COMPONENT];
+    for (int i = 0; i < MAX_NUM_COMPONENT; i++)
+    {
+      copy(reinterpret_cast<uint8_t *>(&result.psnr[i]),
+           reinterpret_cast<uint8_t *>(&result.psnr[i]) + sizeof(result.psnr[i]),
+           reinterpret_cast<uint8_t *>(&xPsnr[i]));
+    }
+    printf(" [xY %16" PRIx64 " xU %16" PRIx64 " xv %16" PRIx64 "]", xPsnr[COMPONENT_Y], xPsnr[COMPONENT_Cb], xPsnr[COMPONENT_Cr]);
+  }
+
+  if (outputLogCtrl.printMSSSIM)
+  {
+    printf(" [MS-SSIM Y %1.6lf    U %1.6lf    V %1.6lf]", result.MSSSIM[COMPONENT_Y], result.MSSSIM[COMPONENT_Cb], result.MSSSIM[COMPONENT_Cr] );
+  }  
+  if (outputLogCtrl.printXPSNR)
+  {
+    printf(" [xPSNR %6.4lf dB]", result.xpsnr);
+  }
+  if (outputLogCtrl.printFrameMSE)
+  {
+    printf(" [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", result.MSEyuvframe[COMPONENT_Y], result.MSEyuvframe[COMPONENT_Cb], result.MSEyuvframe[COMPONENT_Cr] );
+  }
+#if EXTENSION_360_VIDEO
+  m_ext360.printPerPOCInfo();
+#endif
+  printf(" [ET %5.0f ]", dEncTime );
+
+  // printf(" [WP %d]", pcSlice->getUseWeightedPrediction());
+
+  for (Int iRefList = 0; iRefList < 2; iRefList++)
+  {
+    printf(" [L%d ", iRefList);
+    for (Int iRefIndex = 0; iRefIndex < pcSlice->getNumRefIdx(RefPicList(iRefList)); iRefIndex++)
+    {
+      printf ("%d ", pcSlice->getRefPOC(RefPicList(iRefList), iRefIndex)-pcSlice->getLastIDR());
+    }
+    printf("]");
+  }
+
+  cscd.destroy();
+}
+
+Double TEncGOP::xCalculateMSSSIM (const Pel *pOrg, const Int orgStride, const Pel* pRec, const Int recStride, const Int width, const Int height, const UInt bitDepth)
+{
+  const Int MAX_MSSSIM_SCALE  = 5;
+  const Int WEIGHTING_MID_TAP = 5;
+  const Int WEIGHTING_SIZE    = WEIGHTING_MID_TAP*2+1;
+
+  UInt maxScale;
+
+  // For low resolution videos determine number of scales 
+  if (width < 22 || height < 22)
+  {
+    maxScale = 1; 
+  }
+  else if (width < 44 || height < 44)
+  {
+    maxScale = 2; 
+  }
+  else if (width < 88 || height < 88)
+  {
+    maxScale = 3; 
+  }
+  else if (width < 176 || height < 176)
+  {
+    maxScale = 4; 
+  }
+  else
