@@ -2698,3 +2698,103 @@ Double TEncGOP::xCalculateMSSSIM (const Pel *pOrg, const Int orgStride, const Pe
     maxScale = 4; 
   }
   else
+  {
+    maxScale = 5;
+  }
+
+  assert(maxScale>0 && maxScale<=MAX_MSSSIM_SCALE);
+
+  //Normalized Gaussian mask design, 11*11, s.d. 1.5
+  Double weights[WEIGHTING_SIZE][WEIGHTING_SIZE];
+  {
+    Double coeffSum=0.0;
+    for(Int y=0; y<WEIGHTING_SIZE; y++)
+    {
+      for(Int x=0; x<WEIGHTING_SIZE; x++)
+      {
+        weights[y][x]=exp(-((y-WEIGHTING_MID_TAP)*(y-WEIGHTING_MID_TAP)+(x-WEIGHTING_MID_TAP)*(x-WEIGHTING_MID_TAP))/(WEIGHTING_MID_TAP-0.5));
+        coeffSum +=weights[y][x];
+      }
+    }
+
+    for(Int y=0; y<WEIGHTING_SIZE; y++)
+    {
+      for(Int x=0; x<WEIGHTING_SIZE; x++)
+      {
+        weights[y][x] /=coeffSum;
+      }
+    }
+  }
+
+  //Resolution based weights
+  const Double exponentWeights[MAX_MSSSIM_SCALE][MAX_MSSSIM_SCALE] = {{1.0,    0,      0,      0,      0     },
+                                                                      {0.1356, 0.8644, 0,      0,      0     },
+                                                                      {0.0711, 0.4530, 0.4760, 0,      0     },
+                                                                      {0.0517, 0.3295, 0.3462, 0.2726, 0     },
+                                                                      {0.0448, 0.2856, 0.3001, 0.2363, 0.1333}};
+
+  //Downsampling of data:
+  std::vector<Double> original[MAX_MSSSIM_SCALE];
+  std::vector<Double> recon[MAX_MSSSIM_SCALE];
+
+  for(UInt scale=0; scale<maxScale; scale++)
+  {
+    const Int scaledHeight = height >> scale;
+    const Int scaledWidth  = width  >> scale;
+    original[scale].resize(scaledHeight*scaledWidth, Double(0));
+    recon[scale].resize(scaledHeight*scaledWidth, Double(0));
+  }
+
+  // Initial [0] arrays to be a copy of the source data (but stored in array "Double", not Pel array).
+  for(Int y=0; y<height; y++)
+  {
+    for(Int x=0; x<width; x++)
+    {
+      original[0][y*width+x] = pOrg[y*orgStride+x];
+      recon[0][   y*width+x] = pRec[y*recStride+x];
+    }
+  }
+
+  // Set up other arrays to be average value of each 2x2 sample.
+  for(UInt scale=1; scale<maxScale; scale++)
+  {
+    const Int scaledHeight = height >> scale;
+    const Int scaledWidth  = width  >> scale;
+    for(Int y=0; y<scaledHeight; y++)
+    {
+      for(Int x=0; x<scaledWidth; x++)
+      {
+        original[scale][y*scaledWidth+x]= (original[scale-1][ 2*y   *(2*scaledWidth)+2*x  ] +
+                                           original[scale-1][ 2*y   *(2*scaledWidth)+2*x+1] +
+                                           original[scale-1][(2*y+1)*(2*scaledWidth)+2*x  ] +
+                                           original[scale-1][(2*y+1)*(2*scaledWidth)+2*x+1]) / 4.0;
+        recon[scale][y*scaledWidth+x]=    (   recon[scale-1][ 2*y   *(2*scaledWidth)+2*x  ] +
+                                              recon[scale-1][ 2*y   *(2*scaledWidth)+2*x+1] +
+                                              recon[scale-1][(2*y+1)*(2*scaledWidth)+2*x  ] +
+                                              recon[scale-1][(2*y+1)*(2*scaledWidth)+2*x+1]) / 4.0;
+      }
+    }
+  }
+  
+  // Calculate MS-SSIM:
+  const UInt   maxValue  = (1<<bitDepth)-1;
+  const Double c1        = (0.01*maxValue)*(0.01*maxValue);
+  const Double c2        = (0.03*maxValue)*(0.03*maxValue);
+  
+  Double finalMSSSIM = 1.0;
+
+  for(UInt scale=0; scale<maxScale; scale++)
+  {
+    const Int scaledHeight    = height >> scale;
+    const Int scaledWidth     = width  >> scale;
+    const Int blocksPerRow    = scaledWidth-WEIGHTING_SIZE+1;
+    const Int blocksPerColumn = scaledHeight-WEIGHTING_SIZE+1;
+    const Int totalBlocks     = blocksPerRow*blocksPerColumn;
+
+    Double meanSSIM= 0.0;
+
+    for(Int blockIndexY=0; blockIndexY<blocksPerColumn; blockIndexY++)
+    {
+      for(Int blockIndexX=0; blockIndexX<blocksPerRow; blockIndexX++)
+      {
+        Double muOrg          =0.0;
