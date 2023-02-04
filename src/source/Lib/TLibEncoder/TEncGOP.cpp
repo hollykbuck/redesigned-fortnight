@@ -2798,3 +2798,103 @@ Double TEncGOP::xCalculateMSSSIM (const Pel *pOrg, const Int orgStride, const Pe
       for(Int blockIndexX=0; blockIndexX<blocksPerRow; blockIndexX++)
       {
         Double muOrg          =0.0;
+        Double muRec          =0.0;
+        Double muOrigSqr      =0.0;
+        Double muRecSqr       =0.0;
+        Double muOrigMultRec  =0.0;
+
+        for(Int y=0; y<WEIGHTING_SIZE; y++)
+        {
+          for(Int x=0;x<WEIGHTING_SIZE; x++)
+          {
+            const Double gaussianWeight=weights[y][x];
+            const Int    sampleOffset=(blockIndexY+y)*scaledWidth+(blockIndexX+x);
+            const Double orgPel=original[scale][sampleOffset];
+            const Double recPel=   recon[scale][sampleOffset];
+
+            muOrg        +=orgPel*       gaussianWeight;
+            muRec        +=recPel*       gaussianWeight;
+            muOrigSqr    +=orgPel*orgPel*gaussianWeight;
+            muRecSqr     +=recPel*recPel*gaussianWeight;
+            muOrigMultRec+=orgPel*recPel*gaussianWeight;
+          }
+        }
+
+        const Double sigmaSqrOrig = muOrigSqr    -(muOrg*muOrg);
+        const Double sigmaSqrRec  = muRecSqr     -(muRec*muRec);
+        const Double sigmaOrigRec = muOrigMultRec-(muOrg*muRec);
+
+        Double blockSSIMVal = ((2.0*sigmaOrigRec + c2)/(sigmaSqrOrig+sigmaSqrRec + c2));
+        if(scale == maxScale-1)
+        {
+          blockSSIMVal*=(2.0*muOrg*muRec + c1)/(muOrg*muOrg+muRec*muRec + c1);
+        }
+
+        meanSSIM += blockSSIMVal;
+      }
+    }
+
+    meanSSIM /=totalBlocks;
+
+    finalMSSSIM *= pow(meanSSIM, exponentWeights[maxScale-1][scale]);
+  }
+
+  return finalMSSSIM;
+}
+
+
+Void TEncGOP::xCalculateInterlacedAddPSNR( TComPic* pcPicOrgFirstField, TComPic* pcPicOrgSecondField,
+                                          TComPicYuv* pcPicRecFirstField, TComPicYuv* pcPicRecSecondField,
+                                          const InputColourSpaceConversion conversion, const TEncAnalyze::OutputLogControl &outputLogCtrl, Double* PSNR_Y )
+{
+  TEncAnalyze::ResultData result;
+  const TComSPS &sps=pcPicOrgFirstField->getPicSym()->getSPS();
+  TComPic    *apcPicOrgFields[2]={pcPicOrgFirstField, pcPicOrgSecondField};
+  TComPicYuv *apcPicRecFields[2]={pcPicRecFirstField, pcPicRecSecondField};
+
+  TComPicYuv cscd[2 /* first/second field */];
+  if (conversion!=IPCOLOURSPACE_UNCHANGED)
+  {
+    for(UInt fieldNum=0; fieldNum<2; fieldNum++)
+    {
+      TComPicYuv &reconField=*(apcPicRecFields[fieldNum]);
+      cscd[fieldNum].createWithoutCUInfo(reconField.getWidth(COMPONENT_Y), reconField.getHeight(COMPONENT_Y), reconField.getChromaFormat() );
+      TVideoIOYuv::ColourSpaceConvert(reconField, cscd[fieldNum], conversion, false);
+      apcPicRecFields[fieldNum]=cscd+fieldNum;
+    }
+  }
+
+  //===== calculate PSNR =====
+
+  assert(apcPicRecFields[0]->getChromaFormat()==apcPicRecFields[1]->getChromaFormat());
+  const UInt numValidComponents=apcPicRecFields[0]->getNumberValidComponents();
+  const Bool   useTrueOrg = conversion != IPCOLOURSPACE_UNCHANGED || m_pcCfg->getGopBasedTemporalFilterEnabled();
+
+  if (outputLogCtrl.printXPSNR && apcPicRecFields[0]->getChromaFormat() != CHROMA_400 && apcPicRecFields[1]->getChromaFormat() != CHROMA_400)
+  {
+    // For interlace images, we need to scan the two fields independently
+    Pel*   pOrg[MAX_NUM_COMPONENT];
+    Double dWeightPel[MAX_NUM_COMPONENT];
+    Int    iWeightSize[MAX_NUM_COMPONENT] = {1, 1, 1};
+    Pel*   pRec[MAX_NUM_COMPONENT];
+    Int    iOrgStride[MAX_NUM_COMPONENT], iRecStride[MAX_NUM_COMPONENT];
+    Int    iWidth[MAX_NUM_COMPONENT], iHeight[MAX_NUM_COMPONENT], iSize[MAX_NUM_COMPONENT];
+    UInt64 uiSSDtemp[MAX_NUM_COMPONENT];
+    UInt   uiShiftWidth[MAX_NUM_COMPONENT], uiShiftHeight[MAX_NUM_COMPONENT];
+    Intermediate_Int iDiff;
+    Double dSSDtemp = 0.0;
+    Double fWValue  = 0.0;
+    for(UInt fieldNum=0; fieldNum<2; fieldNum++)
+    {
+      TComPic *pcPic=apcPicOrgFields[fieldNum];
+      TComPicYuv *pcPicD=apcPicRecFields[fieldNum];
+      TComPicYuv *pOrgPicYuv = useTrueOrg ? pcPic ->getPicYuvTrueOrg() : pcPic ->getPicYuvOrg();
+
+      for(Int chan=0; chan<pcPicD->getNumberValidComponents(); chan++)
+      {
+        const ComponentID ch=ComponentID(chan);
+        iOrgStride[ch]    = pOrgPicYuv->getStride(ch);
+        iRecStride[ch]    = pcPicD->getStride(ch);
+        iWidth[ch]        = pcPicD->getWidth (ch) - (m_pcEncTop->getSourcePadding(0) >> pcPic->getComponentScaleX(ch));
+        iHeight[ch]       = pcPicD->getHeight(ch) - ((m_pcEncTop->getSourcePadding(1) >> 1) >> pcPic->getComponentScaleY(ch));
+        iSize[ch]         = iWidth[ch]*iHeight[ch];
