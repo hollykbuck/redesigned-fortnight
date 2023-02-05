@@ -2698,3 +2698,103 @@ TEncSearch::estIntraPredChromaQT(TComDataCU* pcCU,
           const UInt  uiDesStride     = pcCU->getPic()->getPicYuvRec()->getStride( compID);
           const Pel*  piSrc           = pcRecoYuv->getAddr( compID, uiPartOffset );
           const UInt  uiSrcStride     = pcRecoYuv->getStride( compID);
+
+          for( UInt uiY = 0; uiY < uiCompHeight; uiY++, piSrc += uiSrcStride, piDes += uiDesStride )
+          {
+            for( UInt uiX = 0; uiX < uiCompWidth; uiX++ )
+            {
+              piDes[ uiX ] = piSrc[ uiX ];
+            }
+          }
+        }
+      }
+
+      pcCU->setIntraDirSubParts( CHANNEL_TYPE_CHROMA, uiBestMode, uiPartOffset, uiDepthCU+uiInitTrDepth );
+      pcCU->getTotalDistortion      () += uiBestDist;
+    }
+
+  } while (tuRecurseWithPU.nextSection(tuRecurseCU));
+
+  //----- restore context models -----
+
+  if( uiInitTrDepth != 0 )
+  { // set Cbf for all blocks
+    UInt uiCombCbfU = 0;
+    UInt uiCombCbfV = 0;
+    UInt uiPartIdx  = 0;
+    for( UInt uiPart = 0; uiPart < 4; uiPart++, uiPartIdx += uiQNumParts )
+    {
+      uiCombCbfU |= pcCU->getCbf( uiPartIdx, COMPONENT_Cb, 1 );
+      uiCombCbfV |= pcCU->getCbf( uiPartIdx, COMPONENT_Cr, 1 );
+    }
+    for( UInt uiOffs = 0; uiOffs < 4 * uiQNumParts; uiOffs++ )
+    {
+      pcCU->getCbf( COMPONENT_Cb )[ uiOffs ] |= uiCombCbfU;
+      pcCU->getCbf( COMPONENT_Cr )[ uiOffs ] |= uiCombCbfV;
+    }
+  }
+
+  m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[uiDepthCU][CI_CURR_BEST] );
+}
+
+
+
+
+/** Function for encoding and reconstructing luma/chroma samples of a PCM mode CU.
+ * \param pcCU pointer to current CU
+ * \param uiAbsPartIdx part index
+ * \param pOrg pointer to original sample arrays
+ * \param pPCM pointer to PCM code arrays
+ * \param pPred pointer to prediction signal arrays
+ * \param pResi pointer to residual signal arrays
+ * \param pReco pointer to reconstructed sample arrays
+ * \param uiStride stride of the original/prediction/residual sample arrays
+ * \param uiWidth block width
+ * \param uiHeight block height
+ * \param compID texture component type
+ */
+Void TEncSearch::xEncPCM (TComDataCU* pcCU, UInt uiAbsPartIdx, Pel* pOrg, Pel* pPCM, Pel* pPred, Pel* pResi, Pel* pReco, UInt uiStride, UInt uiWidth, UInt uiHeight, const ComponentID compID )
+{
+  const UInt uiReconStride   = pcCU->getPic()->getPicYuvRec()->getStride(compID);
+  const UInt uiPCMBitDepth   = pcCU->getSlice()->getSPS()->getPCMBitDepth(toChannelType(compID));
+  const Int  channelBitDepth = pcCU->getSlice()->getSPS()->getBitDepth(toChannelType(compID));
+  Pel* pRecoPic = pcCU->getPic()->getPicYuvRec()->getAddr(compID, pcCU->getCtuRsAddr(), pcCU->getZorderIdxInCtu()+uiAbsPartIdx);
+
+  const Int pcmShiftRight=(channelBitDepth - Int(uiPCMBitDepth));
+
+  assert(pcmShiftRight >= 0);
+
+  for( UInt uiY = 0; uiY < uiHeight; uiY++ )
+  {
+    for( UInt uiX = 0; uiX < uiWidth; uiX++ )
+    {
+      // Reset pred and residual
+      pPred[uiX] = 0;
+      pResi[uiX] = 0;
+      // Encode
+      pPCM[uiX] = (pOrg[uiX]>>pcmShiftRight);
+      // Reconstruction
+      pReco   [uiX] = (pPCM[uiX]<<(pcmShiftRight));
+      pRecoPic[uiX] = pReco[uiX];
+    }
+    pPred += uiStride;
+    pResi += uiStride;
+    pPCM += uiWidth;
+    pOrg += uiStride;
+    pReco += uiStride;
+    pRecoPic += uiReconStride;
+  }
+}
+
+
+//!  Function for PCM mode estimation.
+Void TEncSearch::IPCMSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* pcPredYuv, TComYuv* pcResiYuv, TComYuv* pcRecoYuv )
+{
+  UInt              uiDepth      = pcCU->getDepth(0);
+  const Distortion  uiDistortion = 0;
+  UInt              uiBits;
+
+  Double dCost;
+
+  for (UInt ch=0; ch < pcCU->getPic()->getNumberValidComponents(); ch++)
+  {
