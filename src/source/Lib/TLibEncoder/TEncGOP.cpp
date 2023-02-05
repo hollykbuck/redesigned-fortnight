@@ -2998,3 +2998,103 @@ Void TEncGOP::xCalculateInterlacedAddPSNR( TComPic* pcPicOrgFirstField, TComPic*
     }
   }
   //===== calculate MS-SSIM =====
+  if (outputLogCtrl.printMSSSIM)
+  {
+    for(Int chan=0; chan<numValidComponents; chan++)
+    {
+      const ComponentID ch=ComponentID(chan);
+      assert(apcPicRecFields[0]->getWidth(ch) ==apcPicRecFields[1]->getWidth(ch) );
+      assert(apcPicRecFields[0]->getHeight(ch)==apcPicRecFields[1]->getHeight(ch));
+
+      Double sumOverFieldsMSSSIM = 0.0;
+      const Int   width  = apcPicRecFields[0]->getWidth (ch) - ( m_pcEncTop->getSourcePadding(0)       >> apcPicRecFields[0]->getComponentScaleX(ch));
+      const Int   height = apcPicRecFields[0]->getHeight(ch) - ((m_pcEncTop->getSourcePadding(1) >> 1) >> apcPicRecFields[0]->getComponentScaleY(ch));
+
+      for(UInt fieldNum=0; fieldNum<2; fieldNum++)
+      {
+        TComPic    *pcPic      = apcPicOrgFields[fieldNum];
+        TComPicYuv *pcPicD     = apcPicRecFields[fieldNum];
+
+        const Pel*  pOrg       = useTrueOrg ? pcPic ->getPicYuvTrueOrg()->getAddr(ch)   : pcPic ->getPicYuvOrg()->getAddr(ch);
+        const Int   orgStride  = useTrueOrg ? pcPic ->getPicYuvTrueOrg()->getStride(ch) : pcPic ->getPicYuvOrg()->getStride(ch);
+        Pel*        pRec       = pcPicD->getAddr(ch);
+        const Int   recStride  = pcPicD->getStride(ch);
+        const UInt  bitDepth   = sps.getBitDepth(toChannelType(ch));
+
+        sumOverFieldsMSSSIM += xCalculateMSSSIM (pOrg, orgStride, pRec, recStride, width, height, bitDepth);
+      }
+
+      result.MSSSIM[ch] = sumOverFieldsMSSSIM/2;
+    }
+  }
+
+  result.bits = 0; // the number of bits for the pair is not calculated here - instead the overall total is used elsewhere.
+
+  //===== add PSNR =====
+  m_gcAnalyzeAll_in.addResult (result);
+
+  *PSNR_Y = result.psnr[COMPONENT_Y];
+
+  printf("\n                                      Interlaced frame %d: [Y %6.4lf dB    U %6.4lf dB    V %6.4lf dB]", pcPicOrgSecondField->getPOC()/2 , result.psnr[COMPONENT_Y], result.psnr[COMPONENT_Cb], result.psnr[COMPONENT_Cr] );
+
+  if (outputLogCtrl.printHexPerPOCPSNRs)
+  {
+    uint64_t xPsnr[MAX_NUM_COMPONENT];
+    for (int i = 0; i < MAX_NUM_COMPONENT; i++)
+    {
+      copy(reinterpret_cast<uint8_t *>(&result.psnr[i]),
+           reinterpret_cast<uint8_t *>(&result.psnr[i]) + sizeof(result.psnr[i]),
+           reinterpret_cast<uint8_t *>(&xPsnr[i]));
+    }
+    printf(" [xY %16" PRIx64 " xU %16" PRIx64 " xv %16" PRIx64 "]", xPsnr[COMPONENT_Y], xPsnr[COMPONENT_Cb], xPsnr[COMPONENT_Cr]);
+  }
+
+  if (outputLogCtrl.printMSSSIM)
+  {
+    printf(" [MS-SSIM Y %1.6lf    U %1.6lf    V %1.6lf]", result.MSSSIM[COMPONENT_Y], result.MSSSIM[COMPONENT_Cb], result.MSSSIM[COMPONENT_Cr] );
+  }
+  if (outputLogCtrl.printFrameMSE)
+  {
+    printf(" [Y MSE %6.4lf  U MSE %6.4lf  V MSE %6.4lf]", result.MSEyuvframe[COMPONENT_Y], result.MSEyuvframe[COMPONENT_Cb], result.MSEyuvframe[COMPONENT_Cr] );
+  }
+
+  for(UInt fieldNum=0; fieldNum<2; fieldNum++)
+  {
+    cscd[fieldNum].destroy();
+  }
+}
+
+/** Function for deciding the nal_unit_type.
+ * \param pocCurr POC of the current picture
+ * \param lastIDR  POC of the last IDR picture
+ * \param isField  true to indicate field coding
+ * \returns the NAL unit type of the picture
+ * This function checks the configuration and returns the appropriate nal_unit_type for the picture.
+ */
+NalUnitType TEncGOP::getNalUnitType(Int pocCurr, Int lastIDR, Bool isField)
+{
+  if (pocCurr == 0)
+  {
+    return NAL_UNIT_CODED_SLICE_IDR_W_RADL;
+  }
+
+  if(m_pcCfg->getEfficientFieldIRAPEnabled() && isField && pocCurr == 1)
+  {
+    // to avoid the picture becoming an IRAP
+    return NAL_UNIT_CODED_SLICE_TRAIL_R;
+  }
+
+  if(m_pcCfg->getDecodingRefreshType() != 3 && (pocCurr - isField) % m_pcCfg->getIntraPeriod() == 0)
+  {
+    if (m_pcCfg->getDecodingRefreshType() == 1)
+    {
+      return NAL_UNIT_CODED_SLICE_CRA;
+    }
+    else if (m_pcCfg->getDecodingRefreshType() == 2)
+    {
+      return NAL_UNIT_CODED_SLICE_IDR_W_RADL;
+    }
+  }
+  if(m_pocCRA>0)
+  {
+    if(pocCurr<m_pocCRA)
