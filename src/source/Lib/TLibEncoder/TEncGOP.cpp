@@ -3098,3 +3098,103 @@ NalUnitType TEncGOP::getNalUnitType(Int pocCurr, Int lastIDR, Bool isField)
   if(m_pocCRA>0)
   {
     if(pocCurr<m_pocCRA)
+    {
+      // All leading pictures are being marked as TFD pictures here since current encoder uses all
+      // reference pictures while encoding leading pictures. An encoder can ensure that a leading
+      // picture can be still decodable when random accessing to a CRA/CRANT/BLA/BLANT picture by
+      // controlling the reference pictures used for encoding that leading picture. Such a leading
+      // picture need not be marked as a TFD picture.
+      return NAL_UNIT_CODED_SLICE_RASL_R;
+    }
+  }
+  if (lastIDR>0)
+  {
+    if (pocCurr < lastIDR)
+    {
+      return NAL_UNIT_CODED_SLICE_RADL_R;
+    }
+  }
+  return NAL_UNIT_CODED_SLICE_TRAIL_R;
+}
+
+Double TEncGOP::xCalculateRVM()
+{
+  Double dRVM = 0;
+
+  if( m_pcCfg->getGOPSize() == 1 && m_pcCfg->getIntraPeriod() != 1 && m_pcCfg->getFramesToBeEncoded() > RVM_VCEGAM10_M * 2 )
+  {
+    // calculate RVM only for lowdelay configurations
+    std::vector<Double> vRL , vB;
+    size_t N = m_vRVM_RP.size();
+    vRL.resize( N );
+    vB.resize( N );
+
+    Int i;
+    Double dRavg = 0 , dBavg = 0;
+    vB[RVM_VCEGAM10_M] = 0;
+    for( i = RVM_VCEGAM10_M + 1 ; i < N - RVM_VCEGAM10_M + 1 ; i++ )
+    {
+      vRL[i] = 0;
+      for( Int j = i - RVM_VCEGAM10_M ; j <= i + RVM_VCEGAM10_M - 1 ; j++ )
+      {
+        vRL[i] += m_vRVM_RP[j];
+      }
+      vRL[i] /= ( 2 * RVM_VCEGAM10_M );
+      vB[i] = vB[i-1] + m_vRVM_RP[i] - vRL[i];
+      dRavg += m_vRVM_RP[i];
+      dBavg += vB[i];
+    }
+
+    dRavg /= ( N - 2 * RVM_VCEGAM10_M );
+    dBavg /= ( N - 2 * RVM_VCEGAM10_M );
+
+    Double dSigamB = 0;
+    for( i = RVM_VCEGAM10_M + 1 ; i < N - RVM_VCEGAM10_M + 1 ; i++ )
+    {
+      Double tmp = vB[i] - dBavg;
+      dSigamB += tmp * tmp;
+    }
+    dSigamB = sqrt( dSigamB / ( N - 2 * RVM_VCEGAM10_M ) );
+
+    Double f = sqrt( 12.0 * ( RVM_VCEGAM10_M - 1 ) / ( RVM_VCEGAM10_M + 1 ) );
+
+    dRVM = dSigamB / dRavg * f;
+  }
+
+  return( dRVM );
+}
+
+/** Attaches the input bitstream to the stream in the output NAL unit
+    Updates rNalu to contain concatenated bitstream. rpcBitstreamRedirect is cleared at the end of this function call.
+ *  \param codedSliceData contains the coded slice data (bitstream) to be concatenated to rNalu
+ *  \param rNalu          target NAL unit
+ */
+Void TEncGOP::xAttachSliceDataToNalUnit (OutputNALUnit& rNalu, TComOutputBitstream* codedSliceData)
+{
+  // Byte-align
+  rNalu.m_Bitstream.writeByteAlignment();   // Slice header byte-alignment
+
+  // Perform bitstream concatenation
+  if (codedSliceData->getNumberOfWrittenBits() > 0)
+  {
+    rNalu.m_Bitstream.addSubstream(codedSliceData);
+  }
+
+  m_pcEntropyCoder->setBitstream(&rNalu.m_Bitstream);
+
+  codedSliceData->clear();
+}
+
+// Function will arrange the long-term pictures in the decreasing order of poc_lsb_lt,
+// and among the pictures with the same lsb, it arranges them in increasing delta_poc_msb_cycle_lt value
+Void TEncGOP::arrangeLongtermPicturesInRPS(TComSlice *pcSlice, TComList<TComPic*>& rcListPic)
+{
+  if(pcSlice->getRPS()->getNumberOfLongtermPictures() == 0)
+  {
+    return;
+  }
+  // we can only modify the local RPS!
+  assert (pcSlice->getRPSidx()==-1);
+  TComReferencePictureSet *rps = pcSlice->getLocalRPS();
+
+  // Arrange long-term reference pictures in the correct order of LSB and MSB,
