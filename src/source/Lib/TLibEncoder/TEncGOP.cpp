@@ -3198,3 +3198,103 @@ Void TEncGOP::arrangeLongtermPicturesInRPS(TComSlice *pcSlice, TComList<TComPic*
   TComReferencePictureSet *rps = pcSlice->getLocalRPS();
 
   // Arrange long-term reference pictures in the correct order of LSB and MSB,
+  // and assign values for pocLSBLT and MSB present flag
+  Int longtermPicsPoc[MAX_NUM_REF_PICS], longtermPicsLSB[MAX_NUM_REF_PICS], indices[MAX_NUM_REF_PICS];
+  Int longtermPicsMSB[MAX_NUM_REF_PICS];
+  Bool mSBPresentFlag[MAX_NUM_REF_PICS];
+  ::memset(longtermPicsPoc, 0, sizeof(longtermPicsPoc));    // Store POC values of LTRP
+  ::memset(longtermPicsLSB, 0, sizeof(longtermPicsLSB));    // Store POC LSB values of LTRP
+  ::memset(longtermPicsMSB, 0, sizeof(longtermPicsMSB));    // Store POC LSB values of LTRP
+  ::memset(indices        , 0, sizeof(indices));            // Indices to aid in tracking sorted LTRPs
+  ::memset(mSBPresentFlag , 0, sizeof(mSBPresentFlag));     // Indicate if MSB needs to be present
+
+  // Get the long-term reference pictures
+  Int offset = rps->getNumberOfNegativePictures() + rps->getNumberOfPositivePictures();
+  Int i, ctr = 0;
+  Int maxPicOrderCntLSB = 1 << pcSlice->getSPS()->getBitsForPOC();
+  for(i = rps->getNumberOfPictures() - 1; i >= offset; i--, ctr++)
+  {
+    longtermPicsPoc[ctr] = rps->getPOC(i);                                  // LTRP POC
+    longtermPicsLSB[ctr] = getLSB(longtermPicsPoc[ctr], maxPicOrderCntLSB); // LTRP POC LSB
+    indices[ctr]      = i;
+    longtermPicsMSB[ctr] = longtermPicsPoc[ctr] - longtermPicsLSB[ctr];
+  }
+  Int numLongPics = rps->getNumberOfLongtermPictures();
+  assert(ctr == numLongPics);
+
+  // Arrange pictures in decreasing order of MSB;
+  for(i = 0; i < numLongPics; i++)
+  {
+    for(Int j = 0; j < numLongPics - 1; j++)
+    {
+      if(longtermPicsMSB[j] < longtermPicsMSB[j+1])
+      {
+        std::swap(longtermPicsPoc[j], longtermPicsPoc[j+1]);
+        std::swap(longtermPicsLSB[j], longtermPicsLSB[j+1]);
+        std::swap(longtermPicsMSB[j], longtermPicsMSB[j+1]);
+        std::swap(indices[j]        , indices[j+1]        );
+      }
+    }
+  }
+
+  for(i = 0; i < numLongPics; i++)
+  {
+    // Check if MSB present flag should be enabled.
+    // Check if the buffer contains any pictures that have the same LSB.
+    TComList<TComPic*>::iterator  iterPic = rcListPic.begin();
+    TComPic*                      pcPic;
+    while ( iterPic != rcListPic.end() )
+    {
+      pcPic = *iterPic;
+      if( (getLSB(pcPic->getPOC(), maxPicOrderCntLSB) == longtermPicsLSB[i])   &&     // Same LSB
+                                      (pcPic->getSlice(0)->isReferenced())     &&    // Reference picture
+                                        (pcPic->getPOC() != longtermPicsPoc[i])    )  // Not the LTRP itself
+      {
+        mSBPresentFlag[i] = true;
+        break;
+      }
+      iterPic++;
+    }
+  }
+
+  // tempArray for usedByCurr flag
+  Bool tempArray[MAX_NUM_REF_PICS]; ::memset(tempArray, 0, sizeof(tempArray));
+  for(i = 0; i < numLongPics; i++)
+  {
+    tempArray[i] = rps->getUsed(indices[i]);
+  }
+  // Now write the final values;
+  ctr = 0;
+  Int currMSB = 0, currLSB = 0;
+  // currPicPoc = currMSB + currLSB
+  currLSB = getLSB(pcSlice->getPOC(), maxPicOrderCntLSB);
+  currMSB = pcSlice->getPOC() - currLSB;
+
+  for(i = rps->getNumberOfPictures() - 1; i >= offset; i--, ctr++)
+  {
+    rps->setPOC                   (i, longtermPicsPoc[ctr]);
+    rps->setDeltaPOC              (i, - pcSlice->getPOC() + longtermPicsPoc[ctr]);
+    rps->setUsed                  (i, tempArray[ctr]);
+    rps->setPocLSBLT              (i, longtermPicsLSB[ctr]);
+    rps->setDeltaPocMSBCycleLT    (i, (currMSB - (longtermPicsPoc[ctr] - longtermPicsLSB[ctr])) / maxPicOrderCntLSB);
+    rps->setDeltaPocMSBPresentFlag(i, mSBPresentFlag[ctr]);
+
+    assert(rps->getDeltaPocMSBCycleLT(i) >= 0);   // Non-negative value
+  }
+  for(i = rps->getNumberOfPictures() - 1, ctr = 1; i >= offset; i--, ctr++)
+  {
+    for(Int j = rps->getNumberOfPictures() - 1 - ctr; j >= offset; j--)
+    {
+      // Here at the encoder we know that we have set the full POC value for the LTRPs, hence we
+      // don't have to check the MSB present flag values for this constraint.
+      assert( rps->getPOC(i) != rps->getPOC(j) ); // If assert fails, LTRP entry repeated in RPS!!!
+    }
+  }
+}
+
+Void TEncGOP::applyDeblockingFilterMetric( TComPic* pcPic, UInt uiNumSlices )
+{
+  TComPicYuv* pcPicYuvRec = pcPic->getPicYuvRec();
+  Pel* Rec    = pcPicYuvRec->getAddr(COMPONENT_Y);
+  Pel* tempRec = Rec;
+  Int  stride = pcPicYuvRec->getStride(COMPONENT_Y);
