@@ -2898,3 +2898,103 @@ Void TEncSearch::xMergeEstimation( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPUI
 
   xRestrictBipredMergeCand( pcCU, iPUIdx, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand );
 
+  ruiCost = std::numeric_limits<Distortion>::max();
+  for( UInt uiMergeCand = 0; uiMergeCand < numValidMergeCand; ++uiMergeCand )
+  {
+    Distortion uiCostCand = std::numeric_limits<Distortion>::max();
+    UInt       uiBitsCand = 0;
+
+    PartSize ePartSize = pcCU->getPartitionSize( 0 );
+
+    pcCU->getCUMvField(REF_PIC_LIST_0)->setAllMvField( cMvFieldNeighbours[0 + 2*uiMergeCand], ePartSize, uiAbsPartIdx, 0, iPUIdx );
+    pcCU->getCUMvField(REF_PIC_LIST_1)->setAllMvField( cMvFieldNeighbours[1 + 2*uiMergeCand], ePartSize, uiAbsPartIdx, 0, iPUIdx );
+
+    xGetInterPredictionError( pcCU, pcYuvOrg, iPUIdx, uiCostCand, m_pcEncCfg->getUseHADME() );
+    uiBitsCand = uiMergeCand + 1;
+    if (uiMergeCand == m_pcEncCfg->getMaxNumMergeCand() -1)
+    {
+        uiBitsCand--;
+    }
+    uiCostCand = uiCostCand + m_pcRdCost->getCost( uiBitsCand );
+    if ( uiCostCand < ruiCost )
+    {
+      ruiCost = uiCostCand;
+      pacMvField[0] = cMvFieldNeighbours[0 + 2*uiMergeCand];
+      pacMvField[1] = cMvFieldNeighbours[1 + 2*uiMergeCand];
+      uiInterDir = uhInterDirNeighbours[uiMergeCand];
+      uiMergeIndex = uiMergeCand;
+    }
+  }
+}
+
+/** convert bi-pred merge candidates to uni-pred
+ * \param pcCU
+ * \param puIdx
+ * \param mvFieldNeighbours
+ * \param interDirNeighbours
+ * \param numValidMergeCand
+ * \returns Void
+ */
+Void TEncSearch::xRestrictBipredMergeCand( TComDataCU* pcCU, UInt puIdx, TComMvField* mvFieldNeighbours, UChar* interDirNeighbours, Int numValidMergeCand )
+{
+  if ( pcCU->isBipredRestriction(puIdx) )
+  {
+    for( UInt mergeCand = 0; mergeCand < numValidMergeCand; ++mergeCand )
+    {
+      if ( interDirNeighbours[mergeCand] == 3 )
+      {
+        interDirNeighbours[mergeCand] = 1;
+        mvFieldNeighbours[(mergeCand << 1) + 1].setMvField(TComMv(0,0), -1);
+      }
+    }
+  }
+}
+
+//! search of the best candidate for inter prediction
+#if AMP_MRG
+Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* pcPredYuv, TComYuv* pcResiYuv, TComYuv* pcRecoYuv DEBUG_STRING_FN_DECLARE(sDebug), Bool bUseRes, Bool bUseMRG )
+#else
+Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* pcPredYuv, TComYuv* pcResiYuv, TComYuv* pcRecoYuv, Bool bUseRes )
+#endif
+{
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_acYuvPred[i].clear();
+  }
+  m_cYuvPredTemp.clear();
+  pcPredYuv->clear();
+
+  if ( !bUseRes )
+  {
+    pcResiYuv->clear();
+  }
+
+  pcRecoYuv->clear();
+
+  TComMv       cMvSrchRngLT;
+  TComMv       cMvSrchRngRB;
+
+  TComMv       cMvZero;
+  TComMv       TempMv; //kolya
+
+  TComMv       cMv[2];
+  TComMv       cMvBi[2];
+  TComMv       cMvTemp[2][33];
+
+  Int          iNumPart    = pcCU->getNumPartitions();
+  Int          iNumPredDir = pcCU->getSlice()->isInterP() ? 1 : 2;
+
+  TComMv       cMvPred[2][33];
+
+  TComMv       cMvPredBi[2][33];
+  Int          aaiMvpIdxBi[2][33];
+
+  Int          aaiMvpIdx[2][33];
+  Int          aaiMvpNum[2][33];
+
+  AMVPInfo     aacAMVPInfo[2][33];
+
+  Int          iRefIdx[2]={0,0}; //If un-initialized, may cause SEGV in bi-directional prediction iterative stage.
+  Int          iRefIdxBi[2];
+
+  UInt         uiPartAddr;
