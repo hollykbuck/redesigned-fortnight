@@ -2998,3 +2998,103 @@ Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* 
   Int          iRefIdxBi[2];
 
   UInt         uiPartAddr;
+  Int          iRoiWidth, iRoiHeight;
+
+  UInt         uiMbBits[3] = {1, 1, 0};
+
+  UInt         uiLastMode = 0;
+  Int          iRefStart, iRefEnd;
+
+  PartSize     ePartSize = pcCU->getPartitionSize( 0 );
+
+  Int          bestBiPRefIdxL1 = 0;
+  Int          bestBiPMvpL1 = 0;
+  Distortion   biPDistTemp = std::numeric_limits<Distortion>::max();
+
+  TComMvField cMvFieldNeighbours[MRG_MAX_NUM_CANDS << 1]; // double length for mv of both lists
+  UChar uhInterDirNeighbours[MRG_MAX_NUM_CANDS];
+  Int numValidMergeCand = 0 ;
+
+  for ( Int iPartIdx = 0; iPartIdx < iNumPart; iPartIdx++ )
+  {
+    Distortion   uiCost[2] = { std::numeric_limits<Distortion>::max(), std::numeric_limits<Distortion>::max() };
+    Distortion   uiCostBi  =   std::numeric_limits<Distortion>::max();
+    Distortion   uiCostTemp;
+
+    UInt         uiBits[3];
+    UInt         uiBitsTemp;
+    Distortion   bestBiPDist = std::numeric_limits<Distortion>::max();
+
+    Distortion   uiCostTempL0[MAX_NUM_REF];
+    for (Int iNumRef=0; iNumRef < MAX_NUM_REF; iNumRef++)
+    {
+      uiCostTempL0[iNumRef] = std::numeric_limits<Distortion>::max();
+    }
+    UInt         uiBitsTempL0[MAX_NUM_REF];
+
+    TComMv       mvValidList1;
+    Int          refIdxValidList1 = 0;
+    UInt         bitsValidList1 = MAX_UINT;
+    Distortion   costValidList1 = std::numeric_limits<Distortion>::max();
+
+    xGetBlkBits( ePartSize, pcCU->getSlice()->isInterP(), iPartIdx, uiLastMode, uiMbBits);
+
+    pcCU->getPartIndexAndSize( iPartIdx, uiPartAddr, iRoiWidth, iRoiHeight );
+
+#if AMP_MRG
+    Bool bTestNormalMC = true;
+
+    if ( bUseMRG && pcCU->getWidth( 0 ) > 8 && iNumPart == 2 )
+    {
+      bTestNormalMC = false;
+    }
+
+    if (bTestNormalMC)
+    {
+#endif
+
+    //  Uni-directional prediction
+    for ( Int iRefList = 0; iRefList < iNumPredDir; iRefList++ )
+    {
+      RefPicList  eRefPicList = ( iRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0 );
+
+      for ( Int iRefIdxTemp = 0; iRefIdxTemp < pcCU->getSlice()->getNumRefIdx(eRefPicList); iRefIdxTemp++ )
+      {
+        uiBitsTemp = uiMbBits[iRefList];
+        if ( pcCU->getSlice()->getNumRefIdx(eRefPicList) > 1 )
+        {
+          uiBitsTemp += iRefIdxTemp+1;
+          if ( iRefIdxTemp == pcCU->getSlice()->getNumRefIdx(eRefPicList)-1 )
+          {
+            uiBitsTemp--;
+          }
+        }
+        xEstimateMvPredAMVP( pcCU, pcOrgYuv, iPartIdx, eRefPicList, iRefIdxTemp, cMvPred[iRefList][iRefIdxTemp], false, &biPDistTemp);
+        aaiMvpIdx[iRefList][iRefIdxTemp] = pcCU->getMVPIdx(eRefPicList, uiPartAddr);
+        aaiMvpNum[iRefList][iRefIdxTemp] = pcCU->getMVPNum(eRefPicList, uiPartAddr);
+
+        if(pcCU->getSlice()->getMvdL1ZeroFlag() && iRefList==1 && biPDistTemp < bestBiPDist)
+        {
+          bestBiPDist = biPDistTemp;
+          bestBiPMvpL1 = aaiMvpIdx[iRefList][iRefIdxTemp];
+          bestBiPRefIdxL1 = iRefIdxTemp;
+        }
+
+        uiBitsTemp += m_auiMVPIdxCost[aaiMvpIdx[iRefList][iRefIdxTemp]][AMVP_MAX_NUM_CANDS];
+
+        if ( m_pcEncCfg->getFastMEForGenBLowDelayEnabled() && iRefList == 1 )    // list 1
+        {
+          if ( pcCU->getSlice()->getList1IdxToList0Idx( iRefIdxTemp ) >= 0 )
+          {
+            cMvTemp[1][iRefIdxTemp] = cMvTemp[0][pcCU->getSlice()->getList1IdxToList0Idx( iRefIdxTemp )];
+            uiCostTemp = uiCostTempL0[pcCU->getSlice()->getList1IdxToList0Idx( iRefIdxTemp )];
+            /*first subtract the bit-rate part of the cost of the other list*/
+            uiCostTemp -= m_pcRdCost->getCost( uiBitsTempL0[pcCU->getSlice()->getList1IdxToList0Idx( iRefIdxTemp )] );
+            /*correct the bit-rate part of the current ref*/
+            m_pcRdCost->setPredictor  ( cMvPred[iRefList][iRefIdxTemp] );
+            uiBitsTemp += m_pcRdCost->getBitsOfVectorWithPredictor( cMvTemp[1][iRefIdxTemp].getHor(), cMvTemp[1][iRefIdxTemp].getVer() );
+            /*calculate the correct cost*/
+            uiCostTemp += m_pcRdCost->getCost( uiBitsTemp );
+          }
+          else
+          {
