@@ -98,3 +98,28 @@ Void write(ostream& out, OutputNALUnit& nalu)
       outputBuffer[outputAmount++]=emulation_prevention_three_byte[0];
       zeroCount=0;
     }
+
+    if (v==0)
+    {
+      zeroCount++;
+    }
+    else
+    {
+      zeroCount=0;
+    }
+    outputBuffer[outputAmount++]=v;
+  }
+
+  /* 7.4.1.1
+   * ... when the last byte of the RBSP data is equal to 0x00 (which can
+   * only occur when the RBSP ends in a cabac_zero_word), a final byte equal
+   * to 0x03 is appended to the end of the data.
+   */
+  if (zeroCount>0)
+  {
+    outputBuffer[outputAmount++]=emulation_prevention_three_byte[0];
+  }
+  out.write(reinterpret_cast<const TChar*>(&(*outputBuffer.begin())), outputAmount);
+}
+
+//! \}
