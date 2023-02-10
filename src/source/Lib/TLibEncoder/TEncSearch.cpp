@@ -3098,3 +3098,103 @@ Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* 
           }
           else
           {
+            xMotionEstimation ( pcCU, pcOrgYuv, iPartIdx, eRefPicList, &cMvPred[iRefList][iRefIdxTemp], iRefIdxTemp, cMvTemp[iRefList][iRefIdxTemp], uiBitsTemp, uiCostTemp );
+          }
+        }
+        else
+        {
+          xMotionEstimation ( pcCU, pcOrgYuv, iPartIdx, eRefPicList, &cMvPred[iRefList][iRefIdxTemp], iRefIdxTemp, cMvTemp[iRefList][iRefIdxTemp], uiBitsTemp, uiCostTemp );
+        }
+        xCopyAMVPInfo(pcCU->getCUMvField(eRefPicList)->getAMVPInfo(), &aacAMVPInfo[iRefList][iRefIdxTemp]); // must always be done ( also when AMVP_MODE = AM_NONE )
+        xCheckBestMVP(pcCU, eRefPicList, cMvTemp[iRefList][iRefIdxTemp], cMvPred[iRefList][iRefIdxTemp], aaiMvpIdx[iRefList][iRefIdxTemp], uiBitsTemp, uiCostTemp);
+
+        if ( iRefList == 0 )
+        {
+          uiCostTempL0[iRefIdxTemp] = uiCostTemp;
+          uiBitsTempL0[iRefIdxTemp] = uiBitsTemp;
+        }
+        if ( uiCostTemp < uiCost[iRefList] )
+        {
+          uiCost[iRefList] = uiCostTemp;
+          uiBits[iRefList] = uiBitsTemp; // storing for bi-prediction
+
+          // set motion
+          cMv[iRefList]     = cMvTemp[iRefList][iRefIdxTemp];
+          iRefIdx[iRefList] = iRefIdxTemp;
+        }
+
+        if ( iRefList == 1 && uiCostTemp < costValidList1 && pcCU->getSlice()->getList1IdxToList0Idx( iRefIdxTemp ) < 0 )
+        {
+          costValidList1 = uiCostTemp;
+          bitsValidList1 = uiBitsTemp;
+
+          // set motion
+          mvValidList1     = cMvTemp[iRefList][iRefIdxTemp];
+          refIdxValidList1 = iRefIdxTemp;
+        }
+      }
+    }
+
+    //  Bi-predictive Motion estimation
+    if ( (pcCU->getSlice()->isInterB()) && (pcCU->isBipredRestriction(iPartIdx) == false) )
+    {
+
+      cMvBi[0] = cMv[0];            cMvBi[1] = cMv[1];
+      iRefIdxBi[0] = iRefIdx[0];    iRefIdxBi[1] = iRefIdx[1];
+
+      ::memcpy(cMvPredBi, cMvPred, sizeof(cMvPred));
+      ::memcpy(aaiMvpIdxBi, aaiMvpIdx, sizeof(aaiMvpIdx));
+
+      UInt uiMotBits[2];
+
+      if(pcCU->getSlice()->getMvdL1ZeroFlag())
+      {
+        xCopyAMVPInfo(&aacAMVPInfo[1][bestBiPRefIdxL1], pcCU->getCUMvField(REF_PIC_LIST_1)->getAMVPInfo());
+        pcCU->setMVPIdxSubParts( bestBiPMvpL1, REF_PIC_LIST_1, uiPartAddr, iPartIdx, pcCU->getDepth(uiPartAddr));
+        aaiMvpIdxBi[1][bestBiPRefIdxL1] = bestBiPMvpL1;
+        cMvPredBi[1][bestBiPRefIdxL1]   = pcCU->getCUMvField(REF_PIC_LIST_1)->getAMVPInfo()->m_acMvCand[bestBiPMvpL1];
+
+        cMvBi[1] = cMvPredBi[1][bestBiPRefIdxL1];
+        iRefIdxBi[1] = bestBiPRefIdxL1;
+        pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllMv( cMvBi[1], ePartSize, uiPartAddr, 0, iPartIdx );
+        pcCU->getCUMvField( REF_PIC_LIST_1 )->setAllRefIdx( iRefIdxBi[1], ePartSize, uiPartAddr, 0, iPartIdx );
+        TComYuv* pcYuvPred = &m_acYuvPred[REF_PIC_LIST_1];
+        motionCompensation( pcCU, pcYuvPred, REF_PIC_LIST_1, iPartIdx );
+
+        uiMotBits[0] = uiBits[0] - uiMbBits[0];
+        uiMotBits[1] = uiMbBits[1];
+
+        if ( pcCU->getSlice()->getNumRefIdx(REF_PIC_LIST_1) > 1 )
+        {
+          uiMotBits[1] += bestBiPRefIdxL1+1;
+          if ( bestBiPRefIdxL1 == pcCU->getSlice()->getNumRefIdx(REF_PIC_LIST_1)-1 )
+          {
+            uiMotBits[1]--;
+          }
+        }
+
+        uiMotBits[1] += m_auiMVPIdxCost[aaiMvpIdxBi[1][bestBiPRefIdxL1]][AMVP_MAX_NUM_CANDS];
+
+        uiBits[2] = uiMbBits[2] + uiMotBits[0] + uiMotBits[1];
+
+        cMvTemp[1][bestBiPRefIdxL1] = cMvBi[1];
+      }
+      else
+      {
+        uiMotBits[0] = uiBits[0] - uiMbBits[0];
+        uiMotBits[1] = uiBits[1] - uiMbBits[1];
+        uiBits[2] = uiMbBits[2] + uiMotBits[0] + uiMotBits[1];
+      }
+
+      // 4-times iteration (default)
+      Int iNumIter = 4;
+
+      // fast encoder setting: only one iteration
+      if ( m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE1 || m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE2 || pcCU->getSlice()->getMvdL1ZeroFlag() )
+      {
+        iNumIter = 1;
+      }
+
+      for ( Int iIter = 0; iIter < iNumIter; iIter++ )
+      {
+        Int         iRefList    = iIter % 2;
