@@ -3198,3 +3198,103 @@ Void TEncSearch::predInterSearch( TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* 
       for ( Int iIter = 0; iIter < iNumIter; iIter++ )
       {
         Int         iRefList    = iIter % 2;
+
+        if ( m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE1 || m_pcEncCfg->getFastInterSearchMode()==FASTINTERSEARCH_MODE2 )
+        {
+          if( uiCost[0] <= uiCost[1] )
+          {
+            iRefList = 1;
+          }
+          else
+          {
+            iRefList = 0;
+          }
+        }
+        else if ( iIter == 0 )
+        {
+          iRefList = 0;
+        }
+        if ( iIter == 0 && !pcCU->getSlice()->getMvdL1ZeroFlag())
+        {
+          pcCU->getCUMvField(RefPicList(1-iRefList))->setAllMv( cMv[1-iRefList], ePartSize, uiPartAddr, 0, iPartIdx );
+          pcCU->getCUMvField(RefPicList(1-iRefList))->setAllRefIdx( iRefIdx[1-iRefList], ePartSize, uiPartAddr, 0, iPartIdx );
+          TComYuv*  pcYuvPred = &m_acYuvPred[1-iRefList];
+          motionCompensation ( pcCU, pcYuvPred, RefPicList(1-iRefList), iPartIdx );
+        }
+
+        RefPicList  eRefPicList = ( iRefList ? REF_PIC_LIST_1 : REF_PIC_LIST_0 );
+
+        if(pcCU->getSlice()->getMvdL1ZeroFlag())
+        {
+          iRefList = 0;
+          eRefPicList = REF_PIC_LIST_0;
+        }
+
+        Bool bChanged = false;
+
+        iRefStart = 0;
+        iRefEnd   = pcCU->getSlice()->getNumRefIdx(eRefPicList)-1;
+
+        for ( Int iRefIdxTemp = iRefStart; iRefIdxTemp <= iRefEnd; iRefIdxTemp++ )
+        {
+          uiBitsTemp = uiMbBits[2] + uiMotBits[1-iRefList];
+          if ( pcCU->getSlice()->getNumRefIdx(eRefPicList) > 1 )
+          {
+            uiBitsTemp += iRefIdxTemp+1;
+            if ( iRefIdxTemp == pcCU->getSlice()->getNumRefIdx(eRefPicList)-1 )
+            {
+              uiBitsTemp--;
+            }
+          }
+          uiBitsTemp += m_auiMVPIdxCost[aaiMvpIdxBi[iRefList][iRefIdxTemp]][AMVP_MAX_NUM_CANDS];
+          // call ME
+          xMotionEstimation ( pcCU, pcOrgYuv, iPartIdx, eRefPicList, &cMvPredBi[iRefList][iRefIdxTemp], iRefIdxTemp, cMvTemp[iRefList][iRefIdxTemp], uiBitsTemp, uiCostTemp, true );
+
+          xCopyAMVPInfo(&aacAMVPInfo[iRefList][iRefIdxTemp], pcCU->getCUMvField(eRefPicList)->getAMVPInfo());
+          xCheckBestMVP(pcCU, eRefPicList, cMvTemp[iRefList][iRefIdxTemp], cMvPredBi[iRefList][iRefIdxTemp], aaiMvpIdxBi[iRefList][iRefIdxTemp], uiBitsTemp, uiCostTemp);
+
+          if ( uiCostTemp < uiCostBi )
+          {
+            bChanged = true;
+
+            cMvBi[iRefList]     = cMvTemp[iRefList][iRefIdxTemp];
+            iRefIdxBi[iRefList] = iRefIdxTemp;
+
+            uiCostBi            = uiCostTemp;
+            uiMotBits[iRefList] = uiBitsTemp - uiMbBits[2] - uiMotBits[1-iRefList];
+            uiBits[2]           = uiBitsTemp;
+
+            if(iNumIter!=1)
+            {
+              //  Set motion
+              pcCU->getCUMvField( eRefPicList )->setAllMv( cMvBi[iRefList], ePartSize, uiPartAddr, 0, iPartIdx );
+              pcCU->getCUMvField( eRefPicList )->setAllRefIdx( iRefIdxBi[iRefList], ePartSize, uiPartAddr, 0, iPartIdx );
+
+              TComYuv* pcYuvPred = &m_acYuvPred[iRefList];
+              motionCompensation( pcCU, pcYuvPred, eRefPicList, iPartIdx );
+            }
+          }
+        } // for loop-iRefIdxTemp
+
+        if ( !bChanged )
+        {
+          if ( uiCostBi <= uiCost[0] && uiCostBi <= uiCost[1] )
+          {
+            xCopyAMVPInfo(&aacAMVPInfo[0][iRefIdxBi[0]], pcCU->getCUMvField(REF_PIC_LIST_0)->getAMVPInfo());
+            xCheckBestMVP(pcCU, REF_PIC_LIST_0, cMvBi[0], cMvPredBi[0][iRefIdxBi[0]], aaiMvpIdxBi[0][iRefIdxBi[0]], uiBits[2], uiCostBi);
+            if(!pcCU->getSlice()->getMvdL1ZeroFlag())
+            {
+              xCopyAMVPInfo(&aacAMVPInfo[1][iRefIdxBi[1]], pcCU->getCUMvField(REF_PIC_LIST_1)->getAMVPInfo());
+              xCheckBestMVP(pcCU, REF_PIC_LIST_1, cMvBi[1], cMvPredBi[1][iRefIdxBi[1]], aaiMvpIdxBi[1][iRefIdxBi[1]], uiBits[2], uiCostBi);
+            }
+          }
+          break;
+        }
+      } // for loop-iter
+    } // if (B_SLICE)
+
+#if AMP_MRG
+    } //end if bTestNormalMC
+#endif
+    //  Clear Motion Field
+    pcCU->getCUMvField(REF_PIC_LIST_0)->setAllMvField( TComMvField(), ePartSize, uiPartAddr, 0, iPartIdx );
