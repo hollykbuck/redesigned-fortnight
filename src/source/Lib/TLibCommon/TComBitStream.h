@@ -98,3 +98,103 @@ public:
   Void        write           ( UInt uiBits, UInt uiNumberOfBits );
 
   /** insert one bits until the bitstream is byte-aligned */
+  Void        writeAlignOne   ();
+
+  /** insert zero bits until the bitstream is byte-aligned */
+  Void        writeAlignZero  ();
+
+  /** this function should never be called */
+  Void resetBits() { assert(0); }
+
+  // utility functions
+
+  /**
+   * Return a pointer to the start of the byte-stream buffer.
+   * Pointer is valid until the next write/flush/reset call.
+   * NB, data is arranged such that subsequent bytes in the
+   * bytestream are stored in ascending addresses.
+   */
+  UChar* getByteStream() const;
+
+  /**
+   * Return the number of valid bytes available from  getByteStream()
+   */
+  UInt getByteStreamLength();
+
+  /**
+   * Reset all internal state.
+   */
+  Void clear();
+
+  /**
+   * returns the number of bits that need to be written to
+   * achieve byte alignment.
+   */
+  Int getNumBitsUntilByteAligned() const { return (8 - m_num_held_bits) & 0x7; }
+
+  /**
+   * Return the number of bits that have been written since the last clear()
+   */
+  UInt getNumberOfWrittenBits() const { return UInt(m_fifo.size()) * 8 + m_num_held_bits; }
+
+  Void insertAt(const TComOutputBitstream& src, UInt pos);
+
+  /**
+   * Return a reference to the internal fifo
+   */
+  std::vector<uint8_t>& getFIFO() { return m_fifo; }
+
+  UChar getHeldBits  ()          { return m_held_bits;          }
+
+  //TComOutputBitstream& operator= (const TComOutputBitstream& src);
+  /** Return a reference to the internal fifo */
+  const std::vector<uint8_t>& getFIFO() const { return m_fifo; }
+
+  Void          addSubstream    ( TComOutputBitstream* pcSubstream );
+  Void writeByteAlignment();
+
+  //! returns the number of start code emulations contained in the current buffer
+  Int countStartCodeEmulations();
+};
+
+/**
+ * Model of an input bitstream that extracts bits from a predefined
+ * bytestream.
+ */
+class TComInputBitstream
+{
+protected:
+  std::vector<uint8_t> m_fifo; /// FIFO for storage of complete bytes
+  std::vector<UInt>    m_emulationPreventionByteLocation;
+
+  UInt m_fifo_idx; /// Read index into m_fifo
+
+  UInt m_num_held_bits;
+  UChar m_held_bits;
+  UInt  m_numBitsRead;
+
+public:
+  /**
+   * Create a new bitstream reader object that reads from buf.
+   */
+  TComInputBitstream();
+  virtual ~TComInputBitstream() { }
+  TComInputBitstream(const TComInputBitstream &src);
+
+  Void resetToStart();
+
+  // interface for decoding
+  Void        pseudoRead      ( UInt uiNumberOfBits, UInt& ruiBits );
+  Void        read            ( UInt uiNumberOfBits, UInt& ruiBits );
+  Void        readByte        ( UInt &ruiBits )
+  {
+    assert(m_fifo_idx < m_fifo.size());
+    ruiBits = m_fifo[m_fifo_idx++];
+  }
+
+  Void        peekPreviousByte( UInt &byte )
+  {
+    assert(m_fifo_idx > 0);
+    byte = m_fifo[m_fifo_idx - 1];
+  }
+
