@@ -198,3 +198,34 @@ public:
     byte = m_fifo[m_fifo_idx - 1];
   }
 
+  UInt        readOutTrailingBits ();
+  UChar getHeldBits  ()          { return m_held_bits;          }
+  TComOutputBitstream& operator= (const TComOutputBitstream& src);
+  UInt  getByteLocation              ( )                     { return m_fifo_idx                    ; }
+
+  // Peek at bits in word-storage. Used in determining if we have completed reading of current bitstream and therefore slice in LCEC.
+  UInt        peekBits (UInt uiBits) { UInt tmp; pseudoRead(uiBits, tmp); return tmp; }
+
+  // utility functions
+  UInt read(UInt numberOfBits) { UInt tmp; read(numberOfBits, tmp); return tmp; }
+  UInt     readByte() { UInt tmp; readByte( tmp ); return tmp; }
+  UInt getNumBitsUntilByteAligned() { return m_num_held_bits & (0x7); }
+  UInt getNumBitsLeft() { return 8*((UInt)m_fifo.size() - m_fifo_idx) + m_num_held_bits; }
+  TComInputBitstream *extractSubstream( UInt uiNumBits ); // Read the nominated number of bits, and return as a bitstream.
+  UInt  getNumBitsRead() { return m_numBitsRead; }
+  UInt readByteAlignment();
+
+  Void      pushEmulationPreventionByteLocation ( UInt pos )                         { m_emulationPreventionByteLocation.push_back( pos ); }
+  UInt      numEmulationPreventionBytesRead     ()                                   { return (UInt) m_emulationPreventionByteLocation.size();    }
+  const std::vector<UInt> &getEmulationPreventionByteLocation  () const              { return m_emulationPreventionByteLocation;           }
+  UInt      getEmulationPreventionByteLocation  ( UInt idx )                         { return m_emulationPreventionByteLocation[ idx ];    }
+  Void      clearEmulationPreventionByteLocation()                                   { m_emulationPreventionByteLocation.clear();          }
+  Void      setEmulationPreventionByteLocation  ( const std::vector<UInt> &vec )     { m_emulationPreventionByteLocation = vec;            }
+
+  const std::vector<uint8_t> &getFifo() const { return m_fifo; }
+        std::vector<uint8_t> &getFifo()       { return m_fifo; }
+};
+
+//! \}
+
+#endif
