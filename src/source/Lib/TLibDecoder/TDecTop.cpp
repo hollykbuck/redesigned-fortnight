@@ -298,3 +298,103 @@ Void TDecTop::xCreateLostPicture(Int iLostPoc)
   xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), cFillPic, 0);
   cFillPic->getSlice(0)->initSlice();
 
+  TComList<TComPic*>::iterator iterPic = m_cListPic.begin();
+  Int closestPoc = 1000000;
+  while ( iterPic != m_cListPic.end())
+  {
+    TComPic * rpcPic = *(iterPic++);
+    if(abs(rpcPic->getPicSym()->getSlice(0)->getPOC() -iLostPoc)<closestPoc&&abs(rpcPic->getPicSym()->getSlice(0)->getPOC() -iLostPoc)!=0&&rpcPic->getPicSym()->getSlice(0)->getPOC()!=m_apcSlicePilot->getPOC())
+    {
+      closestPoc=abs(rpcPic->getPicSym()->getSlice(0)->getPOC() -iLostPoc);
+    }
+  }
+  iterPic = m_cListPic.begin();
+  while ( iterPic != m_cListPic.end())
+  {
+    TComPic *rpcPic = *(iterPic++);
+    if(abs(rpcPic->getPicSym()->getSlice(0)->getPOC() -iLostPoc)==closestPoc&&rpcPic->getPicSym()->getSlice(0)->getPOC()!=m_apcSlicePilot->getPOC())
+    {
+      printf("copying picture %d to %d (%d)\n",rpcPic->getPicSym()->getSlice(0)->getPOC() ,iLostPoc,m_apcSlicePilot->getPOC());
+      rpcPic->getPicYuvRec()->copyToPic(cFillPic->getPicYuvRec());
+      break;
+    }
+  }
+  cFillPic->setCurrSliceIdx(0);
+  for(Int ctuRsAddr=0; ctuRsAddr<cFillPic->getNumberOfCtusInFrame(); ctuRsAddr++)
+  {
+    cFillPic->getCtu(ctuRsAddr)->initCtu(cFillPic, ctuRsAddr);
+  }
+  cFillPic->getSlice(0)->setReferenced(true);
+  cFillPic->getSlice(0)->setPOC(iLostPoc);
+  xUpdatePreviousTid0POC(cFillPic->getSlice(0));
+  cFillPic->setReconMark(true);
+  cFillPic->setOutputMark(true);
+  if(m_pocRandomAccess == MAX_INT)
+  {
+    m_pocRandomAccess = iLostPoc;
+  }
+}
+
+#if MCTS_EXTRACTION
+Void TDecTop::xActivateParameterSets(Bool bSkipCabacAndReconstruction)
+#else
+Void TDecTop::xActivateParameterSets()
+#endif
+{
+  if (m_bFirstSliceInPicture)
+  {
+    const TComPPS *pps = m_parameterSetManager.getPPS(m_apcSlicePilot->getPPSId()); // this is a temporary PPS object. Do not store this value
+    assert (pps != 0);
+
+    const TComSPS *sps = m_parameterSetManager.getSPS(pps->getSPSId());             // this is a temporary SPS object. Do not store this value
+    assert (sps != 0);
+
+    m_parameterSetManager.clearSPSChangedFlag(sps->getSPSId());
+    m_parameterSetManager.clearPPSChangedFlag(pps->getPPSId());
+
+    if (false == m_parameterSetManager.activatePPS(m_apcSlicePilot->getPPSId(),m_apcSlicePilot->isIRAP()))
+    {
+      printf ("Parameter set activation failed!");
+      assert (0);
+    }
+
+    xParsePrefixSEImessages();
+#if MCTS_ENC_CHECK
+    xAnalysePrefixSEImessages();
+#endif
+
+#if RExt__HIGH_BIT_DEPTH_SUPPORT==0
+    if (sps->getSpsRangeExtension().getExtendedPrecisionProcessingFlag() || sps->getBitDepth(CHANNEL_TYPE_LUMA)>12 || sps->getBitDepth(CHANNEL_TYPE_CHROMA)>12 )
+    {
+      printf("High bit depth support must be enabled at compile-time in order to decode this bitstream\n");
+      assert (0);
+      exit(1);
+    }
+#endif
+
+    // NOTE: globals were set up here originally. You can now use:
+    // g_uiMaxCUDepth = sps->getMaxTotalCUDepth();
+    // g_uiAddCUDepth = sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()
+
+    //  Get a new picture buffer. This will also set up m_pcPic, and therefore give us a SPS and PPS pointer that we can use.
+    xGetNewPicBuffer (*(sps), *(pps), m_pcPic, m_apcSlicePilot->getTLayer());
+    m_apcSlicePilot->applyReferencePictureSet(m_cListPic, m_apcSlicePilot->getRPS());
+#if JVET_X0048_X0103_FILM_GRAIN
+    // Initialization of film grain synthesizer 
+    m_pcPic->createGrainSynthesizer(m_bFirstPictureInSequence, &m_grainCharacteristic, &m_grainBuf, sps);
+    m_bFirstPictureInSequence = false;
+#endif
+    // make the slice-pilot a real slice, and set up the slice-pilot for the next slice
+    assert(m_pcPic->getNumAllocatedSlice() == (m_uiSliceIdx + 1));
+    m_apcSlicePilot = m_pcPic->getPicSym()->swapSliceObject(m_apcSlicePilot, m_uiSliceIdx);
+
+    // we now have a real slice:
+    TComSlice *pSlice = m_pcPic->getSlice(m_uiSliceIdx);
+
+    // Update the PPS and SPS pointers with the ones of the picture.
+    pps=pSlice->getPPS();
+    sps=pSlice->getSPS();
+
+    // Initialise the various objects for the new set of settings
+    m_cSAO.create( sps->getPicWidthInLumaSamples(), sps->getPicHeightInLumaSamples(), sps->getChromaFormatIdc(), sps->getMaxCUWidth(), sps->getMaxCUHeight(), sps->getMaxTotalCUDepth(), pps->getPpsRangeExtension().getLog2SaoOffsetScale(CHANNEL_TYPE_LUMA), pps->getPpsRangeExtension().getLog2SaoOffsetScale(CHANNEL_TYPE_CHROMA) );
+    m_cLoopFilter.create( sps->getMaxTotalCUDepth() );
