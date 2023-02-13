@@ -98,3 +98,103 @@ TDecTop::TDecTop()
   g_nSymbolCounter = 0;
 #endif
 }
+
+TDecTop::~TDecTop()
+{
+#if ENC_DEC_TRACE
+  if (g_hTrace != stdout)
+  {
+    fclose( g_hTrace );
+  }
+#endif
+  while (!m_prefixSEINALUs.empty())
+  {
+    delete m_prefixSEINALUs.front();
+    m_prefixSEINALUs.pop_front();
+  }
+}
+
+Void TDecTop::create()
+{
+  m_cGopDecoder.create();
+  m_apcSlicePilot = new TComSlice;
+  m_uiSliceIdx = 0;
+}
+
+Void TDecTop::destroy()
+{
+  m_cGopDecoder.destroy();
+
+  delete m_apcSlicePilot;
+  m_apcSlicePilot = NULL;
+
+  m_cSliceDecoder.destroy();
+}
+
+Void TDecTop::init()
+{
+  // initialize ROM
+  initROM();
+  m_cGopDecoder.init( &m_cEntropyDecoder, &m_cSbacDecoder, &m_cBinCABAC, &m_cCavlcDecoder, &m_cSliceDecoder, &m_cLoopFilter, &m_cSAO);
+  m_cSliceDecoder.init( &m_cEntropyDecoder, &m_cCuDecoder, &m_conformanceCheck );
+#if MCTS_ENC_CHECK
+  m_cEntropyDecoder.init(&m_cPrediction, &m_conformanceCheck );
+#else
+  m_cEntropyDecoder.init(&m_cPrediction);
+#endif
+}
+
+Void TDecTop::deletePicBuffer ( )
+{
+  TComList<TComPic*>::iterator  iterPic   = m_cListPic.begin();
+  Int iSize = Int( m_cListPic.size() );
+
+  for (Int i = 0; i < iSize; i++ )
+  {
+    TComPic* pcPic = *(iterPic++);
+    pcPic->destroy();
+
+    delete pcPic;
+    pcPic = NULL;
+  }
+
+  m_cSAO.destroy();
+
+  m_cLoopFilter.        destroy();
+
+  // destroy ROM
+  destroyROM();
+}
+
+Void TDecTop::xGetNewPicBuffer ( const TComSPS &sps, const TComPPS &pps, TComPic*& rpcPic, const UInt temporalLayer )
+{
+  m_iMaxRefPicNum = sps.getMaxDecPicBuffering(temporalLayer);     // m_uiMaxDecPicBuffering has the space for the picture currently being decoded
+  if (m_cListPic.size() < (UInt)m_iMaxRefPicNum)
+  {
+    rpcPic = new TComPic();
+
+#if REDUCED_ENCODER_MEMORY
+    rpcPic->create ( sps, pps, false, true
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , false
+#endif
+                    );
+#else
+    rpcPic->create ( sps, pps, true
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                    , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                    , false
+#endif
+                    );
+#endif
+
+    m_cListPic.pushBack( rpcPic );
+
+    return;
+  }
+
