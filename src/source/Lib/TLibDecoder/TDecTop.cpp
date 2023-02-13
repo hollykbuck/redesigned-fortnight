@@ -198,3 +198,103 @@ Void TDecTop::xGetNewPicBuffer ( const TComSPS &sps, const TComPPS &pps, TComPic
     return;
   }
 
+  Bool bBufferIsAvailable = false;
+  TComList<TComPic*>::iterator  iterPic   = m_cListPic.begin();
+  while (iterPic != m_cListPic.end())
+  {
+    rpcPic = *(iterPic++);
+    if ( rpcPic->getReconMark() == false && rpcPic->getOutputMark() == false)
+    {
+      rpcPic->setOutputMark(false);
+      bBufferIsAvailable = true;
+      break;
+    }
+
+    if ( rpcPic->getSlice( 0 )->isReferenced() == false  && rpcPic->getOutputMark() == false)
+    {
+      rpcPic->setOutputMark(false);
+      rpcPic->setReconMark( false );
+      rpcPic->getPicYuvRec()->setBorderExtension( false );
+      bBufferIsAvailable = true;
+      break;
+    }
+  }
+
+  if ( !bBufferIsAvailable )
+  {
+    //There is no room for this picture, either because of faulty encoder or dropped NAL. Extend the buffer.
+    m_iMaxRefPicNum++;
+    rpcPic = new TComPic();
+    m_cListPic.pushBack( rpcPic );
+  }
+  rpcPic->destroy();
+#if REDUCED_ENCODER_MEMORY
+  rpcPic->create ( sps, pps, false, true
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                  , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                  , false
+#endif
+                  );
+#else
+  rpcPic->create ( sps, pps, true
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+                  , getShutterFilterFlag()
+#endif
+#if JVET_X0048_X0103_FILM_GRAIN
+                  , false
+#endif
+                  );
+#endif
+}
+
+Void TDecTop::executeLoopFilters(Int& poc, TComList<TComPic*>*& rpcListPic)
+{
+  if (!m_pcPic)
+  {
+    /* nothing to deblock */
+    return;
+  }
+
+  TComPic*   pcPic         = m_pcPic;
+
+  // Execute Deblock + Cleanup
+
+  m_cGopDecoder.filterPicture(pcPic);
+
+  TComSlice::sortPicList( m_cListPic ); // sorting for application output
+  poc                 = pcPic->getSlice(m_uiSliceIdx-1)->getPOC();
+  rpcListPic          = &m_cListPic;
+  m_cCuDecoder.destroy();
+  m_bFirstSliceInPicture  = true;
+
+  return;
+}
+
+Void TDecTop::checkNoOutputPriorPics (TComList<TComPic*>* pcListPic)
+{
+  if (!pcListPic || !m_isNoOutputPriorPics)
+  {
+    return;
+  }
+
+  TComList<TComPic*>::iterator  iterPic   = pcListPic->begin();
+
+  while (iterPic != pcListPic->end())
+  {
+    TComPic* pcPicTmp = *(iterPic++);
+    if (m_lastPOCNoOutputPriorPics != pcPicTmp->getPOC())
+    {
+      pcPicTmp->setOutputMark(false);
+    }
+  }
+}
+
+Void TDecTop::xCreateLostPicture(Int iLostPoc)
+{
+  printf("\ninserting lost poc : %d\n",iLostPoc);
+  TComPic *cFillPic;
+  xGetNewPicBuffer(*(m_parameterSetManager.getFirstSPS()), *(m_parameterSetManager.getFirstPPS()), cFillPic, 0);
+  cFillPic->getSlice(0)->initSlice();
+
