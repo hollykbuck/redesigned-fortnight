@@ -3498,3 +3498,103 @@ Void TEncSearch::xEstimateMvPredAMVP( TComDataCU* pcCU, TComYuv* pcOrgYuv, UInt 
     minMVPCand  = 0;
     maxMVPCand  = pcAMVPInfo->iN;
   }
+#else
+  iBestIdx = 0;
+  cBestMv  = pcAMVPInfo->m_acMvCand[0];
+  minMVPCand  = 0;
+  maxMVPCand  = pcAMVPInfo->iN;
+#endif
+  if (pcAMVPInfo->iN <= 1)
+  {
+    rcMvPred = cBestMv;
+
+    pcCU->setMVPIdxSubParts( iBestIdx, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+    pcCU->setMVPNumSubParts( pcAMVPInfo->iN, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+
+    if(pcCU->getSlice()->getMvdL1ZeroFlag() && eRefPicList==REF_PIC_LIST_1)
+    {
+      (*puiDistBiP) = xGetTemplateCost( pcCU, uiPartAddr, pcOrgYuv, &m_cYuvPredTemp, rcMvPred, 0, AMVP_MAX_NUM_CANDS, eRefPicList, iRefIdx, iRoiWidth, iRoiHeight);
+    }
+    return;
+  }
+
+  if (bFilled)
+  {
+    assert(pcCU->getMVPIdx(eRefPicList,uiPartAddr) >= 0);
+    rcMvPred = pcAMVPInfo->m_acMvCand[pcCU->getMVPIdx(eRefPicList,uiPartAddr)];
+    return;
+  }
+
+  m_cYuvPredTemp.clear();
+  //-- Check Minimum Cost.
+  for ( i = minMVPCand ; i < maxMVPCand; i++)
+  {
+    Distortion uiTmpCost;
+    uiTmpCost = xGetTemplateCost( pcCU, uiPartAddr, pcOrgYuv, &m_cYuvPredTemp, pcAMVPInfo->m_acMvCand[i], i, AMVP_MAX_NUM_CANDS, eRefPicList, iRefIdx, iRoiWidth, iRoiHeight);
+    if ( uiBestCost > uiTmpCost )
+    {
+      uiBestCost = uiTmpCost;
+      cBestMv   = pcAMVPInfo->m_acMvCand[i];
+      iBestIdx  = i;
+      (*puiDistBiP) = uiTmpCost;
+    }
+  }
+
+  m_cYuvPredTemp.clear();
+
+  // Setting Best MVP
+  rcMvPred = cBestMv;
+  pcCU->setMVPIdxSubParts( iBestIdx, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+  pcCU->setMVPNumSubParts( pcAMVPInfo->iN, eRefPicList, uiPartAddr, uiPartIdx, pcCU->getDepth(uiPartAddr));
+  return;
+}
+
+UInt TEncSearch::xGetMvpIdxBits(Int iIdx, Int iNum)
+{
+  assert(iIdx >= 0 && iNum >= 0 && iIdx < iNum);
+
+  if (iNum == 1)
+  {
+    return 0;
+  }
+
+  UInt uiLength = 1;
+  Int iTemp = iIdx;
+  if ( iTemp == 0 )
+  {
+    return uiLength;
+  }
+
+  Bool bCodeLast = ( iNum-1 > iTemp );
+
+  uiLength += (iTemp-1);
+
+  if( bCodeLast )
+  {
+    uiLength++;
+  }
+
+  return uiLength;
+}
+
+Void TEncSearch::xGetBlkBits( PartSize eCUMode, Bool bPSlice, Int iPartIdx, UInt uiLastMode, UInt uiBlkBit[3])
+{
+  if ( eCUMode == SIZE_2Nx2N )
+  {
+    uiBlkBit[0] = (! bPSlice) ? 3 : 1;
+    uiBlkBit[1] = 3;
+    uiBlkBit[2] = 5;
+  }
+  else if ( (eCUMode == SIZE_2NxN || eCUMode == SIZE_2NxnU) || eCUMode == SIZE_2NxnD )
+  {
+    UInt aauiMbBits[2][3][3] = { { {0,0,3}, {0,0,0}, {0,0,0} } , { {5,7,7}, {7,5,7}, {9-3,9-3,9-3} } };
+    if ( bPSlice )
+    {
+      uiBlkBit[0] = 3;
+      uiBlkBit[1] = 0;
+      uiBlkBit[2] = 0;
+    }
+    else
+    {
+      ::memcpy( uiBlkBit, aauiMbBits[iPartIdx][uiLastMode], 3*sizeof(UInt) );
+    }
