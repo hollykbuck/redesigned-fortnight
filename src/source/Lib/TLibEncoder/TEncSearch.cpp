@@ -3598,3 +3598,103 @@ Void TEncSearch::xGetBlkBits( PartSize eCUMode, Bool bPSlice, Int iPartIdx, UInt
     {
       ::memcpy( uiBlkBit, aauiMbBits[iPartIdx][uiLastMode], 3*sizeof(UInt) );
     }
+  }
+  else if ( (eCUMode == SIZE_Nx2N || eCUMode == SIZE_nLx2N) || eCUMode == SIZE_nRx2N )
+  {
+    UInt aauiMbBits[2][3][3] = { { {0,2,3}, {0,0,0}, {0,0,0} } , { {5,7,7}, {7-2,7-2,9-2}, {9-3,9-3,9-3} } };
+    if ( bPSlice )
+    {
+      uiBlkBit[0] = 3;
+      uiBlkBit[1] = 0;
+      uiBlkBit[2] = 0;
+    }
+    else
+    {
+      ::memcpy( uiBlkBit, aauiMbBits[iPartIdx][uiLastMode], 3*sizeof(UInt) );
+    }
+  }
+  else if ( eCUMode == SIZE_NxN )
+  {
+    uiBlkBit[0] = (! bPSlice) ? 3 : 1;
+    uiBlkBit[1] = 3;
+    uiBlkBit[2] = 5;
+  }
+  else
+  {
+    printf("Wrong!\n");
+    assert( 0 );
+  }
+}
+
+Void TEncSearch::xCopyAMVPInfo (AMVPInfo* pSrc, AMVPInfo* pDst)
+{
+  pDst->iN = pSrc->iN;
+  for (Int i = 0; i < pSrc->iN; i++)
+  {
+    pDst->m_acMvCand[i] = pSrc->m_acMvCand[i];
+  }
+}
+
+Void TEncSearch::xCheckBestMVP ( TComDataCU* pcCU, RefPicList eRefPicList, TComMv cMv, TComMv& rcMvPred, Int& riMVPIdx, UInt& ruiBits, Distortion& ruiCost )
+{
+  AMVPInfo* pcAMVPInfo = pcCU->getCUMvField(eRefPicList)->getAMVPInfo();
+
+  assert(pcAMVPInfo->m_acMvCand[riMVPIdx] == rcMvPred);
+
+  if (pcAMVPInfo->iN < 2)
+  {
+    return;
+  }
+
+  m_pcRdCost->selectMotionLambda( true, 0, pcCU->getCUTransquantBypass(0) );
+  m_pcRdCost->setCostScale ( 0    );
+
+  Int iBestMVPIdx = riMVPIdx;
+
+  m_pcRdCost->setPredictor( rcMvPred );
+  Int iOrgMvBits  = m_pcRdCost->getBitsOfVectorWithPredictor(cMv.getHor(), cMv.getVer());
+  iOrgMvBits += m_auiMVPIdxCost[riMVPIdx][AMVP_MAX_NUM_CANDS];
+  Int iBestMvBits = iOrgMvBits;
+
+#if MCTS_ENC_CHECK
+  Int minMVPCand = 0;
+  Int maxMVPCand = pcAMVPInfo->iN;
+
+  if (m_pcEncCfg->getTMCTSSEITileConstraint() && pcCU->isLastColumnCTUInTile())
+  {
+    minMVPCand = (pcAMVPInfo->numSpatialMVPCandidates == 0) ? 1 : 0;
+    maxMVPCand = (pcAMVPInfo->numSpatialMVPCandidates == 0) ? pcAMVPInfo->iN : 1;
+  }
+  for (Int iMVPIdx = minMVPCand; iMVPIdx < maxMVPCand; iMVPIdx++)
+#else
+  for (Int iMVPIdx = 0; iMVPIdx < pcAMVPInfo->iN; iMVPIdx++)
+#endif
+  {
+    if (iMVPIdx == riMVPIdx)
+    {
+      continue;
+    }
+
+    m_pcRdCost->setPredictor( pcAMVPInfo->m_acMvCand[iMVPIdx] );
+
+    Int iMvBits = m_pcRdCost->getBitsOfVectorWithPredictor(cMv.getHor(), cMv.getVer());
+    iMvBits += m_auiMVPIdxCost[iMVPIdx][AMVP_MAX_NUM_CANDS];
+
+    if (iMvBits < iBestMvBits)
+    {
+      iBestMvBits = iMvBits;
+      iBestMVPIdx = iMVPIdx;
+    }
+  }
+
+  if (iBestMVPIdx != riMVPIdx)  //if changed
+  {
+    rcMvPred = pcAMVPInfo->m_acMvCand[iBestMVPIdx];
+
+    riMVPIdx = iBestMVPIdx;
+    UInt uiOrgBits = ruiBits;
+    ruiBits = uiOrgBits - iOrgMvBits + iBestMvBits;
+    ruiCost = (ruiCost - m_pcRdCost->getCost( uiOrgBits ))  + m_pcRdCost->getCost( ruiBits );
+  }
+}
+
