@@ -3698,3 +3698,103 @@ Void TEncSearch::xCheckBestMVP ( TComDataCU* pcCU, RefPicList eRefPicList, TComM
   }
 }
 
+
+Distortion TEncSearch::xGetTemplateCost( TComDataCU* pcCU,
+                                         UInt        uiPartAddr,
+                                         TComYuv*    pcOrgYuv,
+                                         TComYuv*    pcTemplateCand,
+                                         TComMv      cMvCand,
+                                         Int         iMVPIdx,
+                                         Int         iMVPNum,
+                                         RefPicList  eRefPicList,
+                                         Int         iRefIdx,
+                                         Int         iSizeX,
+                                         Int         iSizeY
+                                         )
+{
+  Distortion uiCost = std::numeric_limits<Distortion>::max();
+
+  TComPicYuv* pcPicYuvRef = pcCU->getSlice()->getRefPic( eRefPicList, iRefIdx )->getPicYuvRec();
+
+  pcCU->clipMv( cMvCand );
+
+  // prediction pattern
+  if ( pcCU->getSlice()->testWeightPred() && pcCU->getSlice()->getSliceType()==P_SLICE )
+  {
+    xPredInterBlk( COMPONENT_Y, pcCU, pcPicYuvRef, uiPartAddr, &cMvCand, iSizeX, iSizeY, pcTemplateCand, true, pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA) );
+  }
+  else
+  {
+    xPredInterBlk( COMPONENT_Y, pcCU, pcPicYuvRef, uiPartAddr, &cMvCand, iSizeX, iSizeY, pcTemplateCand, false, pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA) );
+  }
+
+  if ( pcCU->getSlice()->testWeightPred() && pcCU->getSlice()->getSliceType()==P_SLICE )
+  {
+    xWeightedPredictionUni( pcCU, pcTemplateCand, uiPartAddr, iSizeX, iSizeY, eRefPicList, pcTemplateCand, iRefIdx );
+  }
+
+  // calc distortion
+
+  uiCost = m_pcRdCost->getDistPart( pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA), pcTemplateCand->getAddr(COMPONENT_Y, uiPartAddr), pcTemplateCand->getStride(COMPONENT_Y), pcOrgYuv->getAddr(COMPONENT_Y, uiPartAddr), pcOrgYuv->getStride(COMPONENT_Y), iSizeX, iSizeY, COMPONENT_Y, DF_SAD );
+  uiCost = (UInt) m_pcRdCost->calcRdCost( m_auiMVPIdxCost[iMVPIdx][iMVPNum], uiCost, DF_SAD );
+  return uiCost;
+}
+
+
+Void TEncSearch::xMotionEstimation( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPartIdx, RefPicList eRefPicList, TComMv* pcMvPred, Int iRefIdxPred, TComMv& rcMv, UInt& ruiBits, Distortion& ruiCost, Bool bBi  )
+{
+  UInt          uiPartAddr;
+  Int           iRoiWidth;
+  Int           iRoiHeight;
+
+  TComMv        cMvHalf, cMvQter;
+  TComMv        cMvSrchRngLT;
+  TComMv        cMvSrchRngRB;
+
+  TComYuv*      pcYuv = pcYuvOrg;
+
+  assert(eRefPicList < MAX_NUM_REF_LIST_ADAPT_SR && iRefIdxPred<Int(MAX_IDX_ADAPT_SR));
+  m_iSearchRange = m_aaiAdaptSR[eRefPicList][iRefIdxPred];
+
+  Int           iSrchRng      = ( bBi ? m_bipredSearchRange : m_iSearchRange );
+  TComPattern   cPattern;
+
+  Double        fWeight       = 1.0;
+
+  pcCU->getPartIndexAndSize( iPartIdx, uiPartAddr, iRoiWidth, iRoiHeight );
+
+  if ( bBi ) // Bipredictive ME
+  {
+    TComYuv*  pcYuvOther = &m_acYuvPred[1-(Int)eRefPicList];
+    pcYuv                = &m_cYuvPredTemp;
+
+    pcYuvOrg->copyPartToPartYuv( pcYuv, uiPartAddr, iRoiWidth, iRoiHeight );
+
+    pcYuv->removeHighFreq( pcYuvOther, uiPartAddr, iRoiWidth, iRoiHeight, pcCU->getSlice()->getSPS()->getBitDepths().recon, m_pcEncCfg->getClipForBiPredMeEnabled() );
+
+    fWeight = 0.5;
+  }
+  m_cDistParam.bIsBiPred = bBi;
+
+  //  Search key pattern initialization
+#if MCTS_ENC_CHECK
+  Int roiPosX, roiPosY; 
+  Int roiW, roiH;
+  pcCU->getPartPosition(iPartIdx, roiPosX, roiPosY, roiW, roiH);
+  assert(roiW == iRoiWidth);
+  assert(roiH == iRoiHeight);
+  cPattern.initPattern( pcYuv->getAddr(COMPONENT_Y, uiPartAddr),
+                        iRoiWidth,
+                        iRoiHeight,
+                        pcYuv->getStride(COMPONENT_Y),
+                        pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA),
+                        roiPosX,
+                        roiPosY);
+  xInitTileBorders(pcCU, &cPattern);
+#else
+  cPattern.initPattern( pcYuv->getAddr  ( COMPONENT_Y, uiPartAddr ),
+                        iRoiWidth,
+                        iRoiHeight,
+                        pcYuv->getStride(COMPONENT_Y),
+                        pcCU->getSlice()->getSPS()->getBitDepth(CHANNEL_TYPE_LUMA) );
+#endif
