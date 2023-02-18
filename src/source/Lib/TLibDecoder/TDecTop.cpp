@@ -698,3 +698,103 @@ Bool TDecTop::xDecodeSlice(InputNALUnit &nalu, Int &iSkipFrame, Int iPOCLastDisp
 
   if (TDecConformanceCheck::doChecking())
   {
+    m_conformanceCheck.checkSliceActivation(*pcSlice, nalu, *m_pcPic, m_bFirstSliceInBitstream, m_bFirstSliceInSequence, m_bFirstSliceInPicture);
+  }
+
+  m_bFirstSliceInSequence = false;
+  m_bFirstSliceInBitstream  = false;
+
+  // When decoding the slice header, the stored start and end addresses were actually RS addresses, not TS addresses.
+  // Now, having set up the maps, convert them to the correct form.
+  pcSlice->setSliceSegmentCurStartCtuTsAddr( m_pcPic->getPicSym()->getCtuRsToTsAddrMap(pcSlice->getSliceSegmentCurStartCtuTsAddr()) );
+  pcSlice->setSliceSegmentCurEndCtuTsAddr( m_pcPic->getPicSym()->getCtuRsToTsAddrMap(pcSlice->getSliceSegmentCurEndCtuTsAddr()) );
+  if(!pcSlice->getDependentSliceSegmentFlag())
+  {
+    pcSlice->setSliceCurStartCtuTsAddr(m_pcPic->getPicSym()->getCtuRsToTsAddrMap(pcSlice->getSliceCurStartCtuTsAddr()));
+    pcSlice->setSliceCurEndCtuTsAddr(m_pcPic->getPicSym()->getCtuRsToTsAddrMap(pcSlice->getSliceCurEndCtuTsAddr()));
+  }
+
+  m_pcPic->setTLayer(nalu.m_temporalId);
+
+  if (!pcSlice->getDependentSliceSegmentFlag())
+  {
+    pcSlice->checkCRA(pcSlice->getRPS(), m_pocCRA, m_associatedIRAPType, m_cListPic);
+#if MCTS_EXTRACTION
+    if (bSkipCabacAndReconstruction)
+    {
+      m_bFirstSliceInPicture = false;
+      m_uiSliceIdx++;
+      return false;
+    }
+#endif
+    // Set reference list
+    pcSlice->setRefPicList( m_cListPic, true );
+
+    // For generalized B
+    // note: maybe not existed case (always L0 is copied to L1 if L1 is empty)
+    if (pcSlice->isInterB() && pcSlice->getNumRefIdx(REF_PIC_LIST_1) == 0)
+    {
+      Int iNumRefIdx = pcSlice->getNumRefIdx(REF_PIC_LIST_0);
+      pcSlice->setNumRefIdx        ( REF_PIC_LIST_1, iNumRefIdx );
+
+      for (Int iRefIdx = 0; iRefIdx < iNumRefIdx; iRefIdx++)
+      {
+        pcSlice->setRefPic(pcSlice->getRefPic(REF_PIC_LIST_0, iRefIdx), REF_PIC_LIST_1, iRefIdx);
+      }
+    }
+    if (!pcSlice->isIntra())
+    {
+      Bool bLowDelay = true;
+      Int  iCurrPOC  = pcSlice->getPOC();
+      Int iRefIdx = 0;
+
+      for (iRefIdx = 0; iRefIdx < pcSlice->getNumRefIdx(REF_PIC_LIST_0) && bLowDelay; iRefIdx++)
+      {
+        if ( pcSlice->getRefPic(REF_PIC_LIST_0, iRefIdx)->getPOC() > iCurrPOC )
+        {
+          bLowDelay = false;
+        }
+      }
+      if (pcSlice->isInterB())
+      {
+        for (iRefIdx = 0; iRefIdx < pcSlice->getNumRefIdx(REF_PIC_LIST_1) && bLowDelay; iRefIdx++)
+        {
+          if ( pcSlice->getRefPic(REF_PIC_LIST_1, iRefIdx)->getPOC() > iCurrPOC )
+          {
+            bLowDelay = false;
+          }
+        }
+      }
+
+      pcSlice->setCheckLDC(bLowDelay);
+    }
+
+    //---------------
+    pcSlice->setRefPOCList();
+  }
+
+  m_pcPic->setCurrSliceIdx(m_uiSliceIdx);
+  if(pcSlice->getSPS()->getScalingListFlag())
+  {
+    TComScalingList scalingList;
+    if(pcSlice->getPPS()->getScalingListPresentFlag())
+    {
+      scalingList = pcSlice->getPPS()->getScalingList();
+    }
+    else if (pcSlice->getSPS()->getScalingListPresentFlag())
+    {
+      scalingList = pcSlice->getSPS()->getScalingList();
+    }
+    else
+    {
+      scalingList.setDefaultScalingList();
+    }
+    m_cTrQuant.setScalingListDec(scalingList);
+    m_cTrQuant.setUseScalingList(true);
+  }
+  else
+  {
+    const Int maxLog2TrDynamicRange[MAX_NUM_CHANNEL_TYPE] =
+    {
+        pcSlice->getSPS()->getMaxLog2TrDynamicRange(CHANNEL_TYPE_LUMA),
+        pcSlice->getSPS()->getMaxLog2TrDynamicRange(CHANNEL_TYPE_CHROMA)
