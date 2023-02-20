@@ -998,3 +998,70 @@ Bool TDecTop::decode(InputNALUnit& nalu, Int& iSkipFrame, Int& iPOCLastDisplay)
  * \returns true if the picture should be skipped
  * This function skips all TFD pictures that follow a BLA picture
  * in decoding order and precede it in output order.
+ */
+Bool TDecTop::isSkipPictureForBLA(Int& iPOCLastDisplay)
+{
+  if ((m_associatedIRAPType == NAL_UNIT_CODED_SLICE_BLA_N_LP || m_associatedIRAPType == NAL_UNIT_CODED_SLICE_BLA_W_LP || m_associatedIRAPType == NAL_UNIT_CODED_SLICE_BLA_W_RADL) &&
+       m_apcSlicePilot->getPOC() < m_pocCRA && (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_R || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_N))
+  {
+    iPOCLastDisplay++;
+    return true;
+  }
+  return false;
+}
+
+/** Function for checking if picture should be skipped because of random access
+ * \param iSkipFrame skip frame counter
+ * \param iPOCLastDisplay POC of last picture displayed
+ * \returns true if the picture shold be skipped in the random access.
+ * This function checks the skipping of pictures in the case of -s option random access.
+ * All pictures prior to the random access point indicated by the counter iSkipFrame are skipped.
+ * It also checks the type of Nal unit type at the random access point.
+ * If the random access point is CRA/CRANT/BLA/BLANT, TFD pictures with POC less than the POC of the random access point are skipped.
+ * If the random access point is IDR all pictures after the random access point are decoded.
+ * If the random access point is none of the above, a warning is issues, and decoding of pictures with POC
+ * equal to or greater than the random access point POC is attempted. For non IDR/CRA/BLA random
+ * access point there is no guarantee that the decoder will not crash.
+ */
+Bool TDecTop::isRandomAccessSkipPicture(Int& iSkipFrame,  Int& iPOCLastDisplay)
+{
+  if (iSkipFrame)
+  {
+    iSkipFrame--;   // decrement the counter
+    return true;
+  }
+  else if (m_pocRandomAccess == MAX_INT) // start of random access point, m_pocRandomAccess has not been set yet.
+  {
+    if (   m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_CRA
+        || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+        || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP
+        || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL )
+    {
+      // set the POC random access since we need to skip the reordered pictures in the case of CRA/CRANT/BLA/BLANT.
+      m_pocRandomAccess = m_apcSlicePilot->getPOC();
+    }
+    else if ( m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_W_RADL || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_IDR_N_LP )
+    {
+      m_pocRandomAccess = -MAX_INT; // no need to skip the reordered pictures in IDR, they are decodable.
+    }
+    else
+    {
+      if(!m_warningMessageSkipPicture)
+      {
+        printf("\nWarning: this is not a valid random access point and the data is discarded until the first CRA picture");
+        m_warningMessageSkipPicture = true;
+      }
+      return true;
+    }
+  }
+  // skip the reordered pictures, if necessary
+  else if (m_apcSlicePilot->getPOC() < m_pocRandomAccess && (m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_R || m_apcSlicePilot->getNalUnitType() == NAL_UNIT_CODED_SLICE_RASL_N))
+  {
+    iPOCLastDisplay++;
+    return true;
+  }
+  // if we reach here, then the picture is not skipped.
+  return false;
+}
+
+//! \}
