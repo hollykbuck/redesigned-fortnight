@@ -3998,3 +3998,103 @@ Void TEncSearch::xPatternSearch( const TComPattern* const pcPatternKey,
         m_cDistParam.m_maximumDistortionForEarlyExit = uiSad;
       }
     }
+    piRefY += iRefStride;
+  }
+
+  rcMv.set( iBestX, iBestY );
+
+  ruiSAD = uiSadBest - m_pcRdCost->getCostOfVectorWithPredictor( iBestX, iBestY );
+  return;
+}
+
+
+Void TEncSearch::xPatternSearchFast( const TComDataCU* const  pcCU,
+                                     const TComPattern* const pcPatternKey,
+                                     const Pel* const         piRefY,
+                                     const Int                iRefStride,
+                                     const TComMv* const      pcMvSrchRngLT,
+                                     const TComMv* const      pcMvSrchRngRB,
+                                     TComMv&                  rcMv,
+                                     Distortion&              ruiSAD,
+                                     const TComMv* const      pIntegerMv2Nx2NPred )
+{
+  assert (MD_LEFT < NUM_MV_PREDICTORS);
+  pcCU->getMvPredLeft       ( m_acMvPredictors[MD_LEFT] );
+  assert (MD_ABOVE < NUM_MV_PREDICTORS);
+  pcCU->getMvPredAbove      ( m_acMvPredictors[MD_ABOVE] );
+  assert (MD_ABOVE_RIGHT < NUM_MV_PREDICTORS);
+  pcCU->getMvPredAboveRight ( m_acMvPredictors[MD_ABOVE_RIGHT] );
+
+  switch ( m_motionEstimationSearchMethod )
+  {
+    case MESEARCH_DIAMOND:
+      xTZSearch( pcCU, pcPatternKey, piRefY, iRefStride, pcMvSrchRngLT, pcMvSrchRngRB, rcMv, ruiSAD, pIntegerMv2Nx2NPred, false );
+      break;
+
+    case MESEARCH_SELECTIVE:
+      xTZSearchSelective( pcCU, pcPatternKey, piRefY, iRefStride, pcMvSrchRngLT, pcMvSrchRngRB, rcMv, ruiSAD, pIntegerMv2Nx2NPred );
+      break;
+
+    case MESEARCH_DIAMOND_ENHANCED:
+      xTZSearch( pcCU, pcPatternKey, piRefY, iRefStride, pcMvSrchRngLT, pcMvSrchRngRB, rcMv, ruiSAD, pIntegerMv2Nx2NPred, true );
+      break;
+
+    case MESEARCH_FULL: // shouldn't get here.
+    default:
+      break;
+  }
+}
+
+
+Void TEncSearch::xTZSearch( const TComDataCU* const pcCU,
+                            const TComPattern* const pcPatternKey,
+                            const Pel* const         piRefY,
+                            const Int                iRefStride,
+                            const TComMv* const      pcMvSrchRngLT,
+                            const TComMv* const      pcMvSrchRngRB,
+                            TComMv&                  rcMv,
+                            Distortion&              ruiSAD,
+                            const TComMv* const      pIntegerMv2Nx2NPred,
+                            const Bool               bExtendedSettings)
+{
+  const Bool bUseAdaptiveRaster                      = bExtendedSettings;
+  const Int  iRaster                                 = 5;
+  const Bool bTestOtherPredictedMV                   = bExtendedSettings;
+  const Bool bTestZeroVector                         = true;
+  const Bool bTestZeroVectorStart                    = bExtendedSettings;
+  const Bool bTestZeroVectorStop                     = false;
+  const Bool bFirstSearchDiamond                     = true;  // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
+  const Bool bFirstCornersForDiamondDist1            = bExtendedSettings;
+  const Bool bFirstSearchStop                        = m_pcEncCfg->getFastMEAssumingSmootherMVEnabled();
+  const UInt uiFirstSearchRounds                     = 3;     // first search stop X rounds after best match (must be >=1)
+  const Bool bEnableRasterSearch                     = true;
+  const Bool bAlwaysRasterSearch                     = bExtendedSettings;  // true: BETTER but factor 2 slower
+  const Bool bRasterRefinementEnable                 = false; // enable either raster refinement or star refinement
+  const Bool bRasterRefinementDiamond                = false; // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
+  const Bool bRasterRefinementCornersForDiamondDist1 = bExtendedSettings;
+  const Bool bStarRefinementEnable                   = true;  // enable either star refinement or raster refinement
+  const Bool bStarRefinementDiamond                  = true;  // 1 = xTZ8PointDiamondSearch   0 = xTZ8PointSquareSearch
+  const Bool bStarRefinementCornersForDiamondDist1   = bExtendedSettings;
+  const Bool bStarRefinementStop                     = false;
+  const UInt uiStarRefinementRounds                  = 2;  // star refinement stop X rounds after best match (must be >=1)
+  const Bool bNewZeroNeighbourhoodTest               = bExtendedSettings;
+
+  UInt uiSearchRange = m_iSearchRange;
+  pcCU->clipMv( rcMv );
+#if ME_ENABLE_ROUNDING_OF_MVS
+  rcMv.divideByPowerOf2(2);
+#else
+  rcMv >>= 2;
+#endif
+  // init TZSearchStruct
+  IntTZSearchStruct cStruct;
+  cStruct.iBestX      = 0;
+  cStruct.iBestY      = 0;
+  cStruct.iYStride    = iRefStride;
+  cStruct.piRefY      = piRefY;
+  cStruct.uiBestSad   = MAX_UINT;
+
+  // set rcMv (Median predictor) as start point and as best point
+  xTZSearchHelp( pcPatternKey, cStruct, rcMv.getHor(), rcMv.getVer(), 0, 0 );
+
+  // test whether one of PRED_A, PRED_B, PRED_C MV is better start point than Median predictor
