@@ -98,3 +98,103 @@ UInt compCRC(Int bitdepth, const Pel* plane, UInt width, UInt height, UInt strid
     {
       // take CRC of first pictureData byte
       for(bitIdx=0; bitIdx<8; bitIdx++)
+      {
+        crcMsb = (crcVal >> 15) & 1;
+        bitVal = (plane[y*stride+x] >> (7 - bitIdx)) & 1;
+        crcVal = (((crcVal << 1) + bitVal) & 0xffff) ^ (crcMsb * 0x1021);
+      }
+      // take CRC of second pictureData byte if bit depth is greater than 8-bits
+      if(bitdepth > 8)
+      {
+        for(bitIdx=0; bitIdx<8; bitIdx++)
+        {
+          crcMsb = (crcVal >> 15) & 1;
+          bitVal = (plane[y*stride+x] >> (15 - bitIdx)) & 1;
+          crcVal = (((crcVal << 1) + bitVal) & 0xffff) ^ (crcMsb * 0x1021);
+        }
+      }
+    }
+  }
+  for(bitIdx=0; bitIdx<16; bitIdx++)
+  {
+    crcMsb = (crcVal >> 15) & 1;
+    crcVal = ((crcVal << 1) & 0xffff) ^ (crcMsb * 0x1021);
+  }
+
+  digest.hash.push_back((crcVal>>8)  & 0xff);
+  digest.hash.push_back( crcVal      & 0xff);
+  return 2;
+}
+
+UInt calcCRC(const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths)
+{
+  UInt digestLen=0;
+  digest.hash.clear();
+  for(Int chan=0; chan<pic.getNumberValidComponents(); chan++)
+  {
+    const ComponentID compID=ComponentID(chan);
+    digestLen=compCRC(bitDepths.recon[toChannelType(compID)], pic.getAddr(compID), pic.getWidth(compID), pic.getHeight(compID), pic.getStride(compID), digest);
+  }
+  return digestLen;
+}
+
+UInt compChecksum(Int bitdepth, const Pel* plane, UInt width, UInt height, UInt stride, TComPictureHash &digest, const BitDepths &/*bitDepths*/)
+{
+  UInt checksum = 0;
+  UChar xor_mask;
+
+  for (UInt y = 0; y < height; y++)
+  {
+    for (UInt x = 0; x < width; x++)
+    {
+      xor_mask = (x & 0xff) ^ (y & 0xff) ^ (x >> 8) ^ (y >> 8);
+      checksum = (checksum + ((plane[y*stride+x] & 0xff) ^ xor_mask)) & 0xffffffff;
+
+      if(bitdepth > 8)
+      {
+        checksum = (checksum + ((plane[y*stride+x]>>8) ^ xor_mask)) & 0xffffffff;
+      }
+    }
+  }
+
+  digest.hash.push_back((checksum>>24) & 0xff);
+  digest.hash.push_back((checksum>>16) & 0xff);
+  digest.hash.push_back((checksum>>8)  & 0xff);
+  digest.hash.push_back( checksum      & 0xff);
+  return 4;
+}
+
+UInt calcChecksum(const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths)
+{
+  UInt digestLen=0;
+  digest.hash.clear();
+  for(Int chan=0; chan<pic.getNumberValidComponents(); chan++)
+  {
+    const ComponentID compID=ComponentID(chan);
+    digestLen=compChecksum(bitDepths.recon[toChannelType(compID)], pic.getAddr(compID), pic.getWidth(compID), pic.getHeight(compID), pic.getStride(compID), digest, bitDepths);
+  }
+  return digestLen;
+}
+/**
+ * Calculate the MD5sum of pic, storing the result in digest.
+ * MD5 calculation is performed on Y' then Cb, then Cr; each in raster order.
+ * Pel data is inserted into the MD5 function in little-endian byte order,
+ * using sufficient bytes to represent the picture bitdepth.  Eg, 10bit data
+ * uses little-endian two byte words; 8bit data uses single byte words.
+ */
+UInt calcMD5(const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bitDepths)
+{
+  /* choose an md5_plane packing function based on the system bitdepth */
+  typedef Void (*MD5PlaneFunc)(MD5&, const Pel*, UInt, UInt, UInt);
+  MD5PlaneFunc md5_plane_func;
+
+  MD5 md5[MAX_NUM_COMPONENT];
+
+  digest.hash.clear();
+  for(Int chan=0; chan<pic.getNumberValidComponents(); chan++)
+  {
+    const ComponentID compID=ComponentID(chan);
+    md5_plane_func = bitDepths.recon[toChannelType(compID)] <= 8 ? (MD5PlaneFunc)md5_plane<1> : (MD5PlaneFunc)md5_plane<2>;
+    UChar tmp_digest[MD5_DIGEST_STRING_LENGTH];
+    md5_plane_func(md5[compID], pic.getAddr(compID), pic.getWidth(compID), pic.getHeight(compID), pic.getStride(compID));
+    md5[compID].finalize(tmp_digest);
