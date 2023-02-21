@@ -198,3 +198,30 @@ UInt calcMD5(const TComPicYuv& pic, TComPictureHash &digest, const BitDepths &bi
     UChar tmp_digest[MD5_DIGEST_STRING_LENGTH];
     md5_plane_func(md5[compID], pic.getAddr(compID), pic.getWidth(compID), pic.getHeight(compID), pic.getStride(compID));
     md5[compID].finalize(tmp_digest);
+    for(UInt i=0; i<MD5_DIGEST_STRING_LENGTH; i++)
+    {
+      digest.hash.push_back(tmp_digest[i]);
+    }
+  }
+  return 16;
+}
+
+std::string hashToString(const TComPictureHash &digest, Int numChar)
+{
+  static const TChar* hex = "0123456789abcdef";
+  std::string result;
+
+  for(Int pos=0; pos<Int(digest.hash.size()); pos++)
+  {
+    if ((pos % numChar) == 0 && pos!=0 )
+    {
+      result += ',';
+    }
+    result += hex[digest.hash[pos] >> 4];
+    result += hex[digest.hash[pos] & 0xf];
+  }
+
+  return result;
+}
+
+//! \}
