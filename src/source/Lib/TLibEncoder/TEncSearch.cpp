@@ -4198,3 +4198,103 @@ Void TEncSearch::xTZSearch( const TComDataCU* const pcCU,
     // test whether zero Mv is a better start point than Median predictor
     if ( bTestZeroVectorStart && ((cStruct.iBestX != 0) || (cStruct.iBestY != 0)) )
     {
+      xTZSearchHelp( pcPatternKey, cStruct, 0, 0, 0, 0 );
+      if ( (cStruct.iBestX == 0) && (cStruct.iBestY == 0) )
+      {
+        // test its neighborhood
+        for ( iDist = 1; iDist <= (Int)uiSearchRange; iDist*=2 )
+        {
+          xTZ8PointDiamondSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, 0, 0, iDist, false );
+          if ( bTestZeroVectorStop && (cStruct.uiBestRound > 0) ) // stop criterion
+          {
+            break;
+          }
+        }
+      }
+    }
+  }
+  else
+  {
+    // Test also zero neighbourhood but with half the range
+    // It was reported that the original (above) search scheme using bTestZeroVectorStart did not
+    // make sense since one would have already checked the zero candidate earlier
+    // and thus the conditions for that test would have not been satisfied
+    if (bTestZeroVectorStart == true && bBestCandidateZero != true)
+    {
+      for ( iDist = 1; iDist <= ((Int)uiSearchRange >> 1); iDist*=2 )
+      {
+        xTZ8PointDiamondSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, 0, 0, iDist, false );
+        if ( bTestZeroVectorStop && (cStruct.uiBestRound > 2) ) // stop criterion
+        {
+          break;
+        }
+      }
+    }
+  }
+
+  // calculate only 2 missing points instead 8 points if cStruct.uiBestDistance == 1
+  if ( cStruct.uiBestDistance == 1 )
+  {
+    cStruct.uiBestDistance = 0;
+    xTZ2PointSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB );
+  }
+
+  // raster search if distance is too big
+  if (bUseAdaptiveRaster)
+  {
+    Int   iWindowSize = iRaster;
+    Int   iSrchRngRasterLeft   = iSrchRngHorLeft;
+    Int   iSrchRngRasterRight  = iSrchRngHorRight;
+    Int   iSrchRngRasterTop    = iSrchRngVerTop;
+    Int   iSrchRngRasterBottom = iSrchRngVerBottom;
+
+    if (!(bEnableRasterSearch && ( ((Int)(cStruct.uiBestDistance) > iRaster))))
+    {
+      iWindowSize ++;
+      iSrchRngRasterLeft /= 2;
+      iSrchRngRasterRight /= 2;
+      iSrchRngRasterTop /= 2;
+      iSrchRngRasterBottom /= 2;
+    }
+    cStruct.uiBestDistance = iWindowSize;
+    for ( iStartY = iSrchRngRasterTop; iStartY <= iSrchRngRasterBottom; iStartY += iWindowSize )
+    {
+      for ( iStartX = iSrchRngRasterLeft; iStartX <= iSrchRngRasterRight; iStartX += iWindowSize )
+      {
+        xTZSearchHelp( pcPatternKey, cStruct, iStartX, iStartY, 0, iWindowSize );
+      }
+    }
+  }
+  else
+  {
+    if ( bEnableRasterSearch && ( ((Int)(cStruct.uiBestDistance) > iRaster) || bAlwaysRasterSearch ) )
+    {
+      cStruct.uiBestDistance = iRaster;
+      for ( iStartY = iSrchRngVerTop; iStartY <= iSrchRngVerBottom; iStartY += iRaster )
+      {
+        for ( iStartX = iSrchRngHorLeft; iStartX <= iSrchRngHorRight; iStartX += iRaster )
+        {
+          xTZSearchHelp( pcPatternKey, cStruct, iStartX, iStartY, 0, iRaster );
+        }
+      }
+    }
+  }
+
+  // raster refinement
+
+  if ( bRasterRefinementEnable && cStruct.uiBestDistance > 0 )
+  {
+    while ( cStruct.uiBestDistance > 0 )
+    {
+      iStartX = cStruct.iBestX;
+      iStartY = cStruct.iBestY;
+      if ( cStruct.uiBestDistance > 1 )
+      {
+        iDist = cStruct.uiBestDistance >>= 1;
+        if ( bRasterRefinementDiamond == 1 )
+        {
+          xTZ8PointDiamondSearch ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist, bRasterRefinementCornersForDiamondDist1 );
+        }
+        else
+        {
+          xTZ8PointSquareSearch  ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist );
