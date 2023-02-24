@@ -31,85 +31,70 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/** \file     TComList.h
-    \brief    general list class (header)
-*/
+/**
+ \file     NALread.cpp
+ \brief    reading functionality for NAL units
+ */
 
-#ifndef __TCOMLIST__
-#define __TCOMLIST__
 
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#include <vector>
+#include <algorithm>
+#include <ostream>
 
-#include <list>
-#include <assert.h>
-#include "CommonDef.h"
+#include "NALread.h"
+#include "TLibCommon/NAL.h"
+#include "TLibCommon/TComBitStream.h"
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+#include "TLibCommon/TComCodingStatistics.h"
+#endif
+#if ENC_DEC_TRACE && DEC_NUH_TRACE
+#include "TLibCommon/TComRom.h"
+#endif
 
-#include <cstdlib>
 using namespace std;
 
-//! \ingroup TLibCommon
+//! \ingroup TLibDecoder
 //! \{
-
-// ====================================================================================================================
-// Class definition
-// ====================================================================================================================
-
-/// list template
-template< class C >
-class TComList : public std::list< C > // NOTE: should not inherit from STL classes
+static Void convertPayloadToRBSP(vector<uint8_t>& nalUnitBuf, TComInputBitstream *bitstream, Bool isVclNalUnit)
 {
-public:
-  typedef typename std::list<C>::iterator TComIterator;
+  UInt zeroCount = 0;
+  vector<uint8_t>::iterator it_read, it_write;
 
-  TComList& operator += ( const TComList& rcTComList)
+  UInt pos = 0;
+  bitstream->clearEmulationPreventionByteLocation();
+  for (it_read = it_write = nalUnitBuf.begin(); it_read != nalUnitBuf.end(); it_read++, it_write++, pos++)
   {
-    if( ! rcTComList.empty() )
+    assert(zeroCount < 2 || *it_read >= 0x03);
+    if (zeroCount == 2 && *it_read == 0x03)
     {
-      insert( this->end(), rcTComList.begin(), rcTComList.end());
-    }
-    return *this;
-  } // leszek
-
-  C popBack()
-  {
-    C cT = this->back();
-    this->pop_back();
-    return cT;
-  }
-
-  C popFront()
-  {
-    C cT = this->front();
-    this->pop_front();
-    return cT;
-  }
-
-  Void pushBack( const C& rcT )
-  {
-    /*assert( sizeof(C) == 4);*/
-    if( rcT != NULL )
-    {
-      this->push_back( rcT);
-    }
-  }
-
-  Void pushFront( const C& rcT )
-  {
-    /*assert( sizeof(C) == 4);*/
-    if( rcT != NULL )
-    {
-      this->push_front( rcT);
-    }
-  }
-
-  TComIterator find( const C& rcT ) // leszek
-  {
-    return std::list< C >::find( this->begin(), this->end(), rcT );
-  }
-};
-
-//! \}
-
+      bitstream->pushEmulationPreventionByteLocation( pos );
+      pos++;
+      it_read++;
+      zeroCount = 0;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+      TComCodingStatistics::IncrementStatisticEP(STATS__EMULATION_PREVENTION_3_BYTES, 8, 0);
 #endif
+      if (it_read == nalUnitBuf.end())
+      {
+        break;
+      }
+      assert(*it_read <= 0x03);
+    }
+    zeroCount = (*it_read == 0x00) ? zeroCount+1 : 0;
+    *it_write = *it_read;
+  }
+  assert(zeroCount == 0);
+
+  if (isVclNalUnit)
+  {
+    // Remove cabac_zero_word from payload if present
+    Int n = 0;
+
+    while (it_write[-1] == 0x00)
+    {
+      it_write--;
+      n++;
+    }
+
+    if (n > 0)
+    {
