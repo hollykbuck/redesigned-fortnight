@@ -4498,3 +4498,103 @@ Void TEncSearch::xTZSearchSelective( const TComDataCU* const   pcCU,
   {
     // start refinement
     while ( cStruct.uiBestDistance > 0 )
+    {
+      iStartX = cStruct.iBestX;
+      iStartY = cStruct.iBestY;
+      cStruct.uiBestDistance = 0;
+      cStruct.ucPointNr = 0;
+      for ( iDist = 1; iDist < (Int)uiSearchRange + 1; iDist*=2 )
+      {
+        if ( bStarRefinementDiamond == 1 )
+        {
+          xTZ8PointDiamondSearch ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist, false );
+        }
+        else
+        {
+          xTZ8PointSquareSearch  ( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB, iStartX, iStartY, iDist );
+        }
+        if ( bStarRefinementStop && (cStruct.uiBestRound >= uiStarRefinementRounds) ) // stop criterion
+        {
+          break;
+        }
+      }
+
+      // calculate only 2 missing points instead 8 points if cStrukt.uiBestDistance == 1
+      if ( cStruct.uiBestDistance == 1 )
+      {
+        cStruct.uiBestDistance = 0;
+        if ( cStruct.ucPointNr != 0 )
+        {
+          xTZ2PointSearch( pcPatternKey, cStruct, pcMvSrchRngLT, pcMvSrchRngRB );
+        }
+      }
+    }
+  }
+
+  // write out best match
+  rcMv.set( cStruct.iBestX, cStruct.iBestY );
+  ruiSAD = cStruct.uiBestSad - m_pcRdCost->getCostOfVectorWithPredictor( cStruct.iBestX, cStruct.iBestY );
+
+}
+
+
+Void TEncSearch::xPatternSearchFracDIF(
+                                       Bool         bIsLosslessCoded,
+                                       TComPattern* pcPatternKey,
+                                       Pel*         piRefY,
+                                       Int          iRefStride,
+                                       TComMv*      pcMvInt,
+                                       TComMv&      rcMvHalf,
+                                       TComMv&      rcMvQter,
+                                       Distortion&  ruiCost
+                                      )
+{
+  //  Reference pattern initialization (integer scale)
+  TComPattern cPatternRoi;
+  Int         iOffset    = pcMvInt->getHor() + pcMvInt->getVer() * iRefStride;
+  cPatternRoi.initPattern(piRefY + iOffset,
+                          pcPatternKey->getROIYWidth(),
+                          pcPatternKey->getROIYHeight(),
+                          iRefStride,
+#if MCTS_ENC_CHECK
+                          pcPatternKey->getBitDepthY(),
+                          pcPatternKey->getROIYPosX(),
+                          pcPatternKey->getROIYPosY());
+#else
+                          pcPatternKey->getBitDepthY());
+#endif
+#if MCTS_ENC_CHECK
+  cPatternRoi.setTileBorders(pcPatternKey->getTileLeftTopPelPosX(), pcPatternKey->getTileLeftTopPelPosY(), pcPatternKey->getTileRightBottomPelPosX(), pcPatternKey->getTileRightBottomPelPosY());
+#endif
+
+  //  Half-pel refinement
+  xExtDIFUpSamplingH ( &cPatternRoi );
+
+  rcMvHalf = *pcMvInt;   rcMvHalf <<= 1;    // for mv-cost
+  TComMv baseRefMv(0, 0);
+  ruiCost = xPatternRefinement( pcPatternKey, baseRefMv, 2, rcMvHalf, !bIsLosslessCoded );
+
+  m_pcRdCost->setCostScale( 0 );
+
+  xExtDIFUpSamplingQ ( &cPatternRoi, rcMvHalf );
+  baseRefMv = rcMvHalf;
+  baseRefMv <<= 1;
+
+  rcMvQter = *pcMvInt;   rcMvQter <<= 1;    // for mv-cost
+  rcMvQter += rcMvHalf;  rcMvQter <<= 1;
+  ruiCost = xPatternRefinement( pcPatternKey, baseRefMv, 1, rcMvQter, !bIsLosslessCoded );
+}
+
+
+//! encode residual and calculate rate-distortion for a CU block
+Void TEncSearch::encodeResAndCalcRdInterCU( TComDataCU* pcCU, TComYuv* pcYuvOrg, TComYuv* pcYuvPred,
+                                            TComYuv* pcYuvResi, TComYuv* pcYuvResiBest, TComYuv* pcYuvRec,
+                                            Bool bSkipResidual DEBUG_STRING_FN_DECLARE(sDebug) )
+{
+  assert ( !pcCU->isIntra(0) );
+
+  const UInt cuWidthPixels      = pcCU->getWidth ( 0 );
+  const UInt cuHeightPixels     = pcCU->getHeight( 0 );
+  const Int  numValidComponents = pcCU->getPic()->getNumberValidComponents();
+  const TComSPS &sps=*(pcCU->getSlice()->getSPS());
+
