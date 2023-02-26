@@ -98,3 +98,103 @@ Void TComWeightPrediction::addWeightBi( const TComYuv              *pcYuvSrc0,
     const Pel* pSrc0       = pcYuvSrc0->getAddr( compID,  iPartUnitIdx );
     const Pel* pSrc1       = pcYuvSrc1->getAddr( compID,  iPartUnitIdx );
           Pel* pDst        = rpcYuvDst->getAddr( compID,  iPartUnitIdx );
+
+    // Luma : --------------------------------------------
+    const Int  w0          = wp0[compID].w;
+    const Int  offset      = wp0[compID].offset;
+    const Int  clipBD      = bitDepths.recon[toChannelType(compID)];
+    const Int  shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipBD));
+    const Int  shift       = wp0[compID].shift + shiftNum;
+    const Int  round       = (enableRounding[compID] && (shift > 0)) ? (1<<(shift-1)) : 0;
+    const Int  w1          = wp1[compID].w;
+    const UInt csx         = pcYuvSrc0->getComponentScaleX(compID);
+    const UInt csy         = pcYuvSrc0->getComponentScaleY(compID);
+    const Int  iHeight     = uiHeight>>csy;
+    const Int  iWidth      = uiWidth>>csx;
+
+    const UInt iSrc0Stride = pcYuvSrc0->getStride(compID);
+    const UInt iSrc1Stride = pcYuvSrc1->getStride(compID);
+    const UInt iDstStride  = rpcYuvDst->getStride(compID);
+
+    for ( Int y = iHeight-1; y >= 0; y-- )
+    {
+      // do it in batches of 4 (partial unroll)
+      Int x = iWidth-1;
+      for ( ; x >= 3; )
+      {
+        pDst[x] = weightBidir(w0,pSrc0[x], w1,pSrc1[x], round, shift, offset, clipBD); x--;
+        pDst[x] = weightBidir(w0,pSrc0[x], w1,pSrc1[x], round, shift, offset, clipBD); x--;
+        pDst[x] = weightBidir(w0,pSrc0[x], w1,pSrc1[x], round, shift, offset, clipBD); x--;
+        pDst[x] = weightBidir(w0,pSrc0[x], w1,pSrc1[x], round, shift, offset, clipBD); x--;
+      }
+      for( ; x >= 0; x-- )
+      {
+        pDst[x] = weightBidir(w0,pSrc0[x], w1,pSrc1[x], round, shift, offset, clipBD);
+      }
+
+      pSrc0 += iSrc0Stride;
+      pSrc1 += iSrc1Stride;
+      pDst  += iDstStride;
+    } // y loop
+  } // compID loop
+}
+
+
+//! weighted averaging for uni-pred
+Void TComWeightPrediction::addWeightUni( const TComYuv        *const pcYuvSrc0,
+                                         const BitDepths            &bitDepths,
+                                         const UInt                  iPartUnitIdx,
+                                         const UInt                  uiWidth,
+                                         const UInt                  uiHeight,
+                                         const WPScalingParam *const wp0,
+                                               TComYuv        *const pcYuvDst )
+{
+  const UInt numValidComponent = pcYuvSrc0->getNumberValidComponents();
+
+  for(Int componentIndex=0; componentIndex<numValidComponent; componentIndex++)
+  {
+    const ComponentID compID=ComponentID(componentIndex);
+
+    const Pel* pSrc0       = pcYuvSrc0->getAddr( compID,  iPartUnitIdx );
+          Pel* pDst        = pcYuvDst->getAddr( compID,  iPartUnitIdx );
+
+    // Luma : --------------------------------------------
+    const Int  w0          = wp0[compID].w;
+    const Int  offset      = wp0[compID].offset;
+    const Int  clipBD      = bitDepths.recon[toChannelType(compID)];
+    const Int  shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipBD));
+    const Int  shift       = wp0[compID].shift + shiftNum;
+    const UInt iSrc0Stride = pcYuvSrc0->getStride(compID);
+    const UInt iDstStride  = pcYuvDst->getStride(compID);
+    const UInt csx         = pcYuvSrc0->getComponentScaleX(compID);
+    const UInt csy         = pcYuvSrc0->getComponentScaleY(compID);
+    const Int  iHeight     = uiHeight>>csy;
+    const Int  iWidth      = uiWidth>>csx;
+
+    if (w0 != 1 << wp0[compID].shift)
+    {
+      const Int  round       = (shift > 0) ? (1<<(shift-1)) : 0;
+      for (Int y = iHeight-1; y >= 0; y-- )
+      {
+        Int x = iWidth-1;
+        for ( ; x >= 3; )
+        {
+          pDst[x] = weightUnidir(w0, pSrc0[x], round, shift, offset, clipBD); x--;
+          pDst[x] = weightUnidir(w0, pSrc0[x], round, shift, offset, clipBD); x--;
+          pDst[x] = weightUnidir(w0, pSrc0[x], round, shift, offset, clipBD); x--;
+          pDst[x] = weightUnidir(w0, pSrc0[x], round, shift, offset, clipBD); x--;
+        }
+        for( ; x >= 0; x--)
+        {
+          pDst[x] = weightUnidir(w0, pSrc0[x], round, shift, offset, clipBD);
+        }
+        pSrc0 += iSrc0Stride;
+        pDst  += iDstStride;
+      }
+    }
+    else
+    {
+      const Int  round       = (shiftNum > 0) ? (1<<(shiftNum-1)) : 0;
+      if (offset == 0)
+      {
+        for (Int y = iHeight-1; y >= 0; y-- )
