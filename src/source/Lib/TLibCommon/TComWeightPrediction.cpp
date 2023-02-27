@@ -198,3 +198,103 @@ Void TComWeightPrediction::addWeightUni( const TComYuv        *const pcYuvSrc0,
       if (offset == 0)
       {
         for (Int y = iHeight-1; y >= 0; y-- )
+        {
+          Int x = iWidth-1;
+          for ( ; x >= 3; )
+          {
+            pDst[x] = noWeightOffsetUnidir(pSrc0[x], round, shiftNum, clipBD); x--;
+            pDst[x] = noWeightOffsetUnidir(pSrc0[x], round, shiftNum, clipBD); x--;
+            pDst[x] = noWeightOffsetUnidir(pSrc0[x], round, shiftNum, clipBD); x--;
+            pDst[x] = noWeightOffsetUnidir(pSrc0[x], round, shiftNum, clipBD); x--;
+          }
+          for( ; x >= 0; x--)
+          {
+            pDst[x] = noWeightOffsetUnidir(pSrc0[x], round, shiftNum, clipBD);
+          }
+          pSrc0 += iSrc0Stride;
+          pDst  += iDstStride;
+        }
+      }
+      else
+      {
+        for (Int y = iHeight-1; y >= 0; y-- )
+        {
+          Int x = iWidth-1;
+          for ( ; x >= 3; )
+          {
+            pDst[x] = noWeightUnidir(pSrc0[x], round, shiftNum, offset, clipBD); x--;
+            pDst[x] = noWeightUnidir(pSrc0[x], round, shiftNum, offset, clipBD); x--;
+            pDst[x] = noWeightUnidir(pSrc0[x], round, shiftNum, offset, clipBD); x--;
+            pDst[x] = noWeightUnidir(pSrc0[x], round, shiftNum, offset, clipBD); x--;
+          }
+          for( ; x >= 0; x--)
+          {
+            pDst[x] = noWeightUnidir(pSrc0[x], round, shiftNum, offset, clipBD);
+          }
+          pSrc0 += iSrc0Stride;
+          pDst  += iDstStride;
+        }
+      }
+    }
+  }
+}
+
+
+//=======================================================
+//  getWpScaling()
+//=======================================================
+//! derivation of wp tables
+Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
+                                         const Int               iRefIdx0,
+                                         const Int               iRefIdx1,
+                                               WPScalingParam  *&wp0,
+                                               WPScalingParam  *&wp1)
+{
+  assert(iRefIdx0 >= 0 || iRefIdx1 >= 0);
+
+        TComSlice *const pcSlice  = pcCU->getSlice();
+  const Bool             wpBiPred = pcCU->getSlice()->getPPS()->getWPBiPred();
+  const Bool             bBiPred  = (iRefIdx0>=0 && iRefIdx1>=0);
+  const Bool             bUniPred = !bBiPred;
+
+  if ( bUniPred || wpBiPred )
+  { // explicit --------------------
+    if ( iRefIdx0 >= 0 )
+    {
+      pcSlice->getWpScaling(REF_PIC_LIST_0, iRefIdx0, wp0);
+    }
+    if ( iRefIdx1 >= 0 )
+    {
+      pcSlice->getWpScaling(REF_PIC_LIST_1, iRefIdx1, wp1);
+    }
+  }
+  else
+  {
+    assert(0);
+  }
+
+  if ( iRefIdx0 < 0 )
+  {
+    wp0 = NULL;
+  }
+  if ( iRefIdx1 < 0 )
+  {
+    wp1 = NULL;
+  }
+
+  const UInt numValidComponent                    = pcCU->getPic()->getNumberValidComponents();
+  const Bool bUseHighPrecisionPredictionWeighting = pcSlice->getSPS()->getSpsRangeExtension().getHighPrecisionOffsetsEnabledFlag();
+
+  if ( bBiPred )
+  { // Bi-predictive case
+    for ( Int yuv=0 ; yuv<numValidComponent ; yuv++ )
+    {
+      const Int bitDepth            = pcSlice->getSPS()->getBitDepth(toChannelType(ComponentID(yuv)));
+      const Int offsetScalingFactor = bUseHighPrecisionPredictionWeighting ? 1 : (1 << (bitDepth-8));
+
+      wp0[yuv].w      = wp0[yuv].iWeight;
+      wp1[yuv].w      = wp1[yuv].iWeight;
+      wp0[yuv].o      = wp0[yuv].iOffset * offsetScalingFactor;
+      wp1[yuv].o      = wp1[yuv].iOffset * offsetScalingFactor;
+      wp0[yuv].offset = wp0[yuv].o + wp1[yuv].o;
+      wp0[yuv].shift  = wp0[yuv].uiLog2WeightDenom + 1;
