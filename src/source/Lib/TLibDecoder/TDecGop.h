@@ -98,3 +98,12 @@ public:
   Void  decompressSlice(TComInputBitstream* pcBitstream, TComPic* pcPic );
   Void  filterPicture  (TComPic* pcPic );
 
+  Void setDecodedPictureHashSEIEnabled(Int enabled) { m_decodedPictureHashSEIEnabled = enabled; }
+  UInt getNumberOfChecksumErrorsDetected() const { return m_numberOfChecksumErrorsDetected; }
+
+};
+
+//! \}
+
+#endif // !defined(AFX_TDECGOP_H__29440B7A_7CC0_48C7_8DD5_1A531D3CED45__INCLUDED_)
+
