@@ -298,3 +298,93 @@ Void TComWeightPrediction::getWpScaling(       TComDataCU *const pcCU,
       wp1[yuv].o      = wp1[yuv].iOffset * offsetScalingFactor;
       wp0[yuv].offset = wp0[yuv].o + wp1[yuv].o;
       wp0[yuv].shift  = wp0[yuv].uiLog2WeightDenom + 1;
+      wp0[yuv].round  = (1 << wp0[yuv].uiLog2WeightDenom);
+      wp1[yuv].offset = wp0[yuv].offset;
+      wp1[yuv].shift  = wp0[yuv].shift;
+      wp1[yuv].round  = wp0[yuv].round;
+    }
+  }
+  else
+  {  // UniPred
+    WPScalingParam *const pwp = (iRefIdx0>=0) ? wp0 : wp1 ;
+
+    for ( Int yuv=0 ; yuv<numValidComponent ; yuv++ )
+    {
+      const Int bitDepth            = pcSlice->getSPS()->getBitDepth(toChannelType(ComponentID(yuv)));
+      const Int offsetScalingFactor = bUseHighPrecisionPredictionWeighting ? 1 : (1 << (bitDepth-8));
+
+      pwp[yuv].w      = pwp[yuv].iWeight;
+      pwp[yuv].offset = pwp[yuv].iOffset * offsetScalingFactor;
+      pwp[yuv].shift  = pwp[yuv].uiLog2WeightDenom;
+      pwp[yuv].round  = (pwp[yuv].uiLog2WeightDenom>=1) ? (1 << (pwp[yuv].uiLog2WeightDenom-1)) : (0);
+    }
+  }
+}
+
+
+//! weighted prediction for bi-pred
+Void TComWeightPrediction::xWeightedPredictionBi(       TComDataCU *const pcCU,
+                                                  const TComYuv    *const pcYuvSrc0,
+                                                  const TComYuv    *const pcYuvSrc1,
+                                                  const Int               iRefIdx0,
+                                                  const Int               iRefIdx1,
+                                                  const UInt              uiPartIdx,
+                                                  const Int               iWidth,
+                                                  const Int               iHeight,
+                                                        TComYuv          *rpcYuvDst )
+{
+  WPScalingParam  *pwp0;
+  WPScalingParam  *pwp1;
+
+  assert(pcCU->getSlice()->getPPS()->getWPBiPred());
+
+  getWpScaling(pcCU, iRefIdx0, iRefIdx1, pwp0, pwp1);
+
+  if( iRefIdx0 >= 0 && iRefIdx1 >= 0 )
+  {
+    addWeightBi(pcYuvSrc0, pcYuvSrc1, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp0, pwp1, rpcYuvDst );
+  }
+  else if ( iRefIdx0 >= 0 && iRefIdx1 <  0 )
+  {
+    addWeightUni( pcYuvSrc0, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp0, rpcYuvDst );
+  }
+  else if ( iRefIdx0 <  0 && iRefIdx1 >= 0 )
+  {
+    addWeightUni( pcYuvSrc1, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartIdx, iWidth, iHeight, pwp1, rpcYuvDst );
+  }
+  else
+  {
+    assert (0);
+  }
+}
+
+
+//! weighted prediction for uni-pred
+Void TComWeightPrediction::xWeightedPredictionUni(       TComDataCU *const pcCU,
+                                                   const TComYuv    *const pcYuvSrc,
+                                                   const UInt              uiPartAddr,
+                                                   const Int               iWidth,
+                                                   const Int               iHeight,
+                                                   const RefPicList        eRefPicList,
+                                                         TComYuv          *pcYuvPred,
+                                                   const Int               iRefIdx_input)
+{
+  WPScalingParam  *pwp, *pwpTmp;
+
+  Int iRefIdx=iRefIdx_input;
+  if ( iRefIdx < 0 )
+  {
+    iRefIdx   = pcCU->getCUMvField( eRefPicList )->getRefIdx( uiPartAddr );
+  }
+  assert (iRefIdx >= 0);
+
+  if ( eRefPicList == REF_PIC_LIST_0 )
+  {
+    getWpScaling(pcCU, iRefIdx, -1, pwp, pwpTmp);
+  }
+  else
+  {
+    getWpScaling(pcCU, -1, iRefIdx, pwpTmp, pwp);
+  }
+  addWeightUni( pcYuvSrc, pcCU->getSlice()->getSPS()->getBitDepths(), uiPartAddr, iWidth, iHeight, pwp, pcYuvPred );
+}
