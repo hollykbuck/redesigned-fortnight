@@ -98,3 +98,103 @@ public:
     SPHERE_ROTATION                      = 154,
     OMNI_VIEWPORT                        = 156,
     CUBEMAP_PROJECTION                   = 151,
+    FISHEYE_VIDEO_INFO                   = 152,
+    REGION_WISE_PACKING                  = 155, 
+    REGIONAL_NESTING                     = 157,
+#if MCTS_EXTRACTION
+    MCTS_EXTRACTION_INFO_SET             = 158,
+#endif
+#if JCTVC_AD0021_SEI_MANIFEST
+    SEI_MANIFEST                         = 200,
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    SEI_PREFIX_INDICATION                = 201,
+#endif
+    ANNOTATED_REGIONS                    = 202,
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+    SHUTTER_INTERVAL_INFO                = 203,
+#endif
+  };
+
+  SEI() {}
+  virtual ~SEI() {}
+
+  static const TChar *getSEIMessageString(SEI::PayloadType payloadType);
+
+  virtual PayloadType payloadType() const = 0;
+
+  static const std::vector <SEI::PayloadType> prefix_sei_messages;
+  static const std::vector <SEI::PayloadType> suffix_sei_messages;
+  static const std::vector <SEI::PayloadType> regional_nesting_sei_messages;
+};
+
+
+typedef std::list<SEI*> SEIMessages;
+
+/// output a selection of SEI messages by payload type. Ownership stays in original message list.
+SEIMessages getSeisByType(SEIMessages &seiList, SEI::PayloadType seiType);
+
+/// remove a selection of SEI messages by payload type from the original list and return them in a new list.
+SEIMessages extractSeisByType(SEIMessages &seiList, SEI::PayloadType seiType);
+
+/// delete list of SEI messages (freeing the referenced objects)
+Void deleteSEIs (SEIMessages &seiList);
+
+
+class SEIBufferingPeriod : public SEI
+{
+public:
+  PayloadType payloadType() const { return BUFFERING_PERIOD; }
+  void copyTo (SEIBufferingPeriod& target);
+
+  SEIBufferingPeriod()
+  : m_bpSeqParameterSetId (0)
+  , m_rapCpbParamsPresentFlag (false)
+  , m_cpbDelayOffset      (0)
+  , m_dpbDelayOffset      (0)
+  {
+    ::memset(m_initialCpbRemovalDelay, 0, sizeof(m_initialCpbRemovalDelay));
+    ::memset(m_initialCpbRemovalDelayOffset, 0, sizeof(m_initialCpbRemovalDelayOffset));
+    ::memset(m_initialAltCpbRemovalDelay, 0, sizeof(m_initialAltCpbRemovalDelay));
+    ::memset(m_initialAltCpbRemovalDelayOffset, 0, sizeof(m_initialAltCpbRemovalDelayOffset));
+  }
+  virtual ~SEIBufferingPeriod() {}
+
+  UInt m_bpSeqParameterSetId;
+  Bool m_rapCpbParamsPresentFlag;
+  UInt m_cpbDelayOffset;
+  UInt m_dpbDelayOffset;
+  UInt m_initialCpbRemovalDelay         [MAX_CPB_CNT][2];
+  UInt m_initialCpbRemovalDelayOffset   [MAX_CPB_CNT][2];
+  UInt m_initialAltCpbRemovalDelay      [MAX_CPB_CNT][2];
+  UInt m_initialAltCpbRemovalDelayOffset[MAX_CPB_CNT][2];
+  Bool m_concatenationFlag;
+  UInt m_auCpbRemovalDelayDelta;
+};
+
+
+class SEIPictureTiming : public SEI
+{
+public:
+  PayloadType payloadType() const { return PICTURE_TIMING; }
+  void copyTo (SEIPictureTiming& target);
+
+  SEIPictureTiming()
+  : m_picStruct               (0)
+  , m_sourceScanType          (0)
+  , m_duplicateFlag           (false)
+  , m_picDpbOutputDuDelay     (0)
+  {}
+  virtual ~SEIPictureTiming()
+  {
+  }
+
+  UInt  m_picStruct;
+  UInt  m_sourceScanType;
+  Bool  m_duplicateFlag;
+
+  UInt  m_auCpbRemovalDelay;
+  UInt  m_picDpbOutputDelay;
+  UInt  m_picDpbOutputDuDelay;
+  UInt  m_numDecodingUnitsMinus1;
+  Bool  m_duCommonCpbRemovalDelayFlag;
