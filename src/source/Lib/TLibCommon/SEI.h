@@ -198,3 +198,103 @@ public:
   UInt  m_picDpbOutputDuDelay;
   UInt  m_numDecodingUnitsMinus1;
   Bool  m_duCommonCpbRemovalDelayFlag;
+  UInt  m_duCommonCpbRemovalDelayMinus1;
+  std::vector<UInt> m_numNalusInDuMinus1;
+  std::vector<UInt> m_duCpbRemovalDelayMinus1;
+};
+
+
+class SEIPanScanRect : public SEI
+{
+public:
+  PayloadType payloadType() const { return PAN_SCAN_RECT; }
+
+  SEIPanScanRect() {}
+  virtual ~SEIPanScanRect() {}
+
+  struct PanScanRect
+  {
+    Int leftOffset;
+    Int rightOffset;
+    Int topOffset;
+    Int bottomOffset;
+  };
+
+  UInt m_panScanRectId;
+  Bool m_panScanRectCancelFlag;
+  std::vector<PanScanRect> m_panScanRectRegions;
+  Bool m_panScanRectPersistenceFlag;
+};
+
+
+class SEIFillerPayload : public SEI
+{
+public:
+  PayloadType payloadType() const { return FILLER_PAYLOAD; }
+
+  SEIFillerPayload() {}
+  virtual ~SEIFillerPayload() {}
+
+  UInt m_numFillerFFBytes;
+};
+
+
+class SEIUserDataRegistered : public SEI
+{
+public:
+  PayloadType payloadType() const { return USER_DATA_REGISTERED_ITU_T_T35; }
+
+  SEIUserDataRegistered() {}
+  virtual ~SEIUserDataRegistered() {}
+
+  UShort m_ituCountryCode;
+  std::vector<UChar> m_userData;
+};
+
+
+static const UInt ISO_IEC_11578_LEN=16;
+
+class SEIUserDataUnregistered : public SEI
+{
+public:
+  PayloadType payloadType() const { return USER_DATA_UNREGISTERED; }
+
+  SEIUserDataUnregistered() {}
+  virtual ~SEIUserDataUnregistered() { }
+
+  UChar m_uuid_iso_iec_11578[ISO_IEC_11578_LEN];
+  std::vector<UChar> m_userData;
+};
+
+
+class SEIRecoveryPoint : public SEI
+{
+public:
+  PayloadType payloadType() const { return RECOVERY_POINT; }
+
+  SEIRecoveryPoint() {}
+  virtual ~SEIRecoveryPoint() {}
+
+  Int  m_recoveryPocCnt;
+  Bool m_exactMatchingFlag;
+  Bool m_brokenLinkFlag;
+};
+
+
+class SEISceneInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SCENE_INFO; }
+
+  SEISceneInfo() {}
+  virtual ~SEISceneInfo() {}
+
+  Bool m_bSceneInfoPresentFlag;
+  Bool m_bPrevSceneIdValidFlag;
+  UInt m_sceneId;
+  UInt m_sceneTransitionType;
+  UInt m_secondSceneId;
+};
+
+
+class SEIPictureSnapshot : public SEI
