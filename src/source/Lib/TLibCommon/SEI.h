@@ -298,3 +298,103 @@ public:
 
 
 class SEIPictureSnapshot : public SEI
+{
+public:
+  PayloadType payloadType() const { return PICTURE_SNAPSHOT; }
+
+  SEIPictureSnapshot() {}
+  virtual ~SEIPictureSnapshot() {}
+
+  UInt m_snapshotId;
+};
+
+
+class SEIProgressiveRefinementSegmentStart : public SEI
+{
+public:
+  PayloadType payloadType() const { return PROGRESSIVE_REFINEMENT_SEGMENT_START; }
+
+  SEIProgressiveRefinementSegmentStart() {}
+  virtual ~SEIProgressiveRefinementSegmentStart() {}
+
+  UInt m_progressiveRefinementId;
+  UInt m_picOrderCntDelta;
+};
+
+
+class SEIProgressiveRefinementSegmentEnd: public SEI
+{
+public:
+  PayloadType payloadType() const { return PROGRESSIVE_REFINEMENT_SEGMENT_END; }
+
+  SEIProgressiveRefinementSegmentEnd() {}
+  virtual ~SEIProgressiveRefinementSegmentEnd() {}
+
+  UInt m_progressiveRefinementId;
+};
+
+
+class SEIFilmGrainCharacteristics: public SEI
+{
+public:
+  PayloadType payloadType() const { return FILM_GRAIN_CHARACTERISTICS; }
+
+  SEIFilmGrainCharacteristics() {}
+  virtual ~SEIFilmGrainCharacteristics() {}
+
+  Bool      m_filmGrainCharacteristicsCancelFlag;
+  UChar     m_filmGrainModelId;
+  Bool      m_separateColourDescriptionPresentFlag;
+  UChar     m_filmGrainBitDepthLumaMinus8;
+  UChar     m_filmGrainBitDepthChromaMinus8;
+  Bool      m_filmGrainFullRangeFlag;
+  UChar     m_filmGrainColourPrimaries;
+  UChar     m_filmGrainTransferCharacteristics;
+  UChar     m_filmGrainMatrixCoeffs;
+  UChar     m_blendingModeId;
+  UChar     m_log2ScaleFactor;
+
+  struct CompModelIntensityValues
+  {
+    UChar intensityIntervalLowerBound;
+    UChar intensityIntervalUpperBound;
+    std::vector<Int> compModelValue;
+  };
+
+  struct CompModel
+  {
+    Bool  bPresentFlag;
+    UChar numModelValues; // this must be the same as intensityValues[*].compModelValue.size()
+#if JVET_X0048_X0103_FILM_GRAIN
+    UInt  numIntensityIntervals;
+#endif
+    std::vector<CompModelIntensityValues> intensityValues;
+  };
+
+  CompModel m_compModel[MAX_NUM_COMPONENT];
+  Bool      m_filmGrainCharacteristicsPersistenceFlag;
+};
+
+
+class SEIPostFilterHint: public SEI
+{
+public:
+  PayloadType payloadType() const { return POST_FILTER_HINT; }
+
+  SEIPostFilterHint() {}
+  virtual ~SEIPostFilterHint() {}
+
+  UInt             m_filterHintSizeY;
+  UInt             m_filterHintSizeX;
+  UInt             m_filterHintType;
+  Bool             m_bIsMonochrome;
+  std::vector<Int> m_filterHintValues; // values stored in linear array, [ ( ( component * sizeY + y ) * SizeX ) + x ]
+};
+
+
+class SEIToneMappingInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return TONE_MAPPING_INFO; }
+  SEIToneMappingInfo() {}
+  virtual ~SEIToneMappingInfo() {}
