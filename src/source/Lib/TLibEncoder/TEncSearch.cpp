@@ -4998,3 +4998,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
               }
 
               DEBUG_STRING_NEW(sSingleStringTest)
+
+              if( currAbsSum > 0 ) //if non-zero coefficients are present, a residual needs to be derived for further prediction
+              {
+                if (isFirstMode)
+                {
+                  m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_ROOT ] );
+                  m_pcEntropyCoder->resetBits();
+                }
+
+                m_pcEntropyCoder->encodeQtCbf( TUIterator, compID, true );
+
+                if (isCrossCPredictionAvailable)
+                {
+                  m_pcEntropyCoder->encodeCrossComponentPrediction( TUIterator, compID );
+                }
+
+                m_pcEntropyCoder->encodeCoeffNxN( TUIterator, currentCoefficients, compID );
+                currCompBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+
+                pcResiCurrComp = m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 );
+
+                m_pcTrQuant->invTransformNxN( TUIterator, compID, pcResiCurrComp, m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID), currentCoefficients, cQP DEBUG_STRING_PASS_INTO_OPTIONAL(&sSingleStringTest, (DebugOptionList::DebugString_InvTran.getInt()&debugPredModeMask)) );
+
+                if (bUseCrossCPrediction)
+                {
+                  TComTrQuant::crossComponentPrediction(TUIterator,
+                                                        compID,
+                                                        pLumaResi,
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix(compID, tuCompRect.x0, tuCompRect.y0),
+                                                        tuCompRect.width,
+                                                        tuCompRect.height,
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(COMPONENT_Y),
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID     ),
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID     ),
+                                                        true);
+                }
+
+                currCompDist = m_pcRdCost->getDistPart( channelBitDepth, m_pcQTTempTComYuv[uiQTTempAccessLayer].getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ),
+                                                        m_pcQTTempTComYuv[uiQTTempAccessLayer].getStride(compID),
+                                                        pcResi->getAddrPix( compID, tuCompRect.x0, tuCompRect.y0 ),
+                                                        pcResi->getStride(compID),
+                                                        tuCompRect.width, tuCompRect.height, compID);
+
+                currCompCost = m_pcRdCost->calcRdCost(currCompBits, currCompDist);
+                  
+                if (pcCU->isLosslessCoded(0))
+                {
+                  nonCoeffCost = MAX_DOUBLE;
+                }
+              }
+              else if ((transformSkipModeId == 1) && !bUseCrossCPrediction)
+              {
+                currCompCost = MAX_DOUBLE;
+              }
+              else
+              {
+                currCompBits = nonCoeffBits;
+                currCompDist = nonCoeffDist;
+                currCompCost = nonCoeffCost;
+              }
+
+              // evaluate
+              if ((currCompCost < minCost[compID][subTUIndex]) || ((transformSkipModeId == 1) && (currCompCost == minCost[compID][subTUIndex])))
+              {
+                bestExplicitRdpcmModeUnSplit[compID][subTUIndex] = pcCU->getExplicitRdpcmMode(compID, subTUAbsPartIdx);
+
+                if(isFirstMode) //check for forced null
+                {
+                  if((nonCoeffCost < currCompCost) || (currAbsSum == 0))
+                  {
+                    memset(currentCoefficients, 0, (sizeof(TCoeff) * tuCompRect.width * tuCompRect.height));
+
+                    currAbsSum   = 0;
+                    currCompBits = nonCoeffBits;
+                    currCompDist = nonCoeffDist;
+                    currCompCost = nonCoeffCost;
+                  }
+                }
+
+#if DEBUG_STRING
+                if (currAbsSum > 0)
+                {
+                  DEBUG_STRING_SWAP(sSingleStringComp[compID], sSingleStringTest)
+                }
+                else
+                {
+                  sSingleStringComp[compID].clear();
+                }
+#endif
+
+                uiAbsSum                 [compID][subTUIndex] = currAbsSum;
+                uiSingleDistComp         [compID][subTUIndex] = currCompDist;
+                minCost                  [compID][subTUIndex] = currCompCost;
+                uiBestTransformMode      [compID][subTUIndex] = transformSkipModeId;
+                bestCrossCPredictionAlpha[compID][subTUIndex] = (crossCPredictionModeId == 1) ? pcCU->getCrossComponentPredictionAlpha(subTUAbsPartIdx, compID) : 0;
+
+                if (uiAbsSum[compID][subTUIndex] == 0)
+                {
+                  if (bUseCrossCPrediction)
