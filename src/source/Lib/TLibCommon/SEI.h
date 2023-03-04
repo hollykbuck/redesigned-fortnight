@@ -498,3 +498,103 @@ class SEISOPDescription : public SEI
 public:
   PayloadType payloadType() const { return SOP_DESCRIPTION; }
 
+  SEISOPDescription() {}
+  virtual ~SEISOPDescription() {}
+
+  UInt m_sopSeqParameterSetId;
+  UInt m_numPicsInSopMinus1;
+
+  UInt m_sopDescVclNaluType[MAX_NUM_PICS_IN_SOP];
+  UInt m_sopDescTemporalId[MAX_NUM_PICS_IN_SOP];
+  UInt m_sopDescStRpsIdx[MAX_NUM_PICS_IN_SOP];
+  Int m_sopDescPocDelta[MAX_NUM_PICS_IN_SOP];
+};
+
+
+class SEIActiveParameterSets : public SEI
+{
+public:
+  PayloadType payloadType() const { return ACTIVE_PARAMETER_SETS; }
+
+  SEIActiveParameterSets()
+    : activeVPSId            (0)
+    , m_selfContainedCvsFlag (false)
+    , m_noParameterSetUpdateFlag (false)
+    , numSpsIdsMinus1        (0)
+  {}
+  virtual ~SEIActiveParameterSets() {}
+
+  Int activeVPSId;
+  Bool m_selfContainedCvsFlag;
+  Bool m_noParameterSetUpdateFlag;
+  Int numSpsIdsMinus1;
+  std::vector<Int> activeSeqParameterSetId;
+};
+
+
+class SEIDecodingUnitInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return DECODING_UNIT_INFO; }
+
+  SEIDecodingUnitInfo()
+    : m_decodingUnitIdx(0)
+    , m_duSptCpbRemovalDelay(0)
+    , m_dpbOutputDuDelayPresentFlag(false)
+    , m_picSptDpbOutputDuDelay(0)
+  {}
+  virtual ~SEIDecodingUnitInfo() {}
+  Int m_decodingUnitIdx;
+  Int m_duSptCpbRemovalDelay;
+  Bool m_dpbOutputDuDelayPresentFlag;
+  Int m_picSptDpbOutputDuDelay;
+};
+
+
+class SEITemporalLevel0Index : public SEI
+{
+public:
+  PayloadType payloadType() const { return TEMPORAL_LEVEL0_INDEX; }
+
+  SEITemporalLevel0Index()
+    : tl0Idx(0)
+    , rapIdx(0)
+    {}
+  virtual ~SEITemporalLevel0Index() {}
+
+  UInt tl0Idx;
+  UInt rapIdx;
+};
+
+
+class SEIDecodedPictureHash : public SEI
+{
+public:
+  PayloadType payloadType() const { return DECODED_PICTURE_HASH; }
+
+  SEIDecodedPictureHash() {}
+  virtual ~SEIDecodedPictureHash() {}
+
+  HashType method;
+
+  TComPictureHash m_pictureHash;
+};
+
+
+class SEIScalableNesting : public SEI
+{
+public:
+  PayloadType payloadType() const { return SCALABLE_NESTING; }
+
+  SEIScalableNesting() {}
+
+  virtual ~SEIScalableNesting()
+  {
+    deleteSEIs(m_nestedSEIs);
+  }
+
+  Bool  m_bitStreamSubsetFlag;
+  Bool  m_nestingOpFlag;
+  Bool  m_defaultOpFlag;                             //value valid if m_nestingOpFlag != 0
+  UInt  m_nestingNumOpsMinus1;                       // -"-
+  UInt  m_nestingMaxTemporalIdPlus1[MAX_TLAYER];     // -"-
