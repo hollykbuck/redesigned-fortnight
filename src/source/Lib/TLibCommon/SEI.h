@@ -398,3 +398,103 @@ public:
   PayloadType payloadType() const { return TONE_MAPPING_INFO; }
   SEIToneMappingInfo() {}
   virtual ~SEIToneMappingInfo() {}
+
+  Int    m_toneMapId;
+  Bool   m_toneMapCancelFlag;
+  Bool   m_toneMapPersistenceFlag;
+  Int    m_codedDataBitDepth;
+  Int    m_targetBitDepth;
+  Int    m_modelId;
+  Int    m_minValue;
+  Int    m_maxValue;
+  Int    m_sigmoidMidpoint;
+  Int    m_sigmoidWidth;
+  std::vector<Int> m_startOfCodedInterval;
+  Int    m_numPivots;
+  std::vector<Int> m_codedPivotValue;
+  std::vector<Int> m_targetPivotValue;
+  Int    m_cameraIsoSpeedIdc;
+  Int    m_cameraIsoSpeedValue;
+  Int    m_exposureIndexIdc;
+  Int    m_exposureIndexValue;
+  Bool   m_exposureCompensationValueSignFlag;
+  Int    m_exposureCompensationValueNumerator;
+  Int    m_exposureCompensationValueDenomIdc;
+  Int    m_refScreenLuminanceWhite;
+  Int    m_extendedRangeWhiteLevel;
+  Int    m_nominalBlackLevelLumaCodeValue;
+  Int    m_nominalWhiteLevelLumaCodeValue;
+  Int    m_extendedWhiteLevelLumaCodeValue;
+};
+
+
+class SEIFramePacking : public SEI
+{
+public:
+  PayloadType payloadType() const { return FRAME_PACKING; }
+
+  SEIFramePacking() {}
+  virtual ~SEIFramePacking() {}
+
+  Int  m_arrangementId;
+  Bool m_arrangementCancelFlag;
+  Int  m_arrangementType;
+  Bool m_quincunxSamplingFlag;
+  Int  m_contentInterpretationType;
+  Bool m_spatialFlippingFlag;
+  Bool m_frame0FlippedFlag;
+  Bool m_fieldViewsFlag;
+  Bool m_currentFrameIsFrame0Flag;
+  Bool m_frame0SelfContainedFlag;
+  Bool m_frame1SelfContainedFlag;
+  Int  m_frame0GridPositionX;
+  Int  m_frame0GridPositionY;
+  Int  m_frame1GridPositionX;
+  Int  m_frame1GridPositionY;
+  Int  m_arrangementReservedByte;
+  Bool m_arrangementPersistenceFlag;
+  Bool m_upsampledAspectRatio;
+};
+
+
+class SEIDisplayOrientation : public SEI
+{
+public:
+  PayloadType payloadType() const { return DISPLAY_ORIENTATION; }
+
+  SEIDisplayOrientation()
+    : cancelFlag(true)
+    , persistenceFlag(0)
+    , extensionFlag(false)
+    {}
+  virtual ~SEIDisplayOrientation() {}
+
+  Bool cancelFlag;
+  Bool horFlip;
+  Bool verFlip;
+
+  UInt anticlockwiseRotation;
+  Bool persistenceFlag;
+  Bool extensionFlag;
+};
+
+
+class SEIGreenMetadataInfo : public SEI
+{
+public:
+    PayloadType payloadType() const { return GREEN_METADATA; }
+    SEIGreenMetadataInfo() {}
+
+    virtual ~SEIGreenMetadataInfo() {}
+
+    UInt m_greenMetadataType;
+    UInt m_xsdMetricType;
+    UInt m_xsdMetricValue;
+};
+
+
+class SEISOPDescription : public SEI
+{
+public:
+  PayloadType payloadType() const { return SOP_DESCRIPTION; }
+
