@@ -598,3 +598,103 @@ public:
   Bool  m_defaultOpFlag;                             //value valid if m_nestingOpFlag != 0
   UInt  m_nestingNumOpsMinus1;                       // -"-
   UInt  m_nestingMaxTemporalIdPlus1[MAX_TLAYER];     // -"-
+  UInt  m_nestingOpIdx[MAX_NESTING_NUM_OPS];         // -"-
+
+  Bool  m_allLayersFlag;                             //value valid if m_nestingOpFlag == 0
+  UInt  m_nestingNoOpMaxTemporalIdPlus1;             //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0
+  UInt  m_nestingNumLayersMinus1;                    //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0
+  UChar m_nestingLayerId[MAX_NESTING_NUM_LAYER];     //value valid if m_nestingOpFlag == 0 and m_allLayersFlag == 0. This can e.g. be a static array of 64 UChar values
+
+  SEIMessages m_nestedSEIs;
+};
+
+
+class SEIRegionRefreshInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return REGION_REFRESH_INFO; }
+
+  SEIRegionRefreshInfo()
+    : m_gdrForegroundFlag(0)
+  {}
+  virtual ~SEIRegionRefreshInfo() {}
+
+  Bool m_gdrForegroundFlag;
+};
+
+
+class SEINoDisplay : public SEI
+{
+public:
+  PayloadType payloadType() const { return NO_DISPLAY; }
+
+  SEINoDisplay()
+    : m_noDisplay(false)
+  {}
+  virtual ~SEINoDisplay() {}
+
+  Bool m_noDisplay;
+};
+
+
+class SEITimeCode : public SEI
+{
+public:
+  PayloadType payloadType() const { return TIME_CODE; }
+  SEITimeCode() {}
+  virtual ~SEITimeCode(){}
+
+  UInt numClockTs;
+  TComSEITimeSet timeSetArray[MAX_TIMECODE_SEI_SETS];
+};
+
+
+class SEIMasteringDisplayColourVolume : public SEI
+{
+public:
+    PayloadType payloadType() const { return MASTERING_DISPLAY_COLOUR_VOLUME; }
+    SEIMasteringDisplayColourVolume() {}
+    virtual ~SEIMasteringDisplayColourVolume(){}
+
+    TComSEIMasteringDisplay values;
+};
+
+
+class SEISegmentedRectFramePacking : public SEI
+{
+public:
+  PayloadType payloadType() const { return SEGM_RECT_FRAME_PACKING; }
+
+  SEISegmentedRectFramePacking() {}
+  virtual ~SEISegmentedRectFramePacking() {}
+
+  Bool m_arrangementCancelFlag;
+  Int  m_contentInterpretationType;
+  Bool m_arrangementPersistenceFlag;
+};
+
+
+//definition according to P1005_v1;
+class SEITempMotionConstrainedTileSets: public SEI
+{
+  class TileSetData
+  {
+    protected:
+      std::vector<Int> m_top_left_tile_index;  //[tileSetIdx][tileIdx];
+      std::vector<Int> m_bottom_right_tile_index;
+
+    public:
+      Int     m_mcts_id;
+      Bool    m_display_tile_set_flag;
+      Int     m_num_tile_rects_in_set; //_minus1;
+      Bool    m_exact_sample_value_match_flag;
+      Bool    m_mcts_tier_level_idc_present_flag;
+      Bool    m_mcts_tier_flag;
+      Int     m_mcts_level_idc;
+
+      Void setNumberOfTileRects(const Int number)
+      {
+        m_top_left_tile_index    .resize(number);
+        m_bottom_right_tile_index.resize(number);
+      }
+
