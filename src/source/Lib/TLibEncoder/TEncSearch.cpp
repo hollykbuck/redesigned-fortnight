@@ -5298,3 +5298,103 @@ Void TEncSearch::xEstimateInterResidualQT( TComYuv    *pcResi,
     {
       rdCost += dSubdivCost;
       ruiBits += uiSubdivBits;
+      ruiDist += uiSubdivDist;
+#if DEBUG_STRING
+      for(UInt ch = 0; ch < numValidComp; ch++)
+      {
+        DEBUG_STRING_APPEND(sDebug, debug_reorder_data_inter_token[ch])
+        DEBUG_STRING_APPEND(sDebug, sSplitString[ch])
+      }
+#endif
+    }
+    else
+    {
+      rdCost  += dSingleCost;
+      ruiBits += uiSingleBits;
+      ruiDist += uiSingleDist;
+
+      //restore state to unsplit
+
+      pcCU->setTrIdxSubParts( uiTrMode, uiAbsPartIdx, uiDepth );
+
+      for(UInt ch = 0; ch < numValidComp; ch++)
+      {
+        const ComponentID compID=ComponentID(ch);
+
+        DEBUG_STRING_APPEND(sDebug, debug_reorder_data_inter_token[ch])
+        if (rTu.ProcessComponentSection(compID))
+        {
+          DEBUG_STRING_APPEND(sDebug, sSingleStringComp[compID])
+
+          const Bool splitIntoSubTUs   = rTu.getRect(compID).width != rTu.getRect(compID).height;
+          const UInt numberOfSections  = splitIntoSubTUs ? 2 : 1;
+          const UInt partIdxesPerSubTU = rTu.GetAbsPartIdxNumParts(compID) >> (splitIntoSubTUs ? 1 : 0);
+
+          for (UInt subTUIndex = 0; subTUIndex < numberOfSections; subTUIndex++)
+          {
+            const UInt  uisubTUPartIdx = uiAbsPartIdx + (subTUIndex * partIdxesPerSubTU);
+
+            if (splitIntoSubTUs)
+            {
+              const UChar combinedCBF = (bestsubTUCBF[compID][subTUIndex] << subTUDepth) | (bestCBF[compID] << uiTrMode);
+              pcCU->setCbfPartRange(combinedCBF, compID, uisubTUPartIdx, partIdxesPerSubTU);
+            }
+            else
+            {
+              pcCU->setCbfPartRange((bestCBF[compID] << uiTrMode), compID, uisubTUPartIdx, partIdxesPerSubTU);
+            }
+
+            pcCU->setCrossComponentPredictionAlphaPartRange(bestCrossCPredictionAlpha[compID][subTUIndex], compID, uisubTUPartIdx, partIdxesPerSubTU);
+            pcCU->setTransformSkipPartRange(uiBestTransformMode[compID][subTUIndex], compID, uisubTUPartIdx, partIdxesPerSubTU);
+            pcCU->setExplicitRdpcmModePartRange(bestExplicitRdpcmModeUnSplit[compID][subTUIndex], compID, uisubTUPartIdx, partIdxesPerSubTU);
+          }
+        }
+      }
+
+      m_pcRDGoOnSbacCoder->load( m_pppcRDSbacCoder[ uiDepth ][ CI_QT_TRAFO_TEST ] );
+    }
+  }
+  else
+  {
+    rdCost  += dSingleCost;
+    ruiBits += uiSingleBits;
+    ruiDist += uiSingleDist;
+#if DEBUG_STRING
+    for(UInt ch = 0; ch < numValidComp; ch++)
+    {
+      const ComponentID compID=ComponentID(ch);
+      DEBUG_STRING_APPEND(sDebug, debug_reorder_data_inter_token[compID])
+
+      if (rTu.ProcessComponentSection(compID))
+      {
+        DEBUG_STRING_APPEND(sDebug, sSingleStringComp[compID])
+      }
+    }
+#endif
+  }
+  DEBUG_STRING_APPEND(sDebug, debug_reorder_data_inter_token[MAX_NUM_COMPONENT])
+}
+
+
+
+Void TEncSearch::xEncodeInterResidualQT( const ComponentID compID, TComTU &rTu )
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+  const UInt uiCurrTrMode = rTu.GetTransformDepthRel();
+  assert( pcCU->getDepth( 0 ) == pcCU->getDepth( uiAbsPartIdx ) );
+  const UInt uiTrMode = pcCU->getTransformIdx( uiAbsPartIdx );
+
+  const Bool bSubdiv = uiCurrTrMode != uiTrMode;
+
+  const UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+
+  if (compID==MAX_NUM_COMPONENT)  // we are not processing a channel, instead we always recurse and code the CBFs
+  {
+    if( uiLog2TrSize <= pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() && uiLog2TrSize > pcCU->getQuadtreeTULog2MinSizeInCU(uiAbsPartIdx) )
+    {
+      if((pcCU->getSlice()->getSPS()->getQuadtreeTUMaxDepthInter() == 1) && (pcCU->getPartitionSize(uiAbsPartIdx) != SIZE_2Nx2N))
+      {
+        assert(bSubdiv); // Inferred splitting rule - see derivation and use of interSplitFlag in the specification.
+      }
+      else
