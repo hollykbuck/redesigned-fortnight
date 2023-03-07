@@ -698,3 +698,103 @@ class SEITempMotionConstrainedTileSets: public SEI
         m_bottom_right_tile_index.resize(number);
       }
 
+      Int  getNumberOfTileRects() const
+      {
+        assert(m_top_left_tile_index.size() == m_bottom_right_tile_index.size());
+        return Int(m_top_left_tile_index.size());
+      }
+
+            Int &topLeftTileIndex    (const Int tileRectIndex)       { return m_top_left_tile_index    [tileRectIndex]; }
+            Int &bottomRightTileIndex(const Int tileRectIndex)       { return m_bottom_right_tile_index[tileRectIndex]; }
+      const Int &topLeftTileIndex    (const Int tileRectIndex) const { return m_top_left_tile_index    [tileRectIndex]; }
+      const Int &bottomRightTileIndex(const Int tileRectIndex) const { return m_bottom_right_tile_index[tileRectIndex]; }
+  };
+
+protected:
+  std::vector<TileSetData> m_tile_set_data;
+
+public:
+
+  Bool    m_mc_all_tiles_exact_sample_value_match_flag;
+  Bool    m_each_tile_one_tile_set_flag;
+  Bool    m_limited_tile_set_display_flag;
+  Bool    m_max_mcs_tier_level_idc_present_flag;
+  Bool    m_max_mcts_tier_flag;
+  Int     m_max_mcts_level_idc;
+
+  PayloadType payloadType() const { return TEMP_MOTION_CONSTRAINED_TILE_SETS; }
+  SEITempMotionConstrainedTileSets() { }
+  virtual ~SEITempMotionConstrainedTileSets() { }
+
+  Void setNumberOfTileSets(const Int number)       { m_tile_set_data.resize(number);     }
+  Int  getNumberOfTileSets()                 const { return Int(m_tile_set_data.size()); }
+
+        TileSetData &tileSetData (const Int index)       { return m_tile_set_data[index]; }
+  const TileSetData &tileSetData (const Int index) const { return m_tile_set_data[index]; }
+
+};
+
+
+class SEIChromaResamplingFilterHint : public SEI
+{
+public:
+  PayloadType payloadType() const {return CHROMA_RESAMPLING_FILTER_HINT;}
+  SEIChromaResamplingFilterHint() {}
+  virtual ~SEIChromaResamplingFilterHint() {}
+
+  Int                            m_verChromaFilterIdc;
+  Int                            m_horChromaFilterIdc;
+  Bool                           m_verFilteringFieldProcessingFlag;
+  Int                            m_targetFormatIdc;
+  Bool                           m_perfectReconstructionFlag;
+  std::vector<std::vector<Int> > m_verFilterCoeff;
+  std::vector<std::vector<Int> > m_horFilterCoeff;
+};
+
+
+class SEIKneeFunctionInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return KNEE_FUNCTION_INFO; }
+  SEIKneeFunctionInfo() {}
+  virtual ~SEIKneeFunctionInfo() {}
+
+  Int   m_kneeId;
+  Bool  m_kneeCancelFlag;
+  Bool  m_kneePersistenceFlag;
+  Int   m_kneeInputDrange;
+  Int   m_kneeInputDispLuminance;
+  Int   m_kneeOutputDrange;
+  Int   m_kneeOutputDispLuminance;
+  Int   m_kneeNumKneePointsMinus1;
+  std::vector<Int> m_kneeInputKneePoint;
+  std::vector<Int> m_kneeOutputKneePoint;
+};
+
+class SEIContentColourVolume : public SEI
+{
+public:
+  PayloadType payloadType() const { return CONTENT_COLOUR_VOLUME; }
+  SEIContentColourVolume() {}
+  virtual ~SEIContentColourVolume() {}
+
+  Bool    m_ccvCancelFlag;
+  Bool    m_ccvPersistenceFlag;
+  Bool    m_ccvPrimariesPresentFlag;
+  Bool    m_ccvMinLuminanceValuePresentFlag;
+  Bool    m_ccvMaxLuminanceValuePresentFlag;
+  Bool    m_ccvAvgLuminanceValuePresentFlag;
+  Int     m_ccvPrimariesX[MAX_NUM_COMPONENT];
+  Int     m_ccvPrimariesY[MAX_NUM_COMPONENT];
+  UInt    m_ccvMinLuminanceValue;
+  UInt    m_ccvMaxLuminanceValue;
+  UInt    m_ccvAvgLuminanceValue;
+};
+
+class SEIEquirectangularProjection : public SEI
+{
+public:
+  PayloadType payloadType() const { return EQUIRECTANGULAR_PROJECTION; }
+
+  SEIEquirectangularProjection()  {}
+  virtual ~SEIEquirectangularProjection() {}
