@@ -5398,3 +5398,103 @@ Void TEncSearch::xEncodeInterResidualQT( const ComponentID compID, TComTU &rTu )
         assert(bSubdiv); // Inferred splitting rule - see derivation and use of interSplitFlag in the specification.
       }
       else
+      {
+        m_pcEntropyCoder->encodeTransformSubdivFlag( bSubdiv, 5 - uiLog2TrSize );
+      }
+    }
+
+    assert( !pcCU->isIntra(uiAbsPartIdx) );
+
+    const Bool bFirstCbfOfCU = uiCurrTrMode == 0;
+
+    for (UInt ch=COMPONENT_Cb; ch<pcCU->getPic()->getNumberValidComponents(); ch++)
+    {
+      const ComponentID compIdInner=ComponentID(ch);
+      if( bFirstCbfOfCU || rTu.ProcessingAllQuadrants(compIdInner) )
+      {
+        if( bFirstCbfOfCU || pcCU->getCbf( uiAbsPartIdx, compIdInner, uiCurrTrMode - 1 ) )
+        {
+          m_pcEntropyCoder->encodeQtCbf( rTu, compIdInner, !bSubdiv );
+        }
+      }
+      else
+      {
+        assert( pcCU->getCbf( uiAbsPartIdx, compIdInner, uiCurrTrMode ) == pcCU->getCbf( uiAbsPartIdx, compIdInner, uiCurrTrMode - 1 ) );
+      }
+    }
+
+    if (!bSubdiv)
+    {
+      m_pcEntropyCoder->encodeQtCbf( rTu, COMPONENT_Y, true );
+    }
+  }
+
+  if( !bSubdiv )
+  {
+    if (compID != MAX_NUM_COMPONENT) // we have already coded the CBFs, so now we code coefficients
+    {
+      if (rTu.ProcessComponentSection(compID))
+      {
+        if (isChroma(compID) && (pcCU->getCbf(uiAbsPartIdx, COMPONENT_Y, uiTrMode) != 0))
+        {
+          m_pcEntropyCoder->encodeCrossComponentPrediction(rTu, compID);
+        }
+
+        if (pcCU->getCbf(uiAbsPartIdx, compID, uiTrMode) != 0)
+        {
+          const UInt uiQTTempAccessLayer = pcCU->getSlice()->getSPS()->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+          TCoeff *pcCoeffCurr = m_ppcQTTempCoeff[compID][uiQTTempAccessLayer] + rTu.getCoefficientOffset(compID);
+          m_pcEntropyCoder->encodeCoeffNxN( rTu, pcCoeffCurr, compID );
+        }
+      }
+    }
+  }
+  else
+  {
+    if( compID==MAX_NUM_COMPONENT || pcCU->getCbf( uiAbsPartIdx, compID, uiCurrTrMode ) )
+    {
+      TComTURecurse tuRecurseChild(rTu, false);
+      do
+      {
+        xEncodeInterResidualQT( compID, tuRecurseChild );
+      } while (tuRecurseChild.nextSection(rTu));
+    }
+  }
+}
+
+
+
+
+Void TEncSearch::xSetInterResidualQTData( TComYuv* pcResi, Bool bSpatial, TComTU &rTu ) // TODO: turn this into two functions for bSpatial=true and false.
+{
+  TComDataCU* pcCU=rTu.getCU();
+  const UInt uiCurrTrMode=rTu.GetTransformDepthRel();
+  const UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU();
+  assert( pcCU->getDepth( 0 ) == pcCU->getDepth( uiAbsPartIdx ) );
+  const UInt uiTrMode = pcCU->getTransformIdx( uiAbsPartIdx );
+  const TComSPS *sps=pcCU->getSlice()->getSPS();
+
+  if( uiCurrTrMode == uiTrMode )
+  {
+    const UInt uiLog2TrSize = rTu.GetLog2LumaTrSize();
+    const UInt uiQTTempAccessLayer = sps->getQuadtreeTULog2MaxSize() - uiLog2TrSize;
+
+    if( bSpatial )
+    {
+      // Data to be copied is in the spatial domain, i.e., inverse-transformed.
+
+      for(UInt i=0; i<pcResi->getNumberValidComponents(); i++)
+      {
+        const ComponentID compID=ComponentID(i);
+        if (rTu.ProcessComponentSection(compID))
+        {
+          const TComRectangle &rectCompTU(rTu.getRect(compID));
+          m_pcQTTempTComYuv[uiQTTempAccessLayer].copyPartToPartComponentMxN    ( compID, pcResi, rectCompTU );
+        }
+      }
+    }
+    else
+    {
+      for (UInt ch=0; ch < getNumberValidComponents(sps->getChromaFormatIdc()); ch++)
+      {
+        const ComponentID compID   = ComponentID(ch);
