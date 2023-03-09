@@ -798,3 +798,103 @@ public:
 
   SEIEquirectangularProjection()  {}
   virtual ~SEIEquirectangularProjection() {}
+
+  Bool   m_erpCancelFlag;
+  Bool   m_erpPersistenceFlag;
+  Bool   m_erpGuardBandFlag;
+  UChar  m_erpGuardBandType;
+  UChar  m_erpLeftGuardBandWidth;
+  UChar  m_erpRightGuardBandWidth;
+};
+
+class SEISphereRotation : public SEI
+{
+public:
+  PayloadType payloadType() const { return SPHERE_ROTATION; }
+
+  SEISphereRotation()  {}
+  virtual ~SEISphereRotation() {}
+
+  Bool  m_sphereRotationCancelFlag;
+  Bool  m_sphereRotationPersistenceFlag;
+  Int   m_sphereRotationYaw;
+  Int   m_sphereRotationPitch;
+  Int   m_sphereRotationRoll;
+};
+
+class SEIOmniViewport : public SEI
+{
+public:
+  PayloadType payloadType() const { return OMNI_VIEWPORT; }
+
+  SEIOmniViewport() {}
+  virtual ~SEIOmniViewport() {}
+
+  struct OmniViewport
+  {
+    Int  azimuthCentre;
+    Int  elevationCentre;
+    Int  tiltCentre;
+    UInt horRange;
+    UInt verRange;
+  };
+
+  UInt  m_omniViewportId;
+  Bool  m_omniViewportCancelFlag;
+  Bool  m_omniViewportPersistenceFlag;
+  UChar m_omniViewportCntMinus1;
+  std::vector<OmniViewport> m_omniViewportRegions;  
+};
+
+class SEIAnnotatedRegions : public SEI
+{
+public:
+  PayloadType payloadType() const { return ANNOTATED_REGIONS; }
+  SEIAnnotatedRegions() {}
+  virtual ~SEIAnnotatedRegions() {}
+
+  Void copyFrom(const SEIAnnotatedRegions &seiAnnotatedRegions)
+  {
+    (*this) = seiAnnotatedRegions;
+  }
+
+  struct AnnotatedRegionObject
+  {
+    AnnotatedRegionObject() :
+      objectCancelFlag(false),
+      objectLabelValid(false),
+      boundingBoxValid(false)
+    { }
+    Bool objectCancelFlag;
+
+    Bool objectLabelValid;
+    UInt objLabelIdx;            // only valid if bObjectLabelValid
+
+    Bool boundingBoxValid;
+    Bool boundingBoxCancelFlag;
+    UInt boundingBoxTop;         // only valid if bBoundingBoxValid
+    UInt boundingBoxLeft;
+    UInt boundingBoxWidth;
+    UInt boundingBoxHeight;
+
+    Bool partialObjectFlag;        // only valid if bPartialObjectFlagValid
+    UInt objectConfidence;
+  };
+  struct AnnotatedRegionLabel
+  {
+    AnnotatedRegionLabel() : labelValid(false) { }
+    Bool        labelValid;
+    std::string label;           // only valid if bLabelValid
+  };
+
+  struct AnnotatedRegionHeader
+  {
+    AnnotatedRegionHeader() : m_cancelFlag(true), m_receivedSettingsOnce(false) { }
+    Bool      m_cancelFlag;
+    Bool      m_receivedSettingsOnce; // used for decoder conformance checking. Other confidence flags must be unchanged once this flag is set.
+
+    Bool      m_notOptimizedForViewingFlag;
+    Bool      m_trueMotionFlag;
+    Bool      m_occludedObjectFlag;
+    Bool      m_partialObjectFlagPresentFlag;
+    Bool      m_objectLabelPresentFlag;
