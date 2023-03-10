@@ -898,3 +898,103 @@ public:
     Bool      m_occludedObjectFlag;
     Bool      m_partialObjectFlagPresentFlag;
     Bool      m_objectLabelPresentFlag;
+    Bool      m_objectConfidenceInfoPresentFlag;
+    UInt      m_objectConfidenceLength;         // Only valid if m_objectConfidenceInfoPresentFlag
+    Bool      m_objectLabelLanguagePresentFlag; // Only valid if m_objectLabelPresentFlag
+    std::string m_annotatedRegionsObjectLabelLang;
+  };
+  typedef UInt AnnotatedRegionObjectIndex;
+  typedef UInt AnnotatedRegionLabelIndex;
+
+  AnnotatedRegionHeader m_hdr;
+  std::vector<std::pair<AnnotatedRegionObjectIndex, AnnotatedRegionObject> > m_annotatedRegions;
+  std::vector<std::pair<AnnotatedRegionLabelIndex,  AnnotatedRegionLabel>  > m_annotatedLabels;
+};
+
+class SEICubemapProjection : public SEI
+{
+public:
+  PayloadType payloadType() const { return CUBEMAP_PROJECTION; }
+  SEICubemapProjection() {}
+  virtual ~SEICubemapProjection() {}
+  Bool                  m_cmpCancelFlag;
+  Bool                  m_cmpPersistenceFlag;
+};
+
+class SEIRegionWisePacking : public SEI
+{
+public:
+  PayloadType payloadType() const { return REGION_WISE_PACKING; }
+  SEIRegionWisePacking() {}
+  virtual ~SEIRegionWisePacking() {}
+  Bool                  m_rwpCancelFlag;
+  Bool                  m_rwpPersistenceFlag;
+  Bool                  m_constituentPictureMatchingFlag;
+  Int                   m_numPackedRegions;
+  Int                   m_projPictureWidth;
+  Int                   m_projPictureHeight;
+  Int                   m_packedPictureWidth;
+  Int                   m_packedPictureHeight;
+  std::vector<UChar>    m_rwpTransformType;
+  std::vector<Bool>     m_rwpGuardBandFlag;
+  std::vector<UInt>     m_projRegionWidth;
+  std::vector<UInt>     m_projRegionHeight;
+  std::vector<UInt>     m_rwpProjRegionTop;
+  std::vector<UInt>     m_projRegionLeft;
+  std::vector<UShort>   m_packedRegionWidth;
+  std::vector<UShort>   m_packedRegionHeight;
+  std::vector<UShort>   m_packedRegionTop;
+  std::vector<UShort>   m_packedRegionLeft;
+  std::vector<UChar>    m_rwpLeftGuardBandWidth;
+  std::vector<UChar>    m_rwpRightGuardBandWidth;
+  std::vector<UChar>    m_rwpTopGuardBandHeight;
+  std::vector<UChar>    m_rwpBottomGuardBandHeight;
+  std::vector<Bool>     m_rwpGuardBandNotUsedForPredFlag;
+  std::vector<UChar>    m_rwpGuardBandType;
+};
+
+class SEIFisheyeVideoInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return FISHEYE_VIDEO_INFO; }
+  SEIFisheyeVideoInfo() {}
+  virtual ~SEIFisheyeVideoInfo() {}
+  TComSEIFisheyeVideoInfo values;
+};
+
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+class SEIShutterIntervalInfo : public SEI
+{
+public:
+  PayloadType payloadType() const { return SHUTTER_INTERVAL_INFO; }
+  SEIShutterIntervalInfo() {}
+  virtual ~SEIShutterIntervalInfo() {}
+
+  Bool                  m_siiEnabled;
+  UInt                  m_siiNumUnitsInShutterInterval;
+  UInt                  m_siiTimeScale;
+  UInt                  m_siiMaxSubLayersMinus1;
+  Bool                  m_siiFixedSIwithinCLVS;
+  std::vector<UInt>     m_siiSubLayerNumUnitsInSI;
+};
+#endif
+
+class SEIColourRemappingInfo : public SEI
+{
+public:
+
+  struct CRIlut
+  {
+    Int codedValue;
+    Int targetValue;
+    bool operator < (const CRIlut& a) const
+    {
+      return codedValue < a.codedValue;
+    }
+  };
+
+  PayloadType payloadType() const { return COLOUR_REMAPPING_INFO; }
+  SEIColourRemappingInfo() {}
+  ~SEIColourRemappingInfo() {}
+
+  Void copyFrom( const SEIColourRemappingInfo &seiCriInput)
