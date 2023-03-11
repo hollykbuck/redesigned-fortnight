@@ -998,3 +998,103 @@ public:
   ~SEIColourRemappingInfo() {}
 
   Void copyFrom( const SEIColourRemappingInfo &seiCriInput)
+  {
+    (*this) = seiCriInput;
+  }
+
+  UInt                m_colourRemapId;
+  Bool                m_colourRemapCancelFlag;
+  Bool                m_colourRemapPersistenceFlag;
+  Bool                m_colourRemapVideoSignalInfoPresentFlag;
+  Bool                m_colourRemapFullRangeFlag;
+  Int                 m_colourRemapPrimaries;
+  Int                 m_colourRemapTransferFunction;
+  Int                 m_colourRemapMatrixCoefficients;
+  Int                 m_colourRemapInputBitDepth;
+  Int                 m_colourRemapBitDepth;
+  Int                 m_preLutNumValMinus1[3];
+  std::vector<CRIlut> m_preLut[3];
+  Bool                m_colourRemapMatrixPresentFlag;
+  Int                 m_log2MatrixDenom;
+  Int                 m_colourRemapCoeffs[3][3];
+  Int                 m_postLutNumValMinus1[3];
+  std::vector<CRIlut> m_postLut[3];
+};
+
+
+class SEIDeinterlaceFieldIdentification : public SEI
+{
+public:
+    PayloadType payloadType() const { return  DEINTERLACE_FIELD_IDENTIFICATION; }
+    SEIDeinterlaceFieldIdentification() { }
+
+    virtual ~SEIDeinterlaceFieldIdentification() {}
+
+    Bool m_deinterlacedPictureSourceParityFlag;
+};
+
+
+class SEIContentLightLevelInfo : public SEI
+{
+public:
+    PayloadType payloadType() const { return CONTENT_LIGHT_LEVEL_INFO; }
+    SEIContentLightLevelInfo() { }
+
+    virtual ~SEIContentLightLevelInfo() { }
+
+    UInt m_maxContentLightLevel;
+    UInt m_maxPicAverageLightLevel;
+};
+
+
+class SEIDependentRAPIndication : public SEI
+{
+public:
+  PayloadType payloadType() const { return DEPENDENT_RAP_INDICATION; }
+  SEIDependentRAPIndication() { }
+
+  virtual ~SEIDependentRAPIndication() { }
+};
+
+
+class SEICodedRegionCompletion : public SEI
+{
+public:
+  PayloadType payloadType() const { return CODED_REGION_COMPLETION; }
+  SEICodedRegionCompletion() { }
+
+  virtual ~SEICodedRegionCompletion() { }
+
+  UInt m_nextSegmentAddress;
+  Bool m_independentSliceSegmentFlag;
+};
+
+
+class SEIAlternativeTransferCharacteristics : public SEI
+{
+public:
+  PayloadType payloadType() const { return ALTERNATIVE_TRANSFER_CHARACTERISTICS; }
+
+  SEIAlternativeTransferCharacteristics() : m_preferredTransferCharacteristics(18)
+  { }
+
+  virtual ~SEIAlternativeTransferCharacteristics() {}
+
+  UInt m_preferredTransferCharacteristics;
+};
+
+
+class SEIAmbientViewingEnvironment : public SEI
+{
+public:
+  PayloadType payloadType() const { return AMBIENT_VIEWING_ENVIRONMENT; }
+  SEIAmbientViewingEnvironment() { }
+
+  virtual ~SEIAmbientViewingEnvironment() { }
+
+  UInt m_ambientIlluminance;
+  UShort m_ambientLightX;
+  UShort m_ambientLightY;
+};
+#if MCTS_EXTRACTION
+class SEIMCTSExtractionInfoSet : public SEI
