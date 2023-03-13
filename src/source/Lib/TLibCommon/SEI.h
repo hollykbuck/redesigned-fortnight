@@ -1098,3 +1098,103 @@ public:
 };
 #if MCTS_EXTRACTION
 class SEIMCTSExtractionInfoSet : public SEI
+{
+public:
+  struct MCTSExtractionInfo
+  {
+    std::vector< std::vector<UInt> > m_idxOfMctsInSet;
+    Bool m_sliceReorderingEnabledFlag;
+    std::vector<UInt> m_outputSliceSegmentAddress;
+    std::vector<UInt> m_vpsRbspDataLength;
+    std::vector<UInt> m_spsRbspDataLength;
+    std::vector<UInt> m_ppsNuhTemporalIdPlus1;
+    std::vector<UInt> m_ppsRbspDataLength;
+    std::vector< std::vector<uint8_t> > m_vpsRbspData;
+    std::vector< std::vector<uint8_t> > m_spsRbspData;
+    std::vector< std::vector<uint8_t> > m_ppsRbspData;
+    UInt mctsWidth;
+    UInt mctsHeight;
+  };
+    PayloadType payloadType() const { return MCTS_EXTRACTION_INFO_SET; }
+    SEIMCTSExtractionInfoSet() { }
+    virtual ~SEIMCTSExtractionInfoSet() { }
+    std::vector<MCTSExtractionInfo> m_MCTSExtractionInfoSets;
+};
+#endif
+
+#endif
+// Class that associates an SEI with one more regions
+class RegionalSEI
+{
+public:
+  RegionalSEI(): m_seiMessage(NULL) {}
+  RegionalSEI(SEI *sei, RNSEIWindowVec &regions) 
+  {    
+    if( checkRegionalNestedSEIPayloadType(sei->payloadType()) )  
+    {
+      m_seiMessage = sei;
+      m_regions = regions;
+    }
+    else
+    {
+     m_seiMessage = sei;
+    }    
+  }
+  ~RegionalSEI()
+  {
+    if(!m_seiMessage)
+    {
+      delete m_seiMessage;
+    }
+  }
+  SEI *dissociateSEIObject()  // Dissociates SEI; receiver of this function in charge of memory deallocation.
+  {
+    SEI *temp = m_seiMessage; 
+    m_seiMessage = NULL;
+    return temp;
+  }
+  UInt getNumRegions() const { return (UInt) m_regions.size(); }
+  const RNSEIWindowVec& getRegions() { return m_regions; }
+  Void addRegions(RNSEIWindowVec const &regions) { m_regions.insert(m_regions.end(), regions.begin(), regions.end()); }
+  static Bool checkRegionalNestedSEIPayloadType(SEI::PayloadType const payloadType)
+  {
+    switch(payloadType)
+    {
+    case SEI::USER_DATA_REGISTERED_ITU_T_T35:
+    case SEI::USER_DATA_UNREGISTERED:
+    case SEI::FILM_GRAIN_CHARACTERISTICS:
+    case SEI::POST_FILTER_HINT:
+    case SEI::TONE_MAPPING_INFO:
+    case SEI::CHROMA_RESAMPLING_FILTER_HINT:
+    case SEI::KNEE_FUNCTION_INFO: 
+    case SEI::COLOUR_REMAPPING_INFO:
+    case SEI::CONTENT_COLOUR_VOLUME:
+      return true;
+    default:
+      return false;
+    }
+  }
+private:
+  SEI *m_seiMessage;
+  RNSEIWindowVec m_regions; 
+};
+
+class SEIRegionalNesting : public SEI
+{
+public:
+  SEIRegionalNesting(): m_rnId(0) {}
+  ~SEIRegionalNesting();
+
+  struct SEIListOfIndices
+  {
+    std::vector<UInt> m_listOfIndices;
+    SEI *m_seiMessage;
+    SEIListOfIndices() : m_seiMessage(NULL) {}
+    SEIListOfIndices(std::vector<UInt> listOfIndices, SEI* sei) : m_listOfIndices(listOfIndices), m_seiMessage(sei) {}
+  };
+
+  PayloadType payloadType() const { return REGIONAL_NESTING; }
+  UInt getNumRnSEIMessage() const  { return (UInt) m_rnSeiMessages.size(); }
+  UInt getNumRectRegions()  const  { return (UInt) m_regions.size(); }
+  UInt getRNId()            const  { return m_rnId; }
+  Void addRegion(RNSEIWindow *regn) { m_regions.push_back(*regn); }
