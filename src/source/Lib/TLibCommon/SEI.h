@@ -1198,3 +1198,63 @@ public:
   UInt getNumRectRegions()  const  { return (UInt) m_regions.size(); }
   UInt getRNId()            const  { return m_rnId; }
   Void addRegion(RNSEIWindow *regn) { m_regions.push_back(*regn); }
+  Void clearRegions() { m_regions.clear(); }
+  Void addRegionalSEI(SEIListOfIndices const &seiWithListOfRegionIndices) 
+  {
+    m_rnSeiMessages.push_back(seiWithListOfRegionIndices);
+  }
+  Void addRegionalSEI(RegionalSEI *regSEI);
+  const std::vector< SEIListOfIndices >& getRnSEIMessages() const { return m_rnSeiMessages; }
+  const std::vector<RNSEIWindow> &getRegions() const { return m_regions; }
+private:
+  UInt m_rnId;
+  RNSEIWindowVec m_regions;
+  std::vector< SEIListOfIndices > m_rnSeiMessages;
+};
+
+#if JCTVC_AD0021_SEI_MANIFEST
+class SEIManifest : public SEI
+{
+public:
+  PayloadType payloadType() const { return SEI_MANIFEST; }
+
+  SEIManifest() {}
+  virtual ~SEIManifest() {}
+
+  enum SEIManifestDescription
+  {
+    NO_SEI_MESSAGE = 0,
+    NECESSARY_SEI_MESSAGE = 1,
+    UNNECESSARY_SEI_MESSAGE = 2,
+    UNDETERMINED_SEI_MESSAGE = 3,
+
+    NUM_OF_DESCROPTION = 255,
+  };
+  uint16_t                    m_manifestNumSeiMsgTypes;
+  std::vector<uint16_t>       m_manifestSeiPayloadType;
+  std::vector<uint8_t>        m_manifestSeiDescription;
+
+  SEIManifestDescription getSEIMessageDescription(const PayloadType payloadType);
+};
+#endif
+
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+class SEIPrefixIndication : public SEI
+{
+public:
+  PayloadType payloadType() const { return SEI_PREFIX_INDICATION; }
+
+  SEIPrefixIndication() {}
+  virtual ~SEIPrefixIndication() {}
+
+  uint16_t                      m_prefixSeiPayloadType;
+  uint8_t                       m_numSeiPrefixIndicationsMinus1;
+  std::vector<uint16_t>         m_numBitsInPrefixIndicationMinus1;
+  std::vector<std::vector<int>> m_seiPrefixDataBit;
+  const SEI* m_payload;
+
+  uint8_t getNumsOfSeiPrefixIndications(const SEI* sei);
+};
+#endif 
+
+//! \}
