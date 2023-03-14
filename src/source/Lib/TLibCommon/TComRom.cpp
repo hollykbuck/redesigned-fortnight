@@ -98,3 +98,103 @@ public:
 
   UInt GetCurrentX() const { return m_column; }
   UInt GetCurrentY() const { return m_line; }
+
+  UInt GetNextIndex(UInt blockOffsetX, UInt blockOffsetY)
+  {
+    Int rtn=((m_line + blockOffsetY) * m_stride) + m_column + blockOffsetX;
+
+    //advance line and column to the next position
+    switch (m_scanType)
+    {
+      //------------------------------------------------
+
+      case SCAN_DIAG:
+        {
+          if ((m_column == (m_blockWidth - 1)) || (m_line == 0)) //if we reach the end of a rank, go diagonally down to the next one
+          {
+            m_line   += m_column + 1;
+            m_column  = 0;
+
+            if (m_line >= m_blockHeight) //if that takes us outside the block, adjust so that we are back on the bottom row
+            {
+              m_column += m_line - (m_blockHeight - 1);
+              m_line    = m_blockHeight - 1;
+            }
+          }
+          else
+          {
+            m_column++;
+            m_line--;
+          }
+        }
+        break;
+
+      //------------------------------------------------
+
+      case SCAN_HOR:
+        {
+          if (m_column == (m_blockWidth - 1))
+          {
+            m_line++;
+            m_column = 0;
+          }
+          else
+          {
+            m_column++;
+          }
+        }
+        break;
+
+      //------------------------------------------------
+
+      case SCAN_VER:
+        {
+          if (m_line == (m_blockHeight - 1))
+          {
+            m_column++;
+            m_line = 0;
+          }
+          else
+          {
+            m_line++;
+          }
+        }
+        break;
+
+      //------------------------------------------------
+
+      default:
+        {
+          std::cerr << "ERROR: Unknown scan type \"" << m_scanType << "\"in ScanGenerator::GetNextIndex" << std::endl;
+          exit(1);
+        }
+        break;
+    }
+
+    return rtn;
+  }
+};
+
+// initialize ROM variables
+Void initROM()
+{
+  Int i, c;
+
+  // g_aucConvertToBit[ x ]: log2(x/4), if x=4 -> 0, x=8 -> 1, x=16 -> 2, ...
+  ::memset( g_aucConvertToBit,   -1, sizeof( g_aucConvertToBit ) );
+  c=0;
+  for ( i=4; i<=MAX_CU_SIZE; i*=2 )
+  {
+    g_aucConvertToBit[ i ] = c;
+    c++;
+  }
+
+  // initialise scan orders
+  for(UInt log2BlockHeight = 0; log2BlockHeight < MAX_CU_DEPTH; log2BlockHeight++)
+  {
+    for(UInt log2BlockWidth = 0; log2BlockWidth < MAX_CU_DEPTH; log2BlockWidth++)
+    {
+      const UInt blockWidth  = 1 << log2BlockWidth;
+      const UInt blockHeight = 1 << log2BlockHeight;
+      const UInt totalValues = blockWidth * blockHeight;
+
