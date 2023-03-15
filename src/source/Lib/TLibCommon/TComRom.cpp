@@ -198,3 +198,103 @@ Void initROM()
       const UInt blockHeight = 1 << log2BlockHeight;
       const UInt totalValues = blockWidth * blockHeight;
 
+      //--------------------------------------------------------------------------------------------------
+
+      //non-grouped scan orders
+
+      for (UInt scanTypeIndex = 0; scanTypeIndex < SCAN_NUMBER_OF_TYPES; scanTypeIndex++)
+      {
+        const COEFF_SCAN_TYPE scanType = COEFF_SCAN_TYPE(scanTypeIndex);
+
+        g_scanOrder[SCAN_UNGROUPED][scanType][log2BlockWidth][log2BlockHeight] = new UInt[totalValues];
+
+        ScanGenerator fullBlockScan(blockWidth, blockHeight, blockWidth, scanType);
+
+        for (UInt scanPosition = 0; scanPosition < totalValues; scanPosition++)
+        {
+          g_scanOrder[SCAN_UNGROUPED][scanType][log2BlockWidth][log2BlockHeight][scanPosition] = fullBlockScan.GetNextIndex(0, 0);
+        }
+      }
+
+      //--------------------------------------------------------------------------------------------------
+
+      //grouped scan orders
+
+      const UInt  groupWidth           = 1           << MLS_CG_LOG2_WIDTH;
+      const UInt  groupHeight          = 1           << MLS_CG_LOG2_HEIGHT;
+      const UInt  widthInGroups        = blockWidth  >> MLS_CG_LOG2_WIDTH;
+      const UInt  heightInGroups       = blockHeight >> MLS_CG_LOG2_HEIGHT;
+
+      const UInt  groupSize            = groupWidth    * groupHeight;
+      const UInt  totalGroups          = widthInGroups * heightInGroups;
+
+      for (UInt scanTypeIndex = 0; scanTypeIndex < SCAN_NUMBER_OF_TYPES; scanTypeIndex++)
+      {
+        const COEFF_SCAN_TYPE scanType = COEFF_SCAN_TYPE(scanTypeIndex);
+
+        g_scanOrder[SCAN_GROUPED_4x4][scanType][log2BlockWidth][log2BlockHeight] = new UInt[totalValues];
+
+        ScanGenerator fullBlockScan(widthInGroups, heightInGroups, groupWidth, scanType);
+
+        for (UInt groupIndex = 0; groupIndex < totalGroups; groupIndex++)
+        {
+          const UInt groupPositionY  = fullBlockScan.GetCurrentY();
+          const UInt groupPositionX  = fullBlockScan.GetCurrentX();
+          const UInt groupOffsetX    = groupPositionX * groupWidth;
+          const UInt groupOffsetY    = groupPositionY * groupHeight;
+          const UInt groupOffsetScan = groupIndex     * groupSize;
+
+          ScanGenerator groupScan(groupWidth, groupHeight, blockWidth, scanType);
+
+          for (UInt scanPosition = 0; scanPosition < groupSize; scanPosition++)
+          {
+            g_scanOrder[SCAN_GROUPED_4x4][scanType][log2BlockWidth][log2BlockHeight][groupOffsetScan + scanPosition] = groupScan.GetNextIndex(groupOffsetX, groupOffsetY);
+          }
+
+          fullBlockScan.GetNextIndex(0,0);
+        }
+      }
+
+      //--------------------------------------------------------------------------------------------------
+    }
+  }
+}
+
+Void destroyROM()
+{
+  for(UInt groupTypeIndex = 0; groupTypeIndex < SCAN_NUMBER_OF_GROUP_TYPES; groupTypeIndex++)
+  {
+    for (UInt scanOrderIndex = 0; scanOrderIndex < SCAN_NUMBER_OF_TYPES; scanOrderIndex++)
+    {
+      for (UInt log2BlockWidth = 0; log2BlockWidth < MAX_CU_DEPTH; log2BlockWidth++)
+      {
+        for (UInt log2BlockHeight = 0; log2BlockHeight < MAX_CU_DEPTH; log2BlockHeight++)
+        {
+          delete [] g_scanOrder[groupTypeIndex][scanOrderIndex][log2BlockWidth][log2BlockHeight];
+        }
+      }
+    }
+  }
+}
+
+// ====================================================================================================================
+// Data structure related table & variable
+// ====================================================================================================================
+
+UInt g_auiZscanToRaster [ MAX_NUM_PART_IDXS_IN_CTU_WIDTH*MAX_NUM_PART_IDXS_IN_CTU_WIDTH ] = { 0, };
+UInt g_auiRasterToZscan [ MAX_NUM_PART_IDXS_IN_CTU_WIDTH*MAX_NUM_PART_IDXS_IN_CTU_WIDTH ] = { 0, };
+UInt g_auiRasterToPelX  [ MAX_NUM_PART_IDXS_IN_CTU_WIDTH*MAX_NUM_PART_IDXS_IN_CTU_WIDTH ] = { 0, };
+UInt g_auiRasterToPelY  [ MAX_NUM_PART_IDXS_IN_CTU_WIDTH*MAX_NUM_PART_IDXS_IN_CTU_WIDTH ] = { 0, };
+
+const UInt g_auiPUOffset[NUMBER_OF_PART_SIZES] = { 0, 8, 4, 4, 2, 10, 1, 5};
+
+Void initZscanToRaster ( Int iMaxDepth, Int iDepth, UInt uiStartVal, UInt*& rpuiCurrIdx )
+{
+  Int iStride = 1 << ( iMaxDepth - 1 );
+
+  if ( iDepth == iMaxDepth )
+  {
+    rpuiCurrIdx[0] = uiStartVal;
+    rpuiCurrIdx++;
+  }
+  else
