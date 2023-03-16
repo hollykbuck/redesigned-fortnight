@@ -298,3 +298,103 @@ Void initZscanToRaster ( Int iMaxDepth, Int iDepth, UInt uiStartVal, UInt*& rpui
     rpuiCurrIdx++;
   }
   else
+  {
+    Int iStep = iStride >> iDepth;
+    initZscanToRaster( iMaxDepth, iDepth+1, uiStartVal,                     rpuiCurrIdx );
+    initZscanToRaster( iMaxDepth, iDepth+1, uiStartVal+iStep,               rpuiCurrIdx );
+    initZscanToRaster( iMaxDepth, iDepth+1, uiStartVal+iStep*iStride,       rpuiCurrIdx );
+    initZscanToRaster( iMaxDepth, iDepth+1, uiStartVal+iStep*iStride+iStep, rpuiCurrIdx );
+  }
+}
+
+Void initRasterToZscan ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth )
+{
+  UInt  uiMinCUWidth  = uiMaxCUWidth  >> ( uiMaxDepth - 1 );
+  UInt  uiMinCUHeight = uiMaxCUHeight >> ( uiMaxDepth - 1 );
+
+  UInt  uiNumPartInWidth  = (UInt)uiMaxCUWidth  / uiMinCUWidth;
+  UInt  uiNumPartInHeight = (UInt)uiMaxCUHeight / uiMinCUHeight;
+
+  for ( UInt i = 0; i < uiNumPartInWidth*uiNumPartInHeight; i++ )
+  {
+    g_auiRasterToZscan[ g_auiZscanToRaster[i] ] = i;
+  }
+}
+
+Void initRasterToPelXY ( UInt uiMaxCUWidth, UInt uiMaxCUHeight, UInt uiMaxDepth )
+{
+  UInt    i;
+
+  UInt* uiTempX = &g_auiRasterToPelX[0];
+  UInt* uiTempY = &g_auiRasterToPelY[0];
+
+  UInt  uiMinCUWidth  = uiMaxCUWidth  >> ( uiMaxDepth - 1 );
+  UInt  uiMinCUHeight = uiMaxCUHeight >> ( uiMaxDepth - 1 );
+
+  UInt  uiNumPartInWidth  = uiMaxCUWidth  / uiMinCUWidth;
+  UInt  uiNumPartInHeight = uiMaxCUHeight / uiMinCUHeight;
+
+  uiTempX[0] = 0; uiTempX++;
+  for ( i = 1; i < uiNumPartInWidth; i++ )
+  {
+    uiTempX[0] = uiTempX[-1] + uiMinCUWidth; uiTempX++;
+  }
+  for ( i = 1; i < uiNumPartInHeight; i++ )
+  {
+    memcpy(uiTempX, uiTempX-uiNumPartInWidth, sizeof(UInt)*uiNumPartInWidth);
+    uiTempX += uiNumPartInWidth;
+  }
+
+  for ( i = 1; i < uiNumPartInWidth*uiNumPartInHeight; i++ )
+  {
+    uiTempY[i] = ( i / uiNumPartInWidth ) * uiMinCUWidth;
+  }
+}
+
+const Int g_quantScales[SCALING_LIST_REM_NUM] =
+{
+  26214,23302,20560,18396,16384,14564
+};
+
+const Int g_invQuantScales[SCALING_LIST_REM_NUM] =
+{
+  40,45,51,57,64,72
+};
+
+//--------------------------------------------------------------------------------------------------
+
+//structures
+
+#define DEFINE_DST4x4_MATRIX(a,b,c,d) \
+{ \
+  {  a,  b,  c,  d }, \
+  {  c,  c,  0, -c }, \
+  {  d, -a, -c,  b }, \
+  {  b, -d,  c, -a }, \
+}
+
+#define DEFINE_DCT4x4_MATRIX(a,b,c) \
+{ \
+  { a,  a,  a,  a}, \
+  { b,  c, -c, -b}, \
+  { a, -a, -a,  a}, \
+  { c, -b,  b, -c}  \
+}
+
+#define DEFINE_DCT8x8_MATRIX(a,b,c,d,e,f,g) \
+{ \
+  { a,  a,  a,  a,  a,  a,  a,  a}, \
+  { d,  e,  f,  g, -g, -f, -e, -d}, \
+  { b,  c, -c, -b, -b, -c,  c,  b}, \
+  { e, -g, -d, -f,  f,  d,  g, -e}, \
+  { a, -a, -a,  a,  a, -a, -a,  a}, \
+  { f, -d,  g,  e, -e, -g,  d, -f}, \
+  { c, -b,  b, -c, -c,  b, -b,  c}, \
+  { g, -f,  e, -d,  d, -e,  f, -g}  \
+}
+
+#define DEFINE_DCT16x16_MATRIX(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o) \
+{ \
+  { a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a,  a}, \
+  { h,  i,  j,  k,  l,  m,  n,  o, -o, -n, -m, -l, -k, -j, -i, -h}, \
+  { d,  e,  f,  g, -g, -f, -e, -d, -d, -e, -f, -g,  g,  f,  e,  d}, \
