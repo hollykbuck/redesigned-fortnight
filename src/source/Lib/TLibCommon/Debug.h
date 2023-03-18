@@ -198,3 +198,81 @@ Void printBlock(const ValueType    *const source,
 
     outputWidth = std::max<UInt>(getDecimalWidth(Double(minimumValue)), getDecimalWidth(Double(maximumValue))) + 1; //+1 so the numbers don't run into each other
   }
+
+  //------------------
+  //print out the block
+
+  ValueType valueSum = 0;
+
+  for (UInt y = 0; y < height; y++)
+  {
+    for (UInt x = 0; x < width; x++)
+    {
+      ValueType value = 0;
+
+      if (!onlyPrintEdges || (x == 0) || (y == 0))
+      {
+        value     = leftShift(source[printInZScan ? getZScanIndex(x, y) : ((y * stride) + x)], shiftLeftBy);
+        valueSum += value;
+      }
+
+      writeValueToStream(value, stream, outputWidth);
+    }
+    stream << "\n";
+  }
+
+  const Int valueCount = onlyPrintEdges ? Int((width + height) - 1) : Int(width * height);
+  if (printAverage)
+  {
+    stream << "Average: " << (valueSum / valueCount) << "\n";
+  }
+  stream << "\n";
+}
+
+
+template <typename T>
+Void printBlockToStream( std::ostream &ss, const TChar *pLinePrefix, const T * blkSrc, const UInt width, const UInt height, const UInt stride, const UInt subBlockWidth=0, const UInt subBlockHeight=0, const UInt defWidth=3 )
+{
+  for (UInt y=0; y<height; y++)
+  {
+    if (subBlockHeight!=0 && (y%subBlockHeight)==0 && y!=0)
+    {
+      ss << pLinePrefix << '\n';
+    }
+
+    ss << pLinePrefix;
+    for (UInt x=0; x<width; x++)
+    {
+      if (subBlockWidth!=0 && (x%subBlockWidth)==0 && x!=0)
+      {
+        ss << std::setw(defWidth+2) << "";
+      }
+
+      ss << std::setw(defWidth) << blkSrc[y*stride + x] << ' ';
+    }
+    ss << '\n';
+  }
+}
+
+class TComYuv;
+Void printBlockToStream( std::ostream &ss, const TChar *pLinePrefix, TComYuv &src, const UInt numSubBlocksAcross=1, const UInt numSubBlocksUp=1, const UInt defWidth=3 );
+
+// ---------------------------------------------------------------------------------------------- //
+
+//String manipulation functions for aligning and wrapping printed text
+
+std::string splitOnSettings(const std::string &input);
+
+std::string lineWrap(const std::string &input, const UInt maximumLineLength);
+
+std::string indentNewLines(const std::string &input, const UInt indentBy);
+
+// ---------------------------------------------------------------------------------------------- //
+
+#if DEBUG_STRING
+  Int DebugStringGetPredModeMask(PredMode mode);
+  Void DebugInterPredResiReco(std::string &sDebug, TComYuv &pred, TComYuv &resi, TComYuv &reco, Int predmode_mask);
+#endif
+
+
+#endif /* __DEBUG__ */
