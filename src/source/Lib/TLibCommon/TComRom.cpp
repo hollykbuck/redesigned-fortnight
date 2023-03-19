@@ -598,3 +598,103 @@ const TMatrixCoeff g_aiT64[TRANSFORM_NUMBER_OF_DIRECTIONS][64][64] =
 };
 #endif
 
+const TMatrixCoeff g_as_DST_MAT_4[TRANSFORM_NUMBER_OF_DIRECTIONS][4][4] =
+{
+  DEFINE_DST4x4_MATRIX(   29,    55,    74,    84),
+  DEFINE_DST4x4_MATRIX(   29,    55,    74,    84)
+};
+#endif
+
+
+//--------------------------------------------------------------------------------------------------
+
+#undef DEFINE_DST4x4_MATRIX
+#undef DEFINE_DCT4x4_MATRIX
+#undef DEFINE_DCT8x8_MATRIX
+#undef DEFINE_DCT16x16_MATRIX
+#undef DEFINE_DCT32x32_MATRIX
+
+//--------------------------------------------------------------------------------------------------
+
+
+const UChar g_aucChromaScale[NUM_CHROMA_FORMAT][chromaQPMappingTableSize]=
+{
+  //0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57
+  { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,29,30,31,32,33,33,34,34,35,35,36,36,37,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51 },
+  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,51,51,51,51,51,51 },
+  { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,51,51,51,51,51,51 }
+};
+
+// ====================================================================================================================
+// Intra prediction
+// ====================================================================================================================
+
+const UChar g_aucIntraModeNumFast_UseMPM[MAX_CU_DEPTH] =
+{
+  3,  //   2x2
+  8,  //   4x4
+  8,  //   8x8
+  3,  //  16x16
+  3,  //  32x32
+  3   //  64x64
+};
+const UChar g_aucIntraModeNumFast_NotUseMPM[MAX_CU_DEPTH] =
+{
+  3,  //   2x2
+  9,  //   4x4
+  9,  //   8x8
+  4,  //  16x16   33
+  4,  //  32x32   33
+  5   //  64x64   33
+};
+
+const UChar g_chroma422IntraAngleMappingTable[NUM_INTRA_MODE] =
+  //0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, DM
+  { 0, 1, 2, 2, 2, 2, 3, 5, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 23, 24, 24, 25, 25, 26, 27, 27, 28, 28, 29, 29, 30, 31, DM_CHROMA_IDX};
+
+// ====================================================================================================================
+// Misc.
+// ====================================================================================================================
+
+SChar  g_aucConvertToBit  [ MAX_CU_SIZE+1 ];
+
+#if ENC_DEC_TRACE
+FILE*  g_hTrace = NULL; // Set to NULL to open up a file. Set to stdout to use the current output
+const Bool g_bEncDecTraceEnable  = true;
+const Bool g_bEncDecTraceDisable = false;
+Bool   g_HLSTraceEnable = true;
+Bool   g_bJustDoIt = false;
+UInt64 g_nSymbolCounter = 0;
+#endif
+// ====================================================================================================================
+// Scanning order & context model mapping
+// ====================================================================================================================
+
+// scanning order table
+UInt* g_scanOrder[SCAN_NUMBER_OF_GROUP_TYPES][SCAN_NUMBER_OF_TYPES][ MAX_CU_DEPTH ][ MAX_CU_DEPTH ];
+
+const UInt ctxIndMap4x4[4*4] =
+{
+  0, 1, 4, 5,
+  2, 3, 4, 5,
+  6, 6, 8, 8,
+  7, 7, 8, 8
+};
+
+const UInt g_uiMinInGroup[ LAST_SIGNIFICANT_GROUPS ] = {0,1,2,3,4,6,8,12,16,24};
+const UInt g_uiGroupIdx[ MAX_TU_SIZE ]   = {0,1,2,3,4,4,5,5,6,6,6,6,7,7,7,7,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9};
+
+const TChar *MatrixType[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM] =
+{
+  {
+    "INTRA4X4_LUMA",
+    "INTRA4X4_CHROMAU",
+    "INTRA4X4_CHROMAV",
+    "INTER4X4_LUMA",
+    "INTER4X4_CHROMAU",
+    "INTER4X4_CHROMAV"
+  },
+  {
+    "INTRA8X8_LUMA",
+    "INTRA8X8_CHROMAU",
