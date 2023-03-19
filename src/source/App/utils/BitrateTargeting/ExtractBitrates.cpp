@@ -98,3 +98,103 @@ namespace
       {
         continue;
       }
+      if( !iLine.good( ) )
+      {
+        continue;
+      }
+      if( iLine.get( ) != 'O' )
+      {
+        continue;
+      }
+      if( !iLine.good( ) )
+      {
+        continue;
+      }
+      if( iLine.get( ) != 'C' )
+      {
+        continue;
+      }
+      if( !iLine.good( ) )
+      {
+        throw POCParseException( line );
+      }
+
+      ignoreUpTo( line, iLine, '(' );
+
+      if( iLine.get( ) != ' ' )
+      {
+        throw POCParseException( line );
+      }
+      if( !iLine.good( ) )
+      {
+        throw POCParseException( line );
+      }
+
+      if( 'I' == iLine.get( ) )
+      {
+        continue;
+      }
+      if( !iLine.good( ) )
+      {
+        throw POCParseException( line );
+      }
+
+      ignoreUpTo( line, iLine, ' ' );
+      ignoreUpTo( line, iLine, ' ' );
+
+      // Parse the qpIndex
+      long qpIndexLong;
+      iLine >> qpIndexLong;
+      if( ( long )std::numeric_limits< unsigned char >::max( ) < qpIndexLong )
+      {
+        throw POCParseException( line );
+      }
+      unsigned char qpIndex( ( unsigned char )qpIndexLong );
+      if( !iLine.good( ) )
+      {
+        throw POCParseException( line );
+      }
+
+      ignoreUpTo( line, iLine, ')' );
+      ignoreUpTo( line, iLine, ' ' );
+
+      // Parse the number of bits
+      unsigned long bitsULong;
+      iLine >> bitsULong;
+      if( !iLine.good( ) )
+      {
+        throw POCParseException( line );
+      }
+
+      // Find the tally that corresponds to our QP.  If there is no such tally yet, then add a new one to the map.
+      std::map< unsigned char, Tally >::iterator iter( tallyMap.find( qpIndex ) );
+      if( tallyMap.end( ) == iter )
+      {
+        tallyMap[ qpIndex ] = Tally( );
+        iter = tallyMap.find( qpIndex );
+      }
+      assert( iter != tallyMap.end( ) );
+
+      iter->second.add( ( double )bitsULong );
+    }
+
+    // Populate and return the result based on all of the tallies
+    std::map< unsigned char, double > result;
+    for( std::map< unsigned char, Tally >::const_iterator iter( tallyMap.begin( ) ); iter != tallyMap.end( ); ++iter )
+    {
+      result[ iter->first ] = iter->second.average( );
+    }
+    return result;
+  }
+}
+
+std::vector< double > extractBitratesForTemporalLayers( std::istream& i )
+{
+  std::vector< double > result;
+
+  std::map< unsigned char, double > bitratesForQPsMap( extractBitratesForQPs( i ) );
+  if( !bitratesForQPsMap.empty( ) )
+  {
+    unsigned char expectedNextQPIndex( bitratesForQPsMap.begin( )->first );
+
+    for( std::map< unsigned char, double >::const_iterator i( bitratesForQPsMap.begin( ) ); i != bitratesForQPsMap.end( ); ++i )
