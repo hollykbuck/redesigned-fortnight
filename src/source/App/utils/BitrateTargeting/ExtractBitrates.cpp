@@ -198,3 +198,15 @@ std::vector< double > extractBitratesForTemporalLayers( std::istream& i )
     unsigned char expectedNextQPIndex( bitratesForQPsMap.begin( )->first );
 
     for( std::map< unsigned char, double >::const_iterator i( bitratesForQPsMap.begin( ) ); i != bitratesForQPsMap.end( ); ++i )
+    {
+      if( i->first != expectedNextQPIndex )
+      {
+        throw NonContiguousQPSetException( );
+      }
+      ++expectedNextQPIndex;
+      result.push_back( i->second );
+    }
+  }
+
+  return result;
+}
