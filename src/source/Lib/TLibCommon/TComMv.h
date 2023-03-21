@@ -98,3 +98,73 @@ public:
   {
     m_iHor += rcMv.m_iHor;
     m_iVer += rcMv.m_iVer;
+    return  *this;
+  }
+
+  const TComMv& operator-= (const TComMv& rcMv)
+  {
+    m_iHor -= rcMv.m_iHor;
+    m_iVer -= rcMv.m_iVer;
+    return  *this;
+  }
+
+#if !ME_ENABLE_ROUNDING_OF_MVS
+  const TComMv& operator>>= (const Int i)
+  {
+    m_iHor >>= i;
+    m_iVer >>= i;
+    return  *this;
+  }
+#endif
+
+#if ME_ENABLE_ROUNDING_OF_MVS
+  //! shift right with rounding
+  Void divideByPowerOf2 (const Int i)
+  {
+    Int offset = (i == 0) ? 0 : 1 << (i - 1);
+    m_iHor += offset;
+    m_iVer += offset;
+
+    m_iHor >>= i;
+    m_iVer >>= i;
+  }
+#endif
+
+  const TComMv& operator<<= (const Int i)
+  {
+    m_iHor <<= i;
+    m_iVer <<= i;
+    return  *this;
+  }
+
+  const TComMv operator - ( const TComMv& rcMv ) const
+  {
+    return TComMv( m_iHor - rcMv.m_iHor, m_iVer - rcMv.m_iVer );
+  }
+
+  const TComMv operator + ( const TComMv& rcMv ) const
+  {
+    return TComMv( m_iHor + rcMv.m_iHor, m_iVer + rcMv.m_iVer );
+  }
+
+  Bool operator== ( const TComMv& rcMv ) const
+  {
+    return (m_iHor==rcMv.m_iHor && m_iVer==rcMv.m_iVer);
+  }
+
+  Bool operator!= ( const TComMv& rcMv ) const
+  {
+    return (m_iHor!=rcMv.m_iHor || m_iVer!=rcMv.m_iVer);
+  }
+
+  const TComMv scaleMv( Int iScale ) const
+  {
+    Int mvx = Clip3( -32768, 32767, (iScale * getHor() + 127 + (iScale * getHor() < 0)) >> 8 );
+    Int mvy = Clip3( -32768, 32767, (iScale * getVer() + 127 + (iScale * getVer() < 0)) >> 8 );
+    return TComMv( mvx, mvy );
+  }
+};// END CLASS DEFINITION TComMV
+
+//! \}
+
+#endif // __TCOMMV__
