@@ -98,3 +98,33 @@ public:
   TComPattern()
   : m_piROIOrigin(NULL)
   , m_roiWidth(0)
+  , m_roiHeight(0)
+  , m_patternStride(0)
+  , m_bitDepth(0)
+#if MCTS_ENC_CHECK
+  , m_roiPosX(0)
+  , m_roiPosY(0)
+  , m_tileLeftTopPelPosX(0)
+  , m_tileLeftTopPelPosY(0)
+  , m_tileRightBottomPelPosX(0)
+  , m_tileRightBottomPelPosY(0)
+#endif
+  {};
+
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // initialization functions
+  // -------------------------------------------------------------------------------------------------------------------
+
+  /// set parameters from Pel buffers for accessing neighbouring pixels
+#if MCTS_ENC_CHECK
+  Void initPattern(Pel* piY, Int roiWidth, Int roiHeight, Int stride, Int bitDepthLuma, Int roiPosX, Int roiPosY);
+  Void setTileBorders(Int tileLeftTopPelPosX, Int tileLeftTopPelPosY, Int tileRightBottomPelPosX, Int tileRightBottomPelPosY);
+#else
+  Void initPattern(Pel* piY, Int roiWidth, Int roiHeight, Int stride, Int bitDepthLuma);
+#endif
+};
+
+//! \}
+
+#endif // __TCOMPATTERN__
