@@ -98,3 +98,103 @@ protected:
 
   // ME parameters
   Int             m_iSearchRange;
+  Int             m_bipredSearchRange; // Search range for bi-prediction
+  MESearchMethod  m_motionEstimationSearchMethod;
+  Int             m_aaiAdaptSR[MAX_NUM_REF_LIST_ADAPT_SR][MAX_IDX_ADAPT_SR];
+  TComMv          m_acMvPredictors[NUM_MV_PREDICTORS]; // Left, Above, AboveRight. enum MVP_DIR first NUM_MV_PREDICTORS entries are suitable for accessing.
+
+  // RD computation
+  TEncSbac***     m_pppcRDSbacCoder;
+  TEncSbac*       m_pcRDGoOnSbacCoder;
+  DistParam       m_cDistParam;
+
+  // Misc.
+  Pel*            m_pTempPel;
+
+  // AMVP cost computation
+  // UInt            m_auiMVPIdxCost[AMVP_MAX_NUM_CANDS+1][AMVP_MAX_NUM_CANDS];
+  UInt            m_auiMVPIdxCost[AMVP_MAX_NUM_CANDS+1][AMVP_MAX_NUM_CANDS+1]; //th array bounds
+
+  TComMv          m_integerMv2Nx2N[NUM_REF_PIC_LIST_01][MAX_NUM_REF];
+
+  Bool            m_isInitialized;
+public:
+  TEncSearch();
+  virtual ~TEncSearch();
+
+  Void init(TEncCfg*       pcEncCfg,
+            TComTrQuant*   pcTrQuant,
+            Int            iSearchRange,
+            Int            bipredSearchRange,
+            MESearchMethod motionEstimationSearchMethod,
+            const UInt     maxCUWidth,
+            const UInt     maxCUHeight,
+            const UInt     maxTotalCUDepth,
+            TEncEntropy*   pcEntropyCoder,
+            TComRdCost*    pcRdCost,
+            TEncSbac***    pppcRDSbacCoder,
+            TEncSbac*      pcRDGoOnSbacCoder );
+
+  Void destroy();
+
+protected:
+
+  /// sub-function for motion vector refinement used in fractional-pel accuracy
+  Distortion  xPatternRefinement( TComPattern* pcPatternKey,
+                                  TComMv baseRefMv,
+                                  Int iFrac, TComMv& rcMvFrac, Bool bAllowUseOfHadamard
+                                 );
+
+  typedef struct
+  {
+    const Pel*  piRefY;
+    Int         iYStride;
+    Int         iBestX;
+    Int         iBestY;
+    UInt        uiBestRound;
+    UInt        uiBestDistance;
+    Distortion  uiBestSad;
+    UChar       ucPointNr;
+  } IntTZSearchStruct;
+
+  // sub-functions for ME
+  __inline Void xTZSearchHelp         ( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const Int iSearchX, const Int iSearchY, const UChar ucPointNr, const UInt uiDistance );
+  __inline Void xTZ2PointSearch       ( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const TComMv* const pcMvSrchRngLT, const TComMv* const pcMvSrchRngRB );
+  __inline Void xTZ8PointSquareSearch ( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const TComMv* const pcMvSrchRngLT, const TComMv* const pcMvSrchRngRB, const Int iStartX, const Int iStartY, const Int iDist );
+  __inline Void xTZ8PointDiamondSearch( const TComPattern* const pcPatternKey, IntTZSearchStruct& rcStruct, const TComMv* const pcMvSrchRngLT, const TComMv* const pcMvSrchRngRB, const Int iStartX, const Int iStartY, const Int iDist, const Bool bCheckCornersAtDist1 );
+
+  Void xGetInterPredictionError( TComDataCU* pcCU, TComYuv* pcYuvOrg, Int iPartIdx, Distortion& ruiSAD, Bool Hadamard );
+
+public:
+  Void  estIntraPredLumaQT      ( TComDataCU* pcCU,
+                                  TComYuv*    pcOrgYuv,
+                                  TComYuv*    pcPredYuv,
+                                  TComYuv*    pcResiYuv,
+                                  TComYuv*    pcRecoYuv,
+                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE]
+                                  DEBUG_STRING_FN_DECLARE(sDebug));
+
+  Void  estIntraPredChromaQT    ( TComDataCU* pcCU,
+                                  TComYuv*    pcOrgYuv,
+                                  TComYuv*    pcPredYuv,
+                                  TComYuv*    pcResiYuv,
+                                  TComYuv*    pcRecoYuv,
+                                  Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE]
+                                  DEBUG_STRING_FN_DECLARE(sDebug));
+
+  /// encoder estimation - inter prediction (non-skip)
+  Void predInterSearch          ( TComDataCU* pcCU,
+                                  TComYuv*    pcOrgYuv,
+                                  TComYuv*    pcPredYuv,
+                                  TComYuv*    pcResiYuv,
+                                  TComYuv*    pcRecoYuv
+                                  DEBUG_STRING_FN_DECLARE(sDebug),
+                                  Bool        bUseRes = false
+#if AMP_MRG
+                                 ,Bool        bUseMRG = false
+#endif
+                                );
+
+  /// encode residual and compute rd-cost for inter mode
+  Void encodeResAndCalcRdInterCU( TComDataCU* pcCU,
+                                  TComYuv*    pcYuvOrg,
