@@ -98,3 +98,46 @@ protected:
                                UInt uiDepth,
                                DeblockEdgeDir edgeDir,
                                Int iEdgeIdx,
+                               Bool bValue,
+                               UInt uiWidthInBaseUnits = 0,
+                               UInt uiHeightInBaseUnits = 0,
+                               const TComRectangle *rect = 0
+                               );
+
+  Void xEdgeFilterLuma            ( TComDataCU* const pcCU, const UInt uiAbsZorderIdx, const UInt uiDepth, const DeblockEdgeDir edgeDir, const Int iEdge );
+  Void xEdgeFilterChroma          ( TComDataCU* const pcCU, const UInt uiAbsZorderIdx, const UInt uiDepth, const DeblockEdgeDir edgeDir, const Int iEdge );
+
+  __inline Void xPelFilterLuma( Pel* piSrc, Int iOffset, Int tc, Bool sw, Bool bPartPNoFilter, Bool bPartQNoFilter, Int iThrCut, Bool bFilterSecondP, Bool bFilterSecondQ, const Int bitDepthLuma);
+  __inline Void xPelFilterChroma( Pel* piSrc, Int iOffset, Int tc, Bool bPartPNoFilter, Bool bPartQNoFilter, const Int bitDepthChroma);
+
+
+  __inline Bool xUseStrongFiltering( Int offset, Int d, Int beta, Int tc, Pel* piSrc);
+  __inline Int xCalcDP( Pel* piSrc, Int iOffset);
+  __inline Int xCalcDQ( Pel* piSrc, Int iOffset);
+
+  static const UChar sm_tcTable[54];
+  static const UChar sm_betaTable[52];
+
+public:
+  TComLoopFilter();
+  virtual ~TComLoopFilter();
+
+  Void  create                    ( UInt uiMaxCUDepth );
+  Void  destroy                   ();
+
+  /// set configuration
+  Void setCfg( Bool bLFCrossTileBoundary );
+
+  /// picture-level deblocking filter
+  Void loopFilterPic( TComPic* pcPic );
+
+  static Int getBeta( Int qp )
+  {
+    Int indexB = Clip3( 0, MAX_QP, qp );
+    return sm_betaTable[ indexB ];
+  }
+};
+
+//! \}
+
+#endif
