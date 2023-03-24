@@ -198,3 +198,103 @@ public:
   /// encode residual and compute rd-cost for inter mode
   Void encodeResAndCalcRdInterCU( TComDataCU* pcCU,
                                   TComYuv*    pcYuvOrg,
+                                  TComYuv*    pcYuvPred,
+                                  TComYuv*    pcYuvResi,
+                                  TComYuv*    pcYuvResiBest,
+                                  TComYuv*    pcYuvRec,
+                                  Bool        bSkipResidual
+                                  DEBUG_STRING_FN_DECLARE(sDebug) );
+
+  /// set ME search range
+  Void setAdaptiveSearchRange   ( Int iDir, Int iRefIdx, Int iSearchRange) { assert(iDir < MAX_NUM_REF_LIST_ADAPT_SR && iRefIdx<Int(MAX_IDX_ADAPT_SR)); m_aaiAdaptSR[iDir][iRefIdx] = iSearchRange; }
+
+  Void xEncPCM    (TComDataCU* pcCU, UInt uiAbsPartIdx, Pel* piOrg, Pel* piPCM, Pel* piPred, Pel* piResi, Pel* piReco, UInt uiStride, UInt uiWidth, UInt uiHeight, const ComponentID compID );
+  Void IPCMSearch (TComDataCU* pcCU, TComYuv* pcOrgYuv, TComYuv* rpcPredYuv, TComYuv* rpcResiYuv, TComYuv* rpcRecoYuv );
+protected:
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Intra search
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void  xEncSubdivCbfQT           ( TComTU      &rTu,
+                                    Bool         bLuma,
+                                    Bool         bChroma );
+
+  Void  xEncCoeffQT               ( TComTU &rTu,
+                                    ComponentID  component,
+                                    Bool         bRealCoeff );
+  Void  xEncIntraHeader           ( TComDataCU*  pcCU,
+                                    UInt         uiTrDepth,
+                                    UInt         uiAbsPartIdx,
+                                    Bool         bLuma,
+                                    Bool         bChroma );
+  UInt  xGetIntraBitsQT           ( TComTU &rTu,
+                                    Bool         bLuma,
+                                    Bool         bChroma,
+                                    Bool         bRealCoeff );
+
+  UInt  xGetIntraBitsQTChroma    ( TComTU &rTu,
+                                   ComponentID compID,
+                                   Bool          bRealCoeff );
+
+  Void  xIntraCodingTUBlock       (       TComYuv*      pcOrgYuv,
+                                          TComYuv*      pcPredYuv,
+                                          TComYuv*      pcResiYuv,
+                                          Pel           resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                    const Bool          checkCrossCPrediction,
+                                          Distortion&   ruiDist,
+                                    const ComponentID   compID,
+                                          TComTU        &rTu
+                                    DEBUG_STRING_FN_DECLARE(sTest)
+                                         ,Int           default0Save1Load2 = 0
+                                   );
+
+  Void  xRecurIntraCodingLumaQT   ( TComYuv*    pcOrgYuv,
+                                    TComYuv*    pcPredYuv,
+                                    TComYuv*    pcResiYuv,
+                                    Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                    Distortion& ruiDistY,
+#if HHI_RQT_INTRA_SPEEDUP
+                                    Bool         bCheckFirst,
+#endif
+                                    Double&      dRDCost,
+                                    TComTU      &rTu
+                                    DEBUG_STRING_FN_DECLARE(sDebug));
+
+  Void  xSetIntraResultLumaQT     ( TComYuv*     pcRecoYuv,
+                                    TComTU &rTu);
+
+  Void xStoreCrossComponentPredictionResult  (       Pel    *pResiLuma,
+                                               const Pel    *pBestLuma,
+                                                     TComTU &rTu,
+                                               const Int     xOffset,
+                                               const Int     yOffset,
+                                               const Int     strideResi,
+                                               const Int     strideBest );
+
+  SChar xCalcCrossComponentPredictionAlpha   (       TComTU &rTu,
+                                               const ComponentID compID,
+                                               const Pel*        piResiL,
+                                               const Pel*        piResiC,
+                                               const Int         width,
+                                               const Int         height,
+                                               const Int         strideL,
+                                               const Int         strideC );
+
+  Void  xRecurIntraChromaCodingQT ( TComYuv*    pcOrgYuv,
+                                    TComYuv*    pcPredYuv,
+                                    TComYuv*    pcResiYuv,
+                                    Pel         resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE],
+                                    Distortion& ruiDist,
+                                    TComTU      &rTu
+                                    DEBUG_STRING_FN_DECLARE(sDebug));
+
+  Void  xSetIntraResultChromaQT   ( TComYuv*    pcRecoYuv, TComTU &rTu);
+
+  Void  xStoreIntraResultQT       ( const ComponentID compID, TComTU &rTu);
+  Void  xLoadIntraResultQT        ( const ComponentID compID, TComTU &rTu);
+
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // Inter search (AMP)
+  // -------------------------------------------------------------------------------------------------------------------
