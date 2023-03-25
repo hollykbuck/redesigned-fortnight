@@ -298,3 +298,103 @@ protected:
   // -------------------------------------------------------------------------------------------------------------------
   // Inter search (AMP)
   // -------------------------------------------------------------------------------------------------------------------
+
+  Void xEstimateMvPredAMVP        ( TComDataCU* pcCU,
+                                    TComYuv*    pcOrgYuv,
+                                    UInt        uiPartIdx,
+                                    RefPicList  eRefPicList,
+                                    Int         iRefIdx,
+                                    TComMv&     rcMvPred,
+                                    Bool        bFilled = false
+                                  , Distortion* puiDistBiP = NULL
+                                     );
+
+  Void xCheckBestMVP              ( TComDataCU* pcCU,
+                                    RefPicList  eRefPicList,
+                                    TComMv      cMv,
+                                    TComMv&     rcMvPred,
+                                    Int&        riMVPIdx,
+                                    UInt&       ruiBits,
+                                    Distortion& ruiCost );
+
+  Distortion xGetTemplateCost    ( TComDataCU*  pcCU,
+                                    UInt        uiPartAddr,
+                                    TComYuv*    pcOrgYuv,
+                                    TComYuv*    pcTemplateCand,
+                                    TComMv      cMvCand,
+                                    Int         iMVPIdx,
+                                    Int         iMVPNum,
+                                    RefPicList  eRefPicList,
+                                    Int         iRefIdx,
+                                    Int         iSizeX,
+                                    Int         iSizeY
+                                   );
+
+
+  Void xCopyAMVPInfo              ( AMVPInfo*   pSrc, AMVPInfo* pDst );
+  UInt xGetMvpIdxBits             ( Int iIdx, Int iNum );
+  Void xGetBlkBits                ( PartSize  eCUMode, Bool bPSlice, Int iPartIdx,  UInt uiLastMode, UInt uiBlkBit[3]);
+
+  Void xMergeEstimation           ( TComDataCU*  pcCU,
+                                    TComYuv*     pcYuvOrg,
+                                    Int          iPartIdx,
+                                    UInt&        uiInterDir,
+                                    TComMvField* pacMvField,
+                                    UInt&        uiMergeIndex,
+                                    Distortion&  ruiCost,
+                                    TComMvField* cMvFieldNeighbours,
+                                    UChar*       uhInterDirNeighbours,
+                                    Int&         numValidMergeCand
+                                   );
+
+  Void xRestrictBipredMergeCand   ( TComDataCU*     pcCU,
+                                    UInt            puIdx,
+                                    TComMvField*    mvFieldNeighbours,
+                                    UChar*          interDirNeighbours,
+                                    Int             numValidMergeCand );
+
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // motion estimation
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void xMotionEstimation          ( TComDataCU*  pcCU,
+                                    TComYuv*     pcYuvOrg,
+                                    Int          iPartIdx,
+                                    RefPicList   eRefPicList,
+                                    TComMv*      pcMvPred,
+                                    Int          iRefIdxPred,
+                                    TComMv&      rcMv,
+                                    UInt&        ruiBits,
+                                    Distortion&  ruiCost,
+                                    Bool         bBi = false  );
+
+  Void xTZSearch                  ( const TComDataCU* const  pcCU,
+                                    const TComPattern* const pcPatternKey,
+                                    const Pel* const         piRefY,
+                                    const Int                iRefStride,
+                                    const TComMv* const      pcMvSrchRngLT,
+                                    const TComMv* const      pcMvSrchRngRB,
+                                    TComMv&                  rcMv,
+                                    Distortion&              ruiSAD,
+                                    const TComMv* const      pIntegerMv2Nx2NPred,
+                                    const Bool               bExtendedSettings
+                                    );
+
+  Void xTZSearchSelective         ( const TComDataCU* const  pcCU,
+                                    const TComPattern* const pcPatternKey,
+                                    const Pel* const         piRefY,
+                                    const Int                iRefStride,
+                                    const TComMv* const      pcMvSrchRngLT,
+                                    const TComMv* const      pcMvSrchRngRB,
+                                    TComMv&                  rcMv,
+                                    Distortion&              ruiSAD,
+                                    const TComMv* const      pIntegerMv2Nx2NPred
+                                    );
+
+  Void xSetSearchRange            ( const TComDataCU* const pcCU,
+                                    const TComMv&      cMvPred,
+                                    const Int          iSrchRng,
+                                    TComMv&      rcMvSrchRngLT,
+#if !MCTS_ENC_CHECK
+                                    TComMv&      rcMvSrchRngRB );
