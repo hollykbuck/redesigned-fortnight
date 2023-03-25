@@ -198,3 +198,103 @@ Distortion xSearchHistogram(const std::vector<Int> &histogramSource,
         const Int deltaOffset   = Clip3( -4*maxOffset, 4*maxOffset-1, (searchOffset - pred) ); // signed 10bit (if !bHighPrecision)
         const Int clippedOffset = Clip3( -1*maxOffset, 1*maxOffset-1, (deltaOffset  + pred) ); // signed 8bit  (if !bHighPrecision)
         xScaleHistogram(histogramRef, outputHistogram, bitDepth, log2Denom, searchWeight, clippedOffset, bHighPrecision);
+        const Distortion distortion = xCalcHistDistortion(histogramSource, outputHistogram);
+
+        if (distortion < minDistortion)
+        {
+          minDistortion = distortion;
+          bestWeight    = searchWeight;
+          bestOffset    = clippedOffset;
+        }
+      }
+    }
+  }
+
+  weightToUpdate = bestWeight;
+  offsetToUpdate = bestOffset;
+
+  // regenerate best histogram
+  xScaleHistogram(histogramRef, outputHistogram, bitDepth, log2Denom, bestWeight, bestOffset, bHighPrecision);
+
+  return minDistortion;
+}
+
+
+// -----------------------------------------------------------------------------
+// Member functions
+
+WeightPredAnalysis::WeightPredAnalysis()
+{
+  for ( UInt lst =0 ; lst<NUM_REF_PIC_LIST_01 ; lst++ )
+  {
+    for ( Int refIdx=0 ; refIdx<MAX_NUM_REF ; refIdx++ )
+    {
+      for ( Int comp=0 ; comp<MAX_NUM_COMPONENT ;comp++ )
+      {
+        WPScalingParam  *pwp   = &(m_wp[lst][refIdx][comp]);
+        pwp->bPresentFlag      = false;
+        pwp->uiLog2WeightDenom = 0;
+        pwp->iWeight           = 1;
+        pwp->iOffset           = 0;
+      }
+    }
+  }
+}
+
+
+//! calculate AC and DC values for current original image
+Void WeightPredAnalysis::xCalcACDCParamSlice(TComSlice *const slice)
+{
+  //===== calculate AC/DC value =====
+  TComPicYuv*   pPic = slice->getPic()->getPicYuvOrg();
+
+  WPACDCParam weightACDCParam[MAX_NUM_COMPONENT];
+
+  for(Int componentIndex = 0; componentIndex < pPic->getNumberValidComponents(); componentIndex++)
+  {
+    const ComponentID compID = ComponentID(componentIndex);
+
+    // calculate DC/AC value for channel
+
+    const Int stride = pPic->getStride(compID);
+    const Int width  = pPic->getWidth(compID);
+    const Int height = pPic->getHeight(compID);
+
+    const Int sample = width*height;
+
+    Int64 orgDC = 0;
+    {
+      const Pel *pPel = pPic->getAddr(compID);
+
+      for(Int y = 0; y < height; y++, pPel+=stride )
+      {
+        for(Int x = 0; x < width; x++ )
+        {
+          orgDC += (Int)( pPel[x] );
+        }
+      }
+    }
+
+    const Int64 orgNormDC = ((orgDC+(sample>>1)) / sample);
+
+    Int64 orgAC = 0;
+    {
+      const Pel *pPel = pPic->getAddr(compID);
+
+      for(Int y = 0; y < height; y++, pPel += stride )
+      {
+        for(Int x = 0; x < width; x++ )
+        {
+          orgAC += abs( (Int)pPel[x] - (Int)orgNormDC );
+        }
+      }
+    }
+
+    const Int fixedBitShift = (slice->getSPS()->getSpsRangeExtension().getHighPrecisionOffsetsEnabledFlag())?RExt__PREDICTION_WEIGHTING_ANALYSIS_DC_PRECISION:0;
+    weightACDCParam[compID].iDC = (((orgDC<<fixedBitShift)+(sample>>1)) / sample);
+    weightACDCParam[compID].iAC = orgAC;
+  }
+
+  slice->setWpAcDcParam(weightACDCParam);
+}
+
