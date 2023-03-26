@@ -398,3 +398,72 @@ protected:
                                     TComMv&      rcMvSrchRngLT,
 #if !MCTS_ENC_CHECK
                                     TComMv&      rcMvSrchRngRB );
+#else
+                                    TComMv&      rcMvSrchRngRB,
+                                    const TComPattern* const pcPatternKey );
+#endif
+
+#if MCTS_ENC_CHECK
+  Void xInitTileBorders(const TComDataCU* const pcCU, TComPattern* pcPatternKey);
+#endif
+
+  Void xPatternSearchFast         ( const TComDataCU* const  pcCU,
+                                    const TComPattern* const pcPatternKey,
+                                    const Pel* const         piRefY,
+                                    const Int                iRefStride,
+                                    const TComMv* const      pcMvSrchRngLT,
+                                    const TComMv* const      pcMvSrchRngRB,
+                                    TComMv&                  rcMv,
+                                    Distortion&              ruiSAD,
+                                    const TComMv* const      pIntegerMv2Nx2NPred
+                                  );
+
+  Void xPatternSearch             ( const TComPattern* const pcPatternKey,
+                                    const Pel*               piRefY,
+                                    const Int                iRefStride,
+                                    const TComMv* const      pcMvSrchRngLT,
+                                    const TComMv* const      pcMvSrchRngRB,
+                                    TComMv&      rcMv,
+                                    Distortion&  ruiSAD );
+
+  Void xPatternSearchFracDIF      (
+                                    Bool         bIsLosslessCoded,
+                                    TComPattern* pcPatternKey,
+                                    Pel*         piRefY,
+                                    Int          iRefStride,
+                                    TComMv*      pcMvInt,
+                                    TComMv&      rcMvHalf,
+                                    TComMv&      rcMvQter,
+                                    Distortion&  ruiCost
+                                   );
+
+  Void xExtDIFUpSamplingH( TComPattern* pcPattern );
+  Void xExtDIFUpSamplingQ( TComPattern* pcPatternKey, TComMv halfPelRef );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // T & Q & Q-1 & T-1
+  // -------------------------------------------------------------------------------------------------------------------
+
+
+  Void xEncodeInterResidualQT( const ComponentID compID, TComTU &rTu );
+  Void xEstimateInterResidualQT( TComYuv* pcResi, Double &rdCost, UInt &ruiBits, Distortion &ruiDist, Distortion *puiZeroDist, TComTU &rTu DEBUG_STRING_FN_DECLARE(sDebug) );
+  Void xSetInterResidualQTData( TComYuv* pcResi, Bool bSpatial, TComTU &rTu  );
+
+  UInt  xModeBitsIntra ( TComDataCU* pcCU, UInt uiMode, UInt uiPartOffset, UInt uiDepth, const ChannelType compID );
+  UInt  xUpdateCandList( UInt uiMode, Double uiCost, UInt uiFastCandNum, UInt * CandModeList, Double * CandCostList );
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // compute symbol bits
+  // -------------------------------------------------------------------------------------------------------------------
+
+  Void xAddSymbolBitsInter       ( TComDataCU*   pcCU,
+                                   UInt&         ruiBits);
+
+  Void  setWpScalingDistParam( TComDataCU* pcCU, Int iRefIdx, RefPicList eRefPicListCur );
+  inline  Void  setDistParamComp( ComponentID compIdx )  { m_cDistParam.compIdx = compIdx; }
+
+};// END CLASS DEFINITION TEncSearch
+
+//! \}
+
+#endif // __TENCSEARCH__
