@@ -298,3 +298,103 @@ Void WeightPredAnalysis::xCalcACDCParamSlice(TComSlice *const slice)
   slice->setWpAcDcParam(weightACDCParam);
 }
 
+
+//! check weighted pred or non-weighted pred
+Void  WeightPredAnalysis::xCheckWPEnable(TComSlice *const slice)
+{
+  const TComPicYuv *pPic = slice->getPic()->getPicYuvOrg();
+
+  Int presentCnt = 0;
+  for ( UInt lst=0 ; lst<NUM_REF_PIC_LIST_01 ; lst++ )
+  {
+    for ( Int refIdx=0 ; refIdx<MAX_NUM_REF ; refIdx++ )
+    {
+      for(Int componentIndex = 0; componentIndex < pPic->getNumberValidComponents(); componentIndex++)
+      {
+        WPScalingParam  *pwp = &(m_wp[lst][refIdx][componentIndex]);
+        presentCnt += (Int)pwp->bPresentFlag;
+      }
+    }
+  }
+
+  if(presentCnt==0)
+  {
+    slice->setTestWeightPred(false);
+    slice->setTestWeightBiPred(false);
+
+    for ( UInt lst=0 ; lst<NUM_REF_PIC_LIST_01 ; lst++ )
+    {
+      for ( Int refIdx=0 ; refIdx<MAX_NUM_REF ; refIdx++ )
+      {
+        for(Int componentIndex = 0; componentIndex < pPic->getNumberValidComponents(); componentIndex++)
+        {
+          WPScalingParam  *pwp = &(m_wp[lst][refIdx][componentIndex]);
+
+          pwp->bPresentFlag      = false;
+          pwp->uiLog2WeightDenom = 0;
+          pwp->iWeight           = 1;
+          pwp->iOffset           = 0;
+        }
+      }
+    }
+    slice->setWpScaling( m_wp );
+  }
+  else
+  {
+    slice->setTestWeightPred  (slice->getPPS()->getUseWP());
+    slice->setTestWeightBiPred(slice->getPPS()->getWPBiPred());
+  }
+}
+
+
+//! estimate wp tables for explicit wp
+Void WeightPredAnalysis::xEstimateWPParamSlice(TComSlice *const slice, const WeightedPredictionMethod method)
+{
+  Int  iDenom         = 6;
+  Bool validRangeFlag = false;
+
+  if(slice->getNumRefIdx(REF_PIC_LIST_0)>3)
+  {
+    iDenom = 7;
+  }
+
+  do
+  {
+    validRangeFlag = xUpdatingWPParameters(slice, iDenom);
+    if (!validRangeFlag)
+    {
+      iDenom--; // decrement to satisfy the range limitation
+    }
+  } while (validRangeFlag == false);
+
+  // selecting whether WP is used, or not (fast search)
+  // NOTE: This is not operating on a slice, but the entire picture.
+  switch (method)
+  {
+    case WP_PER_PICTURE_WITH_SIMPLE_DC_COMBINED_COMPONENT:
+      xSelectWP(slice, iDenom);
+      break;
+    case WP_PER_PICTURE_WITH_SIMPLE_DC_PER_COMPONENT:
+      xSelectWPHistExtClip(slice, iDenom, false, false, false);
+      break;
+    case WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT:
+      xSelectWPHistExtClip(slice, iDenom, false, false, true);
+      break;
+    case WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING:
+      xSelectWPHistExtClip(slice, iDenom, false, true, true);
+      break;
+    case WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING_AND_EXTENSION:
+      xSelectWPHistExtClip(slice, iDenom, true, true, true);
+      break;
+    default:
+      assert(0);
+      exit(1);
+  }
+
+  slice->setWpScaling( m_wp );
+}
+
+
+//! update wp tables for explicit wp w.r.t range limitation
+Bool WeightPredAnalysis::xUpdatingWPParameters(TComSlice *const slice, const Int log2Denom)
+{
