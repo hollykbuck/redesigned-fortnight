@@ -98,3 +98,103 @@ Void TDecGop::init( TDecEntropy*            pcEntropyDecoder,
 // ====================================================================================================================
 // ====================================================================================================================
 // Public member functions
+// ====================================================================================================================
+
+Void TDecGop::decompressSlice(TComInputBitstream* pcBitstream, TComPic* pcPic)
+{
+  TComSlice*  pcSlice = pcPic->getSlice(pcPic->getCurrSliceIdx());
+  // Table of extracted substreams.
+  // These must be deallocated AND their internal fifos, too.
+  TComInputBitstream **ppcSubstreams = NULL;
+
+  //-- For time output for each slice
+  clock_t iBeforeTime = clock();
+  m_pcSbacDecoder->init( (TDecBinIf*)m_pcBinCABAC );
+  m_pcEntropyDecoder->setEntropyDecoder (m_pcSbacDecoder);
+
+  const UInt uiNumSubstreams = pcSlice->getNumberOfSubstreamSizes()+1;
+
+  // init each couple {EntropyDecoder, Substream}
+  ppcSubstreams    = new TComInputBitstream*[uiNumSubstreams];
+  for ( UInt ui = 0 ; ui < uiNumSubstreams ; ui++ )
+  {
+    ppcSubstreams[ui] = pcBitstream->extractSubstream(ui+1 < uiNumSubstreams ? (pcSlice->getSubstreamSize(ui)<<3) : pcBitstream->getNumBitsLeft());
+  }
+
+  m_pcSliceDecoder->decompressSlice( ppcSubstreams, pcPic, m_pcSbacDecoder);
+  // deallocate all created substreams, including internal buffers.
+  for (UInt ui = 0; ui < uiNumSubstreams; ui++)
+  {
+    delete ppcSubstreams[ui];
+  }
+  delete[] ppcSubstreams;
+
+  m_dDecTime += (Double)(clock()-iBeforeTime) / CLOCKS_PER_SEC;
+}
+
+Void TDecGop::filterPicture(TComPic* pcPic)
+{
+  TComSlice*  pcSlice = pcPic->getSlice(pcPic->getCurrSliceIdx());
+
+  //-- For time output for each slice
+  clock_t iBeforeTime = clock();
+
+  // deblocking filter
+  Bool bLFCrossTileBoundary = pcSlice->getPPS()->getLoopFilterAcrossTilesEnabledFlag();
+  m_pcLoopFilter->setCfg(bLFCrossTileBoundary);
+  m_pcLoopFilter->loopFilterPic( pcPic );
+
+  if( pcSlice->getSPS()->getUseSAO() )
+  {
+    m_pcSAO->reconstructBlkSAOParams(pcPic, pcPic->getPicSym()->getSAOBlkParam());
+    m_pcSAO->SAOProcess(pcPic);
+    m_pcSAO->PCMLFDisableProcess(pcPic);
+  }
+
+  pcPic->compressMotion();
+  TChar c = (pcSlice->isIntra() ? 'I' : pcSlice->isInterP() ? 'P' : 'B');
+  if (!pcSlice->isReferenced())
+  {
+    c += 32;
+  }
+
+  //-- For time output for each slice
+  printf("POC %4d TId: %1d ( %c-SLICE, QP%3d ) ", pcSlice->getPOC(),
+                                                  pcSlice->getTLayer(),
+                                                  c,
+                                                  pcSlice->getSliceQp() );
+
+  m_dDecTime += (Double)(clock()-iBeforeTime) / CLOCKS_PER_SEC;
+  printf ("[DT %6.3f] ", m_dDecTime );
+  m_dDecTime  = 0;
+
+  for (Int iRefList = 0; iRefList < 2; iRefList++)
+  {
+    printf ("[L%d ", iRefList);
+    for (Int iRefIndex = 0; iRefIndex < pcSlice->getNumRefIdx(RefPicList(iRefList)); iRefIndex++)
+    {
+      printf ("%d ", pcSlice->getRefPOC(RefPicList(iRefList), iRefIndex));
+    }
+    printf ("] ");
+  }
+  if (m_decodedPictureHashSEIEnabled)
+  {
+    SEIMessages pictureHashes = getSeisByType(pcPic->getSEIs(), SEI::DECODED_PICTURE_HASH );
+    const SEIDecodedPictureHash *hash = ( pictureHashes.size() > 0 ) ? (SEIDecodedPictureHash*) *(pictureHashes.begin()) : NULL;
+    if (pictureHashes.size() > 1)
+    {
+      printf ("Warning: Got multiple decoded picture hash SEI messages. Using first.");
+    }
+    calcAndPrintHashStatus(*(pcPic->getPicYuvRec()), hash, pcSlice->getSPS()->getBitDepths(), m_numberOfChecksumErrorsDetected);
+  }
+
+  printf("\n");
+
+  pcPic->setOutputMark(pcPic->getSlice(0)->getPicOutputFlag() ? true : false);
+  pcPic->setReconMark(true);
+}
+
+/**
+ * Calculate and print hash for pic, compare to picture_digest SEI if
+ * present in seis.  seis may be NULL.  Hash is printed to stdout, in
+ * a manner suitable for the status line. Theformat is:
