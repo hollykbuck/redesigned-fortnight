@@ -198,3 +198,70 @@ Void TDecGop::filterPicture(TComPic* pcPic)
  * Calculate and print hash for pic, compare to picture_digest SEI if
  * present in seis.  seis may be NULL.  Hash is printed to stdout, in
  * a manner suitable for the status line. Theformat is:
+ *  [Hash_type:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,(yyy)]
+ * Where, x..x is the hash
+ *        yyy has the following meanings:
+ *            OK          - calculated hash matches the SEI message
+ *            ***ERROR*** - calculated hash does not match the SEI message
+ *            unk         - no SEI message was available for comparison
+ */
+static Void calcAndPrintHashStatus(TComPicYuv& pic, const SEIDecodedPictureHash* pictureHashSEI, const BitDepths &bitDepths, UInt &numChecksumErrors)
+{
+  /* calculate MD5sum for entire reconstructed picture */
+  TComPictureHash recon_digest;
+  Int numChar=0;
+  const TChar* hashType = "\0";
+
+  if (pictureHashSEI)
+  {
+    switch (pictureHashSEI->method)
+    {
+      case HASHTYPE_MD5:
+        {
+          hashType = "MD5";
+          numChar = calcMD5(pic, recon_digest, bitDepths);
+          break;
+        }
+      case HASHTYPE_CRC:
+        {
+          hashType = "CRC";
+          numChar = calcCRC(pic, recon_digest, bitDepths);
+          break;
+        }
+      case HASHTYPE_CHECKSUM:
+        {
+          hashType = "Checksum";
+          numChar = calcChecksum(pic, recon_digest, bitDepths);
+          break;
+        }
+      default:
+        {
+          assert (!"unknown hash type");
+          break;
+        }
+    }
+  }
+
+  /* compare digest against received version */
+  const TChar* ok = "(unk)";
+  Bool mismatch = false;
+
+  if (pictureHashSEI)
+  {
+    ok = "(OK)";
+    if (recon_digest != pictureHashSEI->m_pictureHash)
+    {
+      ok = "(***ERROR***)";
+      mismatch = true;
+    }
+  }
+
+  printf("[%s:%s,%s] ", hashType, hashToString(recon_digest, numChar).c_str(), ok);
+
+  if (mismatch)
+  {
+    numChecksumErrors++;
+    printf("[rx%s:%s] ", hashType, hashToString(pictureHashSEI->m_pictureHash, numChar).c_str());
+  }
+}
+//! \}
