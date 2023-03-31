@@ -198,3 +198,103 @@ Void TComYuv::copyPartToYuv( TComYuv* pcYuvDst, const UInt uiSrcPartIdx ) const
     copyPartToComponent  ( ComponentID(comp), pcYuvDst, uiSrcPartIdx );
   }
 }
+
+Void TComYuv::copyPartToComponent( const ComponentID compID, TComYuv* pcYuvDst, const UInt uiSrcPartIdx ) const
+{
+  const Pel* pSrc     = getAddr(compID, uiSrcPartIdx);
+        Pel* pDst     = pcYuvDst->getAddr(compID, 0 );
+
+  const UInt  iSrcStride  = getStride(compID);
+  const UInt  iDstStride  = pcYuvDst->getStride(compID);
+
+  const UInt uiHeight = pcYuvDst->getHeight(compID);
+  const UInt uiWidth = pcYuvDst->getWidth(compID);
+
+  for ( UInt y = uiHeight; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, sizeof(Pel)*uiWidth);
+    pDst += iDstStride;
+    pSrc += iSrcStride;
+  }
+}
+
+
+
+
+Void TComYuv::copyPartToPartYuv   ( TComYuv* pcYuvDst, const UInt uiPartIdx, const UInt iWidth, const UInt iHeight ) const
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    copyPartToPartComponent   (ComponentID(comp), pcYuvDst, uiPartIdx, iWidth>>getComponentScaleX(ComponentID(comp)), iHeight>>getComponentScaleY(ComponentID(comp)) );
+  }
+}
+
+Void TComYuv::copyPartToPartComponent  ( const ComponentID compID, TComYuv* pcYuvDst, const UInt uiPartIdx, const UInt iWidthComponent, const UInt iHeightComponent ) const
+{
+  const Pel* pSrc =           getAddr(compID, uiPartIdx);
+        Pel* pDst = pcYuvDst->getAddr(compID, uiPartIdx);
+  if( pSrc == pDst )
+  {
+    //th not a good idea
+    //th best would be to fix the caller
+    return ;
+  }
+
+  const UInt  iSrcStride = getStride(compID);
+  const UInt  iDstStride = pcYuvDst->getStride(compID);
+  for ( UInt y = iHeightComponent; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, iWidthComponent * sizeof(Pel) );
+    pSrc += iSrcStride;
+    pDst += iDstStride;
+  }
+}
+
+
+
+
+Void TComYuv::copyPartToPartComponentMxN  ( const ComponentID compID, TComYuv* pcYuvDst, const TComRectangle &rect) const
+{
+  const Pel* pSrc =           getAddrPix( compID, rect.x0, rect.y0 );
+        Pel* pDst = pcYuvDst->getAddrPix( compID, rect.x0, rect.y0 );
+  if( pSrc == pDst )
+  {
+    //th not a good idea
+    //th best would be to fix the caller
+    return ;
+  }
+
+  const UInt  iSrcStride = getStride(compID);
+  const UInt  iDstStride = pcYuvDst->getStride(compID);
+  const UInt uiHeightComponent=rect.height;
+  const UInt uiWidthComponent=rect.width;
+  for ( UInt y = uiHeightComponent; y != 0; y-- )
+  {
+    ::memcpy( pDst, pSrc, uiWidthComponent * sizeof( Pel ) );
+    pSrc += iSrcStride;
+    pDst += iDstStride;
+  }
+}
+
+
+
+
+Void TComYuv::addClip( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize, const BitDepths &clipBitDepths )
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    const Int uiPartWidth =uiPartSize>>getComponentScaleX(compID);
+    const Int uiPartHeight=uiPartSize>>getComponentScaleY(compID);
+
+    const Pel* pSrc0 = pcYuvSrc0->getAddr(compID, uiTrUnitIdx, uiPartWidth );
+    const Pel* pSrc1 = pcYuvSrc1->getAddr(compID, uiTrUnitIdx, uiPartWidth );
+          Pel* pDst  = getAddr(compID, uiTrUnitIdx, uiPartWidth );
+
+    const UInt iSrc0Stride = pcYuvSrc0->getStride(compID);
+    const UInt iSrc1Stride = pcYuvSrc1->getStride(compID);
+    const UInt iDstStride  = getStride(compID);
+    const Int clipbd = clipBitDepths.recon[toChannelType(compID)];
+#if O0043_BEST_EFFORT_DECODING
+    const Int bitDepthDelta = clipBitDepths.stream[toChannelType(compID)] - clipbd;
+#endif
