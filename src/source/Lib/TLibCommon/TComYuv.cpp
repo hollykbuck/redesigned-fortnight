@@ -298,3 +298,103 @@ Void TComYuv::addClip( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const
 #if O0043_BEST_EFFORT_DECODING
     const Int bitDepthDelta = clipBitDepths.stream[toChannelType(compID)] - clipbd;
 #endif
+
+    for ( Int y = uiPartHeight-1; y >= 0; y-- )
+    {
+      for ( Int x = uiPartWidth-1; x >= 0; x-- )
+      {
+#if O0043_BEST_EFFORT_DECODING
+        pDst[x] = Pel(ClipBD<Int>( Int(pSrc0[x]) + rightShiftEvenRounding<Pel>(pSrc1[x], bitDepthDelta), clipbd));
+#else
+        pDst[x] = Pel(ClipBD<Int>( Int(pSrc0[x]) + Int(pSrc1[x]), clipbd));
+#endif
+      }
+      pSrc0 += iSrc0Stride;
+      pSrc1 += iSrc1Stride;
+      pDst  += iDstStride;
+    }
+  }
+}
+
+
+
+
+Void TComYuv::subtract( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt uiTrUnitIdx, const UInt uiPartSize )
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    const Int uiPartWidth =uiPartSize>>getComponentScaleX(compID);
+    const Int uiPartHeight=uiPartSize>>getComponentScaleY(compID);
+
+    const Pel* pSrc0 = pcYuvSrc0->getAddr( compID, uiTrUnitIdx, uiPartWidth );
+    const Pel* pSrc1 = pcYuvSrc1->getAddr( compID, uiTrUnitIdx, uiPartWidth );
+          Pel* pDst  = getAddr( compID, uiTrUnitIdx, uiPartWidth );
+
+    const Int  iSrc0Stride = pcYuvSrc0->getStride(compID);
+    const Int  iSrc1Stride = pcYuvSrc1->getStride(compID);
+    const Int  iDstStride  = getStride(compID);
+
+    for (Int y = uiPartHeight-1; y >= 0; y-- )
+    {
+      for (Int x = uiPartWidth-1; x >= 0; x-- )
+      {
+        pDst[x] = pSrc0[x] - pSrc1[x];
+      }
+      pSrc0 += iSrc0Stride;
+      pSrc1 += iSrc1Stride;
+      pDst  += iDstStride;
+    }
+  }
+}
+
+
+
+
+Void TComYuv::addAvg( const TComYuv* pcYuvSrc0, const TComYuv* pcYuvSrc1, const UInt iPartUnitIdx, const UInt uiWidth, const UInt uiHeight, const BitDepths &clipBitDepths )
+{
+  for(Int comp=0; comp<getNumberValidComponents(); comp++)
+  {
+    const ComponentID compID=ComponentID(comp);
+    const Pel* pSrc0  = pcYuvSrc0->getAddr( compID, iPartUnitIdx );
+    const Pel* pSrc1  = pcYuvSrc1->getAddr( compID, iPartUnitIdx );
+    Pel* pDst   = getAddr( compID, iPartUnitIdx );
+
+    const UInt  iSrc0Stride = pcYuvSrc0->getStride(compID);
+    const UInt  iSrc1Stride = pcYuvSrc1->getStride(compID);
+    const UInt  iDstStride  = getStride(compID);
+    const Int   clipbd      = clipBitDepths.recon[toChannelType(compID)];
+    const Int   shiftNum    = std::max<Int>(2, (IF_INTERNAL_PREC - clipbd)) + 1;
+    const Int   offset      = ( 1 << ( shiftNum - 1 ) ) + 2 * IF_INTERNAL_OFFS;
+
+    const Int   iWidth      = uiWidth  >> getComponentScaleX(compID);
+    const Int   iHeight     = uiHeight >> getComponentScaleY(compID);
+
+    if (iWidth&1)
+    {
+      assert(0);
+      exit(-1);
+    }
+    else if (iWidth&2)
+    {
+      for ( Int y = 0; y < iHeight; y++ )
+      {
+        for (Int x=0 ; x < iWidth; x+=2 )
+        {
+          pDst[ x + 0 ] = ClipBD( rightShift(( pSrc0[ x + 0 ] + pSrc1[ x + 0 ] + offset ), shiftNum), clipbd );
+          pDst[ x + 1 ] = ClipBD( rightShift(( pSrc0[ x + 1 ] + pSrc1[ x + 1 ] + offset ), shiftNum), clipbd );
+        }
+        pSrc0 += iSrc0Stride;
+        pSrc1 += iSrc1Stride;
+        pDst  += iDstStride;
+      }
+    }
+    else
+    {
+      for ( Int y = 0; y < iHeight; y++ )
+      {
+        for (Int x=0 ; x < iWidth; x+=4 )
+        {
+          pDst[ x + 0 ] = ClipBD( rightShift(( pSrc0[ x + 0 ] + pSrc1[ x + 0 ] + offset ), shiftNum), clipbd );
+          pDst[ x + 1 ] = ClipBD( rightShift(( pSrc0[ x + 1 ] + pSrc1[ x + 1 ] + offset ), shiftNum), clipbd );
+          pDst[ x + 2 ] = ClipBD( rightShift(( pSrc0[ x + 2 ] + pSrc1[ x + 2 ] + offset ), shiftNum), clipbd );
