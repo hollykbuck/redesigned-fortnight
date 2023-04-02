@@ -198,3 +198,103 @@ protected:
   UInt      m_maxCUHeight;
   UInt      m_maxTotalCUDepth;
   UInt      m_log2DiffMaxMinCodingBlockSize;
+
+  //======= Transform =============
+  UInt      m_uiQuadtreeTULog2MaxSize;
+  UInt      m_uiQuadtreeTULog2MinSize;
+  UInt      m_uiQuadtreeTUMaxDepthInter;
+  UInt      m_uiQuadtreeTUMaxDepthIntra;
+
+  //====== Loop/Deblock Filter ========
+  Bool      m_bLoopFilterDisable;
+  Bool      m_loopFilterOffsetInPPS;
+  Int       m_loopFilterBetaOffsetDiv2;
+  Int       m_loopFilterTcOffsetDiv2;
+  Int       m_deblockingFilterMetric;
+  Bool      m_bUseSAO;
+  Bool      m_bTestSAODisableAtPictureLevel;
+  Double    m_saoEncodingRate;       // When non-0 SAO early picture termination is enabled for luma and chroma
+  Double    m_saoEncodingRateChroma; // The SAO early picture termination rate to use for chroma (when m_SaoEncodingRate is >0). If <=0, use results for luma.
+  Int       m_maxNumOffsetsPerPic;
+  Bool      m_saoCtuBoundary;
+  Bool      m_resetEncoderStateAfterIRAP;
+
+  //====== Motion search ========
+  Bool      m_bDisableIntraPUsInInterSlices;
+  MESearchMethod m_motionEstimationSearchMethod;
+  Int       m_iSearchRange;                     //  0:Full frame
+  Int       m_bipredSearchRange;
+  Bool      m_bClipForBiPredMeEnabled;
+  Bool      m_bFastMEAssumingSmootherMVEnabled;
+  Int       m_minSearchWindow;
+  Bool      m_bRestrictMESampling;
+
+  //====== Quality control ========
+  Int       m_iMaxDeltaQP;                      //  Max. absolute delta QP (1:default)
+  Int       m_iMaxCuDQPDepth;                   //  Max. depth for a minimum CuDQP (0:default)
+  Int       m_diffCuChromaQpOffsetDepth;        ///< If negative, then do not apply chroma qp offsets.
+
+  Int       m_chromaCbQpOffset;                 //  Chroma Cb QP Offset (0:default)
+  Int       m_chromaCrQpOffset;                 //  Chroma Cr Qp Offset (0:default)
+  WCGChromaQPControl m_wcgChromaQpControl;                    ///< Wide-colour-gamut chroma QP control.
+  UInt      m_sliceChromaQpOffsetPeriodicity;                 ///< Used in conjunction with Slice Cb/Cr QpOffsetIntraOrPeriodic. Use 0 (default) to disable periodic nature.
+  Int       m_sliceChromaQpOffsetIntraOrPeriodic[2/*Cb,Cr*/]; ///< Chroma Cb QP Offset at slice level for I slice or for periodic inter slices as defined by SliceChromaQPOffsetPeriodicity. Replaces offset in the GOP table.
+
+  ChromaFormat m_chromaFormatIDC;
+
+#if ADAPTIVE_QP_SELECTION
+  Bool      m_bUseAdaptQpSelect;
+#endif
+  Bool      m_extendedPrecisionProcessingFlag;
+  Bool      m_highPrecisionOffsetsEnabledFlag;
+  Bool      m_bUseAdaptiveQP;
+  Int       m_iQPAdaptationRange;
+
+  //====== Tool list ========
+  Int       m_bitDepth[MAX_NUM_CHANNEL_TYPE];
+#if JVET_X0048_X0103_FILM_GRAIN
+  Int       m_bitDepthInput[MAX_NUM_CHANNEL_TYPE];
+#endif
+  Bool      m_bUseASR;
+  Bool      m_bUseHADME;
+  Bool      m_useRDOQ;
+  Bool      m_useRDOQTS;
+  Bool      m_useSelectiveRDOQ;
+  UInt      m_rdPenalty;
+  FastInterSearchMode m_fastInterSearchMode;
+  Bool      m_bUseEarlyCU;
+  Bool      m_useFastDecisionForMerge;
+  Bool      m_bUseCbfFastMode;
+  Bool      m_useEarlySkipDetection;
+  Bool      m_crossComponentPredictionEnabledFlag;
+  Bool      m_reconBasedCrossCPredictionEstimate;
+  UInt      m_log2SaoOffsetScale[MAX_NUM_CHANNEL_TYPE];
+  Bool      m_useTransformSkip;
+  Bool      m_useTransformSkipFast;
+  UInt      m_log2MaxTransformSkipBlockSize;
+  Bool      m_transformSkipRotationEnabledFlag;
+  Bool      m_transformSkipContextEnabledFlag;
+  Bool      m_persistentRiceAdaptationEnabledFlag;
+  Bool      m_cabacBypassAlignmentEnabledFlag;
+  Bool      m_rdpcmEnabledFlag[NUMBER_OF_RDPCM_SIGNALLING_MODES];
+  LumaLevelToDeltaQPMapping m_lumaLevelToDeltaQPMapping; ///< mapping from luma level to delta QP.
+  Int*      m_aidQP;
+  UInt      m_uiDeltaQpRD;
+  Bool      m_bFastDeltaQP;
+#if JVET_V0078
+  Bool      m_bSmoothQPReductionEnable;
+  Double    m_dSmoothQPReductionThreshold;
+  Double    m_dSmoothQPReductionModelScale;
+  Double    m_dSmoothQPReductionModelOffset;
+  Int       m_iSmoothQPReductionLimit;
+  Int       m_iSmoothQPReductionPeriodicity;
+#endif
+
+  Bool      m_bUseConstrainedIntraPred;
+  Bool      m_bFastUDIUseMPMEnabled;
+  Bool      m_bFastMEForGenBLowDelayEnabled;
+  Bool      m_bUseBLambdaForNonKeyLowDelayPictures;
+  Bool      m_usePCM;
+  Int       m_PCMBitDepth[MAX_NUM_CHANNEL_TYPE];
+  UInt      m_pcmLog2MaxSize;
+  UInt      m_uiPCMLog2MinSize;
