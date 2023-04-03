@@ -298,3 +298,103 @@ protected:
   Int       m_PCMBitDepth[MAX_NUM_CHANNEL_TYPE];
   UInt      m_pcmLog2MaxSize;
   UInt      m_uiPCMLog2MinSize;
+  //====== Slice ========
+  SliceConstraint m_sliceMode;
+  Int       m_sliceArgument;
+  //====== Dependent Slice ========
+  SliceConstraint m_sliceSegmentMode;
+  Int       m_sliceSegmentArgument;
+  Bool      m_bLFCrossSliceBoundaryFlag;
+
+  Bool      m_bPCMInputBitDepthFlag;
+  Bool      m_bPCMFilterDisableFlag;
+  Bool      m_intraSmoothingDisabledFlag;
+  Bool      m_loopFilterAcrossTilesEnabledFlag;
+  Bool      m_tileUniformSpacingFlag;
+  Int       m_iNumColumnsMinus1;
+  Int       m_iNumRowsMinus1;
+  std::vector<Int> m_tileColumnWidth;
+  std::vector<Int> m_tileRowHeight;
+
+  Bool      m_entropyCodingSyncEnabledFlag;
+
+  HashType  m_decodedPictureHashSEIType;
+  Bool      m_bufferingPeriodSEIEnabled;
+  Bool      m_pictureTimingSEIEnabled;
+  Bool      m_recoveryPointSEIEnabled;
+  Bool      m_toneMappingInfoSEIEnabled;
+  Int       m_toneMapId;
+  Bool      m_toneMapCancelFlag;
+  Bool      m_toneMapPersistenceFlag;
+  Int       m_codedDataBitDepth;
+  Int       m_targetBitDepth;
+  Int       m_modelId;
+  Int       m_minValue;
+  Int       m_maxValue;
+  Int       m_sigmoidMidpoint;
+  Int       m_sigmoidWidth;
+  Int       m_numPivots;
+  Int       m_cameraIsoSpeedIdc;
+  Int       m_cameraIsoSpeedValue;
+  Int       m_exposureIndexIdc;
+  Int       m_exposureIndexValue;
+  Bool      m_exposureCompensationValueSignFlag;
+  Int       m_exposureCompensationValueNumerator;
+  Int       m_exposureCompensationValueDenomIdc;
+  Int       m_refScreenLuminanceWhite;
+  Int       m_extendedRangeWhiteLevel;
+  Int       m_nominalBlackLevelLumaCodeValue;
+  Int       m_nominalWhiteLevelLumaCodeValue;
+  Int       m_extendedWhiteLevelLumaCodeValue;
+  Int*      m_startOfCodedInterval;
+  Int*      m_codedPivotValue;
+  Int*      m_targetPivotValue;
+  Bool      m_framePackingSEIEnabled;
+  Int       m_framePackingSEIType;
+  Int       m_framePackingSEIId;
+  Int       m_framePackingSEIQuincunx;
+  Int       m_framePackingSEIInterpretation;
+  Bool      m_segmentedRectFramePackingSEIEnabled;
+  Bool      m_segmentedRectFramePackingSEICancel;
+  Int       m_segmentedRectFramePackingSEIType;
+  Bool      m_segmentedRectFramePackingSEIPersistence;
+  Int       m_displayOrientationSEIAngle;
+  Bool      m_temporalLevel0IndexSEIEnabled;
+  Bool      m_gradualDecodingRefreshInfoEnabled;
+  Int       m_noDisplaySEITLayer;
+  Bool      m_decodingUnitInfoSEIEnabled;
+  Bool      m_SOPDescriptionSEIEnabled;
+  Bool      m_scalableNestingSEIEnabled;
+  Bool      m_tmctsSEIEnabled;
+#if MCTS_ENC_CHECK
+  Bool      m_tmctsSEITileConstraint;
+#endif
+#if MCTS_EXTRACTION
+  Bool      m_tmctsExtractionSEIEnabled;
+#endif
+  Bool      m_timeCodeSEIEnabled;
+  Int       m_timeCodeSEINumTs;
+  TComSEITimeSet   m_timeSetArray[MAX_TIMECODE_SEI_SETS];
+  Bool      m_kneeSEIEnabled;
+  TEncSEIKneeFunctionInformation m_kneeFunctionInformationSEI;
+  std::string m_colourRemapSEIFileRoot;          ///< SEI Colour Remapping File (initialized from external file)
+  TComSEIMasteringDisplay m_masteringDisplay;
+  Bool      m_alternativeTransferCharacteristicsSEIEnabled;
+  UChar     m_preferredTransferCharacteristics;
+  Bool      m_greenMetadataInfoSEIEnabled;
+  UChar     m_greenMetadataType;
+  UChar     m_xsdMetricType;
+  Bool      m_ccvSEIEnabled;
+  Bool      m_ccvSEICancelFlag;
+  Bool      m_ccvSEIPersistenceFlag;
+  Bool      m_ccvSEIPrimariesPresentFlag;
+  Bool      m_ccvSEIMinLuminanceValuePresentFlag;
+  Bool      m_ccvSEIMaxLuminanceValuePresentFlag;
+  Bool      m_ccvSEIAvgLuminanceValuePresentFlag;
+  Double    m_ccvSEIPrimariesX[MAX_NUM_COMPONENT]; 
+  Double    m_ccvSEIPrimariesY[MAX_NUM_COMPONENT];
+  Double    m_ccvSEIMinLuminanceValue;
+  Double    m_ccvSEIMaxLuminanceValue;
+  Double    m_ccvSEIAvgLuminanceValue;
+  Bool      m_erpSEIEnabled;          
+  Bool      m_erpSEICancelFlag;
