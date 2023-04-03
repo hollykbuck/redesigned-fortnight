@@ -198,3 +198,103 @@ Void SEIReader::xReadSEIPayloadData(Int const payloadType, Int const payloadSize
       sei = new SEIUserDataUnregistered;
       xParseSEIUserDataUnregistered((SEIUserDataUnregistered&) *sei, payloadSize, pDecodedMessageOutputStream);
       break;
+    case SEI::RECOVERY_POINT:
+      sei = new SEIRecoveryPoint;
+      xParseSEIRecoveryPoint((SEIRecoveryPoint&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::SCENE_INFO:
+      sei = new SEISceneInfo;
+      xParseSEISceneInfo((SEISceneInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::PICTURE_SNAPSHOT:
+      sei = new SEIPictureSnapshot;
+      xParseSEIPictureSnapshot((SEIPictureSnapshot&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_START:
+      sei = new SEIProgressiveRefinementSegmentStart;
+      xParseSEIProgressiveRefinementSegmentStart((SEIProgressiveRefinementSegmentStart&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::PROGRESSIVE_REFINEMENT_SEGMENT_END:
+      sei = new SEIProgressiveRefinementSegmentEnd;
+      xParseSEIProgressiveRefinementSegmentEnd((SEIProgressiveRefinementSegmentEnd&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::FILM_GRAIN_CHARACTERISTICS:
+      sei = new SEIFilmGrainCharacteristics;
+      xParseSEIFilmGrainCharacteristics((SEIFilmGrainCharacteristics&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::POST_FILTER_HINT:
+      if (!sps)
+      {
+        printf ("Warning: post filter hint SEI message, but no active SPS is available. Ignoring.");
+      }
+      else
+      {
+        sei = new SEIPostFilterHint;
+        xParseSEIPostFilterHint((SEIPostFilterHint&) *sei, payloadSize, sps, pDecodedMessageOutputStream);
+      }
+      break;
+    case SEI::TONE_MAPPING_INFO:
+      sei = new SEIToneMappingInfo;
+      xParseSEIToneMappingInfo((SEIToneMappingInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::FRAME_PACKING:
+      sei = new SEIFramePacking;
+      xParseSEIFramePacking((SEIFramePacking&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::DISPLAY_ORIENTATION:
+      sei = new SEIDisplayOrientation;
+      xParseSEIDisplayOrientation((SEIDisplayOrientation&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::GREEN_METADATA:
+      sei = new SEIGreenMetadataInfo;
+      xParseSEIGreenMetadataInfo((SEIGreenMetadataInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::SOP_DESCRIPTION:
+      sei = new SEISOPDescription;
+      xParseSEISOPDescription((SEISOPDescription&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::DECODED_PICTURE_HASH:
+      sei = new SEIDecodedPictureHash;
+      xParseSEIDecodedPictureHash((SEIDecodedPictureHash&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::ACTIVE_PARAMETER_SETS:
+      sei = new SEIActiveParameterSets;
+      xParseSEIActiveParameterSets((SEIActiveParameterSets&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::DECODING_UNIT_INFO:
+      if (!sps)
+      {
+        printf ("Warning: Found Decoding unit SEI message, but no active SPS is available. Ignoring.");
+      }
+      else
+      {
+        sei = new SEIDecodingUnitInfo;
+        xParseSEIDecodingUnitInfo((SEIDecodingUnitInfo&) *sei, payloadSize, sps, pDecodedMessageOutputStream);
+      }
+      break;
+    case SEI::TEMPORAL_LEVEL0_INDEX:
+      sei = new SEITemporalLevel0Index;
+      xParseSEITemporalLevel0Index((SEITemporalLevel0Index&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::SCALABLE_NESTING:
+      sei = new SEIScalableNesting;
+      xParseSEIScalableNesting((SEIScalableNesting&) *sei, nalUnitType, payloadSize, sps, pDecodedMessageOutputStream);
+      break;
+    case SEI::REGION_REFRESH_INFO:
+      sei = new SEIRegionRefreshInfo;
+      xParseSEIRegionRefreshInfo((SEIRegionRefreshInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::NO_DISPLAY:
+      sei = new SEINoDisplay;
+      xParseSEINoDisplay((SEINoDisplay&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::TIME_CODE:
+      sei = new SEITimeCode;
+      xParseSEITimeCode((SEITimeCode&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::MASTERING_DISPLAY_COLOUR_VOLUME:
+      sei = new SEIMasteringDisplayColourVolume;
+      xParseSEIMasteringDisplayColourVolume((SEIMasteringDisplayColourVolume&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::SEGM_RECT_FRAME_PACKING:
+      sei = new SEISegmentedRectFramePacking;
