@@ -298,3 +298,103 @@ Void SEIReader::xReadSEIPayloadData(Int const payloadType, Int const payloadSize
       break;
     case SEI::SEGM_RECT_FRAME_PACKING:
       sei = new SEISegmentedRectFramePacking;
+      xParseSEISegmentedRectFramePacking((SEISegmentedRectFramePacking&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::TEMP_MOTION_CONSTRAINED_TILE_SETS:
+      sei = new SEITempMotionConstrainedTileSets;
+      xParseSEITempMotionConstraintsTileSets((SEITempMotionConstrainedTileSets&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+#if MCTS_EXTRACTION
+    case SEI::MCTS_EXTRACTION_INFO_SET:
+      sei = new SEIMCTSExtractionInfoSet;
+      xParseSEIMCTSExtractionInfoSet((SEIMCTSExtractionInfoSet&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+#endif
+    case SEI::CHROMA_RESAMPLING_FILTER_HINT:
+      sei = new SEIChromaResamplingFilterHint;
+      xParseSEIChromaResamplingFilterHint((SEIChromaResamplingFilterHint&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::KNEE_FUNCTION_INFO:
+      sei = new SEIKneeFunctionInfo;
+      xParseSEIKneeFunctionInfo((SEIKneeFunctionInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::COLOUR_REMAPPING_INFO:
+      sei = new SEIColourRemappingInfo;
+      xParseSEIColourRemappingInfo((SEIColourRemappingInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::DEINTERLACE_FIELD_IDENTIFICATION:
+      sei = new SEIDeinterlaceFieldIdentification;
+      xParseSEIDeinterlaceFieldIdentification((SEIDeinterlaceFieldIdentification&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::CONTENT_LIGHT_LEVEL_INFO:
+      sei = new SEIContentLightLevelInfo;
+      xParseSEIContentLightLevelInfo((SEIContentLightLevelInfo&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::DEPENDENT_RAP_INDICATION:
+      sei = new SEIDependentRAPIndication;
+      xParseSEIDependentRAPIndication((SEIDependentRAPIndication&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::CODED_REGION_COMPLETION:
+      sei = new SEICodedRegionCompletion;
+      xParseSEICodedRegionCompletion((SEICodedRegionCompletion&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+      sei = new SEIAlternativeTransferCharacteristics;
+      xParseSEIAlternativeTransferCharacteristics((SEIAlternativeTransferCharacteristics&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::AMBIENT_VIEWING_ENVIRONMENT:
+      sei = new SEIAmbientViewingEnvironment;
+      xParseSEIAmbientViewingEnvironment((SEIAmbientViewingEnvironment&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::CONTENT_COLOUR_VOLUME:
+      sei = new SEIContentColourVolume;
+      xParseSEIContentColourVolume((SEIContentColourVolume&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::EQUIRECTANGULAR_PROJECTION:
+      sei = new SEIEquirectangularProjection;
+      xParseSEIEquirectangularProjection((SEIEquirectangularProjection&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::SPHERE_ROTATION:
+      sei = new SEISphereRotation;
+      xParseSEISphereRotation((SEISphereRotation&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::OMNI_VIEWPORT:
+      sei = new SEIOmniViewport;
+      xParseSEIOmniViewport((SEIOmniViewport&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::CUBEMAP_PROJECTION:
+      sei = new SEICubemapProjection;
+      xParseSEICubemapProjection((SEICubemapProjection&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::REGION_WISE_PACKING:
+      sei = new SEIRegionWisePacking;
+      xParseSEIRegionWisePacking((SEIRegionWisePacking&) *sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+
+    case SEI::ANNOTATED_REGIONS:
+      sei = new SEIAnnotatedRegions;
+      xParseSEIAnnotatedRegions((SEIAnnotatedRegions&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::FISHEYE_VIDEO_INFO:
+      sei = new SEIFisheyeVideoInfo;
+      xParseSEIFisheyeVideoInfo((SEIFisheyeVideoInfo&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+    case SEI::REGIONAL_NESTING:
+      sei = new SEIRegionalNesting;
+      xParseSEIRegionalNesting((SEIRegionalNesting&) *sei, payloadSize, sps, pDecodedMessageOutputStream);
+      break;
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+    case SEI::SHUTTER_INTERVAL_INFO:
+      sei = new SEIShutterIntervalInfo;
+      xParseSEIShutterInterval((SEIShutterIntervalInfo&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+#endif
+#if JCTVC_AD0021_SEI_MANIFEST
+    case SEI::SEI_MANIFEST:
+      sei = new SEIManifest;
+      xParseSEISEIManifest((SEIManifest&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    case SEI::SEI_PREFIX_INDICATION:
+      sei = new SEIPrefixIndication;
