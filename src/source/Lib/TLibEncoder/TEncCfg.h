@@ -398,3 +398,103 @@ protected:
   Double    m_ccvSEIAvgLuminanceValue;
   Bool      m_erpSEIEnabled;          
   Bool      m_erpSEICancelFlag;
+  Bool      m_erpSEIPersistenceFlag;
+  Bool      m_erpSEIGuardBandFlag;
+  UInt      m_erpSEIGuardBandType;
+  UInt      m_erpSEILeftGuardBandWidth;
+  UInt      m_erpSEIRightGuardBandWidth;
+  Bool      m_sphereRotationSEIEnabled;          
+  Bool      m_sphereRotationSEICancelFlag;
+  Bool      m_sphereRotationSEIPersistenceFlag;
+  Int       m_sphereRotationSEIYaw;
+  Int       m_sphereRotationSEIPitch;
+  Int       m_sphereRotationSEIRoll;
+  Bool      m_omniViewportSEIEnabled;          
+  UInt      m_omniViewportSEIId;
+  Bool      m_omniViewportSEICancelFlag;
+  Bool      m_omniViewportSEIPersistenceFlag;
+  UInt      m_omniViewportSEICntMinus1;
+  std::vector<Int>  m_omniViewportSEIAzimuthCentre;
+  std::vector<Int>  m_omniViewportSEIElevationCentre;
+  std::vector<Int>  m_omniViewportSEITiltCentre;
+  std::vector<UInt> m_omniViewportSEIHorRange;
+  std::vector<UInt> m_omniViewportSEIVerRange; 
+  Bool      m_gopBasedTemporalFilterEnabled;
+#if JVET_Y0077_BIM
+  Bool                  m_bimEnabled;
+  std::map<Int, Int*>   m_adaptQPmap;
+#endif
+  Bool                  m_cmpSEIEnabled;
+  Bool                  m_cmpSEICmpCancelFlag;
+  Bool                  m_cmpSEICmpPersistenceFlag;
+  Bool                  m_rwpSEIEnabled;
+  Bool                  m_rwpSEIRwpCancelFlag;
+  Bool                  m_rwpSEIRwpPersistenceFlag;
+  Bool                  m_rwpSEIConstituentPictureMatchingFlag;
+  Int                   m_rwpSEINumPackedRegions;
+  Int                   m_rwpSEIProjPictureWidth;
+  Int                   m_rwpSEIProjPictureHeight;
+  Int                   m_rwpSEIPackedPictureWidth;
+  Int                   m_rwpSEIPackedPictureHeight;
+  std::vector<UChar>    m_rwpSEIRwpTransformType;
+  std::vector<Bool>     m_rwpSEIRwpGuardBandFlag;
+  std::vector<UInt>     m_rwpSEIProjRegionWidth;
+  std::vector<UInt>     m_rwpSEIProjRegionHeight;
+  std::vector<UInt>     m_rwpSEIRwpSEIProjRegionTop;
+  std::vector<UInt>     m_rwpSEIProjRegionLeft;
+  std::vector<UShort>   m_rwpSEIPackedRegionWidth;
+  std::vector<UShort>   m_rwpSEIPackedRegionHeight;
+  std::vector<UShort>   m_rwpSEIPackedRegionTop;
+  std::vector<UShort>   m_rwpSEIPackedRegionLeft;
+  std::vector<UChar>    m_rwpSEIRwpLeftGuardBandWidth;
+  std::vector<UChar>    m_rwpSEIRwpRightGuardBandWidth;
+  std::vector<UChar>    m_rwpSEIRwpTopGuardBandHeight;
+  std::vector<UChar>    m_rwpSEIRwpBottomGuardBandHeight;
+  std::vector<Bool>     m_rwpSEIRwpGuardBandNotUsedForPredFlag;
+  std::vector<UChar>    m_rwpSEIRwpGuardBandType;
+  std::string           m_arSEIFileRoot;  // Annotated region SEI - initialized from external file
+  Bool                    m_fviSEIEnabled;
+  TComSEIFisheyeVideoInfo m_fisheyeVideoInfo;
+  std::string m_regionalNestingSEIFileRoot;  // Regional nesting SEI - initialized from external file
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  Bool                    m_siiSEIEnabled;
+  UInt                    m_siiSEINumUnitsInShutterInterval;
+  UInt                    m_siiSEITimeScale;
+  std::vector<UInt>       m_siiSEISubLayerNumUnitsInSI;
+#endif
+#if SEI_ENCODER_CONTROL
+  // film grain characterstics sei
+  Bool      m_fgcSEIEnabled;
+  Bool      m_fgcSEICancelFlag;
+  Bool      m_fgcSEIPersistenceFlag;
+  UChar     m_fgcSEIModelID;
+  Bool      m_fgcSEISepColourDescPresentFlag;
+  UChar     m_fgcSEIBlendingModeID;
+  UChar     m_fgcSEILog2ScaleFactor;
+  Bool      m_fgcSEICompModelPresent[MAX_NUM_COMPONENT];
+#if JVET_X0048_X0103_FILM_GRAIN
+  Bool      m_fgcSEIAnalysisEnabled;
+  std::string m_fgcSEIExternalMask;
+  std::string m_fgcSEIExternalDenoised;
+  Bool      m_fgcSEIPerPictureSEI;
+  UChar     m_fgcSEINumIntensityIntervalMinus1[MAX_NUM_COMPONENT];
+  UChar     m_fgcSEINumModelValuesMinus1[MAX_NUM_COMPONENT];
+  UChar     m_fgcSEIIntensityIntervalLowerBound[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES];
+  UChar     m_fgcSEIIntensityIntervalUpperBound[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES];
+  UInt      m_fgcSEICompModelValue[MAX_NUM_COMPONENT][FG_MAX_NUM_INTENSITIES][FG_MAX_NUM_MODEL_VALUES];
+#endif
+  // content light level SEI
+  Bool      m_cllSEIEnabled;
+  UShort    m_cllSEIMaxContentLevel;
+  UShort    m_cllSEIMaxPicAvgLevel;
+  // ambient viewing environment sei
+  Bool      m_aveSEIEnabled;
+  UInt      m_aveSEIAmbientIlluminance;
+  UShort    m_aveSEIAmbientLightX;
+  UShort    m_aveSEIAmbientLightY;
+  #endif
+  //====== Weighted Prediction ========
+  Bool      m_useWeightedPred;       //< Use of Weighting Prediction (P_SLICE)
+  Bool      m_useWeightedBiPred;    //< Use of Bi-directional Weighting Prediction (B_SLICE)
+  WeightedPredictionMethod m_weightedPredictionMethod;
+  UInt      m_log2ParallelMergeLevelMinus2;       ///< Parallel merge estimation region
