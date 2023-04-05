@@ -498,3 +498,103 @@ Void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType
     for (Int mask = 0xff; finalBits & (mask >> finalPayloadBits); finalPayloadBits++)
     {
       continue;
+    }
+
+    /* 3 */
+    for (; payloadBitsRemaining > 9 - finalPayloadBits; payloadBitsRemaining--)
+    {
+      UInt reservedPayloadExtensionData;
+      sei_read_flag ( 0, reservedPayloadExtensionData, "reserved_payload_extension_data");
+    }
+
+    UInt dummy;
+    sei_read_flag( 0, dummy, "payload_bit_equal_to_one"); payloadBitsRemaining--;
+    while (payloadBitsRemaining)
+    {
+      sei_read_flag( 0, dummy, "payload_bit_equal_to_zero"); payloadBitsRemaining--;
+    }
+  }
+
+  /* restore primary bitstream for sei_message */
+  delete getBitstream();
+  setBitstream(bs);
+}
+
+
+Void SEIReader::xParseSEIBufferingPeriod(SEIBufferingPeriod& sei, UInt payloadSize, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i, nalOrVcl;
+  UInt code;
+
+  const TComVUI *pVUI = sps->getVuiParameters();
+  const TComHRD *pHRD = pVUI->getHrdParameters();
+
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "bp_seq_parameter_set_id" );                         sei.m_bpSeqParameterSetId     = code;
+  if( !pHRD->getSubPicCpbParamsPresentFlag() )
+  {
+    sei_read_flag( pDecodedMessageOutputStream, code, "irap_cpb_params_present_flag" );                   sei.m_rapCpbParamsPresentFlag = code;
+  }
+  if( sei.m_rapCpbParamsPresentFlag )
+  {
+    sei_read_code( pDecodedMessageOutputStream, pHRD->getCpbRemovalDelayLengthMinus1() + 1, code, "cpb_delay_offset" );      sei.m_cpbDelayOffset = code;
+    sei_read_code( pDecodedMessageOutputStream, pHRD->getDpbOutputDelayLengthMinus1()  + 1, code, "dpb_delay_offset" );      sei.m_dpbDelayOffset = code;
+  }
+
+  //read splicing flag and cpb_removal_delay_delta
+  sei_read_flag( pDecodedMessageOutputStream, code, "concatenation_flag");
+  sei.m_concatenationFlag = code;
+  sei_read_code( pDecodedMessageOutputStream, ( pHRD->getCpbRemovalDelayLengthMinus1() + 1 ), code, "au_cpb_removal_delay_delta_minus1" );
+  sei.m_auCpbRemovalDelayDelta = code + 1;
+
+  for( nalOrVcl = 0; nalOrVcl < 2; nalOrVcl ++ )
+  {
+    if( ( ( nalOrVcl == 0 ) && ( pHRD->getNalHrdParametersPresentFlag() ) ) ||
+        ( ( nalOrVcl == 1 ) && ( pHRD->getVclHrdParametersPresentFlag() ) ) )
+    {
+      for( i = 0; i < ( pHRD->getCpbCntMinus1( 0 ) + 1 ); i ++ )
+      {
+        sei_read_code( pDecodedMessageOutputStream, ( pHRD->getInitialCpbRemovalDelayLengthMinus1() + 1 ) , code, nalOrVcl?"vcl_initial_cpb_removal_delay":"nal_initial_cpb_removal_delay" );
+        sei.m_initialCpbRemovalDelay[i][nalOrVcl] = code;
+        sei_read_code( pDecodedMessageOutputStream, ( pHRD->getInitialCpbRemovalDelayLengthMinus1() + 1 ) , code, nalOrVcl?"vcl_initial_cpb_removal_offset":"nal_initial_cpb_removal_offset" );
+        sei.m_initialCpbRemovalDelayOffset[i][nalOrVcl] = code;
+        if( pHRD->getSubPicCpbParamsPresentFlag() || sei.m_rapCpbParamsPresentFlag )
+        {
+          sei_read_code( pDecodedMessageOutputStream, ( pHRD->getInitialCpbRemovalDelayLengthMinus1() + 1 ) , code, nalOrVcl?"vcl_initial_alt_cpb_removal_delay":"nal_initial_alt_cpb_removal_delay" );
+          sei.m_initialAltCpbRemovalDelay[i][nalOrVcl] = code;
+          sei_read_code( pDecodedMessageOutputStream, ( pHRD->getInitialCpbRemovalDelayLengthMinus1() + 1 ) , code, nalOrVcl?"vcl_initial_alt_cpb_removal_offset":"nal_initial_alt_cpb_removal_offset" );
+          sei.m_initialAltCpbRemovalDelayOffset[i][nalOrVcl] = code;
+        }
+      }
+    }
+  }
+}
+
+
+Void SEIReader::xParseSEIPictureTiming(SEIPictureTiming& sei, UInt payloadSize, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i;
+  UInt code;
+
+  const TComVUI *vui = sps->getVuiParameters();
+  const TComHRD *hrd = vui->getHrdParameters();
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  if( vui->getFrameFieldInfoPresentFlag() )
+  {
+    sei_read_code( pDecodedMessageOutputStream, 4, code, "pic_struct" );             sei.m_picStruct            = code;
+    sei_read_code( pDecodedMessageOutputStream, 2, code, "source_scan_type" );       sei.m_sourceScanType       = code;
+    sei_read_flag( pDecodedMessageOutputStream,    code, "duplicate_flag" );         sei.m_duplicateFlag        = (code == 1);
+  }
+
+  if( hrd->getCpbDpbDelaysPresentFlag())
+  {
+    sei_read_code( pDecodedMessageOutputStream, ( hrd->getCpbRemovalDelayLengthMinus1() + 1 ), code, "au_cpb_removal_delay_minus1" );
+    sei.m_auCpbRemovalDelay = code + 1;
+    sei_read_code( pDecodedMessageOutputStream, ( hrd->getDpbOutputDelayLengthMinus1() + 1 ), code, "pic_dpb_output_delay" );
+    sei.m_picDpbOutputDelay = code;
+
+    if(hrd->getSubPicCpbParamsPresentFlag())
+    {
+      sei_read_code( pDecodedMessageOutputStream, hrd->getDpbOutputDelayDuLengthMinus1()+1, code, "pic_dpb_output_du_delay" );
