@@ -398,3 +398,103 @@ Void SEIReader::xReadSEIPayloadData(Int const payloadType, Int const payloadSize
 #if JCTVC_AD0021_SEI_PREFIX_INDICATION
     case SEI::SEI_PREFIX_INDICATION:
       sei = new SEIPrefixIndication;
+      xParseSEISEIPrefixIndication((SEIPrefixIndication&)*sei, payloadSize, pDecodedMessageOutputStream);
+      break;
+#endif
+    default:
+      for (UInt i = 0; i < payloadSize; i++)
+      {
+        UInt seiByte;
+        std::string msg = std::string("unknown ")+typeName+std::string(" payload byte");
+        sei_read_code (NULL, 8, seiByte, msg.c_str());
+      }
+      printf ("Unknown prefix SEI message (payloadType = %d) was found!\n", payloadType);
+      if (pDecodedMessageOutputStream)
+      {
+        (*pDecodedMessageOutputStream) << "Unknown "<< typeName << " message (payloadType = " << payloadType << ") was found!\n";
+      }
+      break;
+    }
+}
+
+Void SEIReader::xReadSEImessage(SEIMessages& seis, const NalUnitType nalUnitType, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream, const vector<SEI::PayloadType>& allowedSeiTypes, std::string const &typeName)
+{
+#if ENC_DEC_TRACE
+  xTraceSEIHeader();
+#endif
+  Int payloadType = 0;
+  UInt val = 0;
+
+  do
+  {
+    sei_read_code(NULL, 8, val, "payload_type");
+    payloadType += val;
+  } while (val==0xFF);
+
+  UInt payloadSize = 0;
+  do
+  {
+    sei_read_code(NULL, 8, val, "payload_size");
+    payloadSize += val;
+  } while (val==0xFF);
+
+#if ENC_DEC_TRACE
+  xTraceSEIMessageType((SEI::PayloadType)payloadType);
+#endif
+
+  /* extract the payload for this single SEI message.
+   * This allows greater safety in erroneous parsing of an SEI message
+   * from affecting subsequent messages.
+   * After parsing the payload, bs needs to be restored as the primary
+   * bitstream.
+   */
+  TComInputBitstream *bs = getBitstream();
+  setBitstream(bs->extractSubstream(payloadSize * 8));
+
+  SEI *sei = NULL;
+
+  if (std::find(allowedSeiTypes.begin(), allowedSeiTypes.begin(), payloadType) !=  allowedSeiTypes.end())
+  {
+    xReadSEIPayloadData(payloadType, payloadSize, sei, nalUnitType, sps, pDecodedMessageOutputStream, typeName);
+  } 
+  else
+  {
+    for (UInt i = 0; i < payloadSize; i++)
+    {
+      UInt seiByte;
+      sei_read_code (NULL, 8, seiByte, "unknown SEI payload byte");
+    }
+    printf ("Unknown SEI message (payloadType = %d) was found!\n", payloadType);
+    if (pDecodedMessageOutputStream)
+    {
+      (*pDecodedMessageOutputStream) << "Unknown SEI message (payloadType = " << payloadType << ") was found!\n";
+    }
+  }
+
+  if (sei != NULL)
+  {
+    seis.push_back(sei);
+  }
+
+  /* By definition the underlying bitstream terminates in a byte-aligned manner.
+   * 1. Extract all bar the last MIN(bitsremaining,nine) bits as reserved_payload_extension_data
+   * 2. Examine the final 8 bits to determine the payload_bit_equal_to_one marker
+   * 3. Extract the remainingreserved_payload_extension_data bits.
+   *
+   * If there are fewer than 9 bits available, extract them.
+   */
+  Int payloadBitsRemaining = getBitstream()->getNumBitsLeft();
+  if (payloadBitsRemaining) /* more_data_in_payload() */
+  {
+    for (; payloadBitsRemaining > 9; payloadBitsRemaining--)
+    {
+      UInt reservedPayloadExtensionData;
+      sei_read_code ( pDecodedMessageOutputStream, 1, reservedPayloadExtensionData, "reserved_payload_extension_data");
+    }
+
+    /* 2 */
+    Int finalBits = getBitstream()->peekBits(payloadBitsRemaining);
+    Int finalPayloadBits = 0;
+    for (Int mask = 0xff; finalBits & (mask >> finalPayloadBits); finalPayloadBits++)
+    {
+      continue;
