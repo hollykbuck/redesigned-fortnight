@@ -498,3 +498,103 @@ protected:
   Bool      m_useWeightedBiPred;    //< Use of Bi-directional Weighting Prediction (B_SLICE)
   WeightedPredictionMethod m_weightedPredictionMethod;
   UInt      m_log2ParallelMergeLevelMinus2;       ///< Parallel merge estimation region
+  UInt      m_maxNumMergeCand;                    ///< Maximum number of merge candidates
+  ScalingListMode m_useScalingListId;             ///< Using quantization matrix i.e. 0=off, 1=default, 2=file.
+  std::string m_scalingListFileName;              ///< quantization matrix file name
+  Int       m_TMVPModeId;
+  Bool      m_SignDataHidingEnabledFlag;
+  Bool      m_RCEnableRateControl;
+  Int       m_RCTargetBitrate;
+  Int       m_RCKeepHierarchicalBit;
+  Bool      m_RCLCULevelRC;
+  Bool      m_RCUseLCUSeparateModel;
+  Int       m_RCInitialQP;
+  Bool      m_RCForceIntraQP;
+  Bool      m_RCCpbSaturationEnabled;
+  UInt      m_RCCpbSize;
+  Double    m_RCInitialCpbFullness;
+  Bool      m_TransquantBypassEnabledFlag;                    ///< transquant_bypass_enabled_flag setting in PPS.
+  Bool      m_CUTransquantBypassFlagForce;                    ///< if transquant_bypass_enabled_flag, then, if true, all CU transquant bypass flags will be set to true.
+
+  CostMode  m_costMode;                                       ///< The cost function to use, primarily when considering lossless coding.
+
+  TComVPS   m_cVPS;
+  Bool      m_recalculateQPAccordingToLambda;                 ///< recalculate QP value according to the lambda value
+  Int       m_activeParameterSetsSEIEnabled;                  ///< enable active parameter set SEI message
+  Bool      m_vuiParametersPresentFlag;                       ///< enable generation of VUI parameters
+  Bool      m_aspectRatioInfoPresentFlag;                     ///< Signals whether aspect_ratio_idc is present
+  Bool      m_chromaResamplingFilterHintEnabled;              ///< Signals whether chroma sampling filter hint data is present
+  Int       m_chromaResamplingHorFilterIdc;                   ///< Specifies the Index of filter to use
+  Int       m_chromaResamplingVerFilterIdc;                   ///< Specifies the Index of filter to use
+  Int       m_aspectRatioIdc;                                 ///< aspect_ratio_idc
+  Int       m_sarWidth;                                       ///< horizontal size of the sample aspect ratio
+  Int       m_sarHeight;                                      ///< vertical size of the sample aspect ratio
+  Bool      m_overscanInfoPresentFlag;                        ///< Signals whether overscan_appropriate_flag is present
+  Bool      m_overscanAppropriateFlag;                        ///< Indicates whether conformant decoded pictures are suitable for display using overscan
+  Bool      m_videoSignalTypePresentFlag;                     ///< Signals whether video_format, video_full_range_flag, and colour_description_present_flag are present
+  Int       m_videoFormat;                                    ///< Indicates representation of pictures
+  Bool      m_videoFullRangeFlag;                             ///< Indicates the black level and range of luma and chroma signals
+  Bool      m_colourDescriptionPresentFlag;                   ///< Signals whether colour_primaries, transfer_characteristics and matrix_coefficients are present
+  Int       m_colourPrimaries;                                ///< Indicates chromaticity coordinates of the source primaries
+  Int       m_transferCharacteristics;                        ///< Indicates the opto-electronic transfer characteristics of the source
+  Int       m_matrixCoefficients;                             ///< Describes the matrix coefficients used in deriving luma and chroma from RGB primaries
+  Bool      m_chromaLocInfoPresentFlag;                       ///< Signals whether chroma_sample_loc_type_top_field and chroma_sample_loc_type_bottom_field are present
+  Int       m_chromaSampleLocTypeTopField;                    ///< Specifies the location of chroma samples for top field
+  Int       m_chromaSampleLocTypeBottomField;                 ///< Specifies the location of chroma samples for bottom field
+  Bool      m_neutralChromaIndicationFlag;                    ///< Indicates that the value of all decoded chroma samples is equal to 1<<(BitDepthCr-1)
+  Window    m_defaultDisplayWindow;                           ///< Represents the default display window parameters
+  Bool      m_frameFieldInfoPresentFlag;                      ///< Indicates that pic_struct and other field coding related values are present in picture timing SEI messages
+  Bool      m_pocProportionalToTimingFlag;                    ///< Indicates that the POC value is proportional to the output time w.r.t. first picture in CVS
+  Int       m_numTicksPocDiffOneMinus1;                       ///< Number of ticks minus 1 that for a POC difference of one
+  Bool      m_bitstreamRestrictionFlag;                       ///< Signals whether bitstream restriction parameters are present
+  Bool      m_tilesFixedStructureFlag;                        ///< Indicates that each active picture parameter set has the same values of the syntax elements related to tiles
+  Bool      m_motionVectorsOverPicBoundariesFlag;             ///< Indicates that no samples outside the picture boundaries are used for inter prediction
+  Int       m_minSpatialSegmentationIdc;                      ///< Indicates the maximum size of the spatial segments in the pictures in the coded video sequence
+  Int       m_maxBytesPerPicDenom;                            ///< Indicates a number of bytes not exceeded by the sum of the sizes of the VCL NAL units associated with any coded picture
+  Int       m_maxBitsPerMinCuDenom;                           ///< Indicates an upper bound for the number of bits of coding_unit() data
+  Int       m_log2MaxMvLengthHorizontal;                      ///< Indicate the maximum absolute value of a decoded horizontal MV component in quarter-pel luma units
+  Int       m_log2MaxMvLengthVertical;                        ///< Indicate the maximum absolute value of a decoded vertical MV component in quarter-pel luma units
+
+  Bool      m_useStrongIntraSmoothing;                        ///< enable the use of strong intra smoothing (bi_linear interpolation) for 32x32 blocks when reference samples are flat.
+  Bool      m_bEfficientFieldIRAPEnabled;                     ///< enable to code fields in a specific, potentially more efficient, order.
+  Bool      m_bHarmonizeGopFirstFieldCoupleEnabled;
+
+  std::string m_summaryOutFilename;                           ///< filename to use for producing summary output file.
+  std::string m_summaryPicFilenameBase;                       ///< Base filename to use for producing summary picture output files. The actual filenames used will have I.txt, P.txt and B.txt appended.
+  UInt        m_summaryVerboseness;                           ///< Specifies the level of the verboseness of the text output.
+
+#if JCTVC_AD0021_SEI_MANIFEST
+  Bool        m_SEIManifestSEIEnabled;
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  Bool        m_SEIPrefixIndicationSEIEnabled;
+#endif
+
+public:
+  TEncCfg()
+  : m_tileColumnWidth()
+  , m_tileRowHeight()
+  {
+    m_PCMBitDepth[CHANNEL_TYPE_LUMA]=8;
+    m_PCMBitDepth[CHANNEL_TYPE_CHROMA]=8;
+  }
+
+  virtual ~TEncCfg()
+  {}
+
+  Void setProfile(Profile::Name profile) { m_profile = profile; }
+  Void setLevel(Level::Tier tier, Level::Name level) { m_levelTier = tier; m_level = level; }
+
+  Void      setFrameRate                    ( Int   i )      { m_iFrameRate = i; }
+  Void      setFrameSkip                    ( UInt  i )      { m_FrameSkip = i; }
+  Void      setTemporalSubsampleRatio       ( UInt  i )      { m_temporalSubsampleRatio = i; }
+  Void      setSourceWidth                  ( Int   i )      { m_iSourceWidth = i; }
+  Void      setSourceHeight                 ( Int   i )      { m_iSourceHeight = i; }
+
+  Window   &getConformanceWindow()                           { return m_conformanceWindow; }
+  Void      setConformanceWindow (Int confLeft, Int confRight, Int confTop, Int confBottom ) { m_conformanceWindow.setWindow (confLeft, confRight, confTop, confBottom); }
+
+  Void      setFramesToBeEncoded            ( Int   i )      { m_framesToBeEncoded = i; }
+
+  Bool      getPrintMSEBasedSequencePSNR    ()         const { return m_printMSEBasedSequencePSNR;  }
+  Void      setPrintMSEBasedSequencePSNR    (Bool value)     { m_printMSEBasedSequencePSNR = value; }
