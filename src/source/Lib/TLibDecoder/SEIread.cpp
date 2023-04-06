@@ -598,3 +598,103 @@ Void SEIReader::xParseSEIPictureTiming(SEIPictureTiming& sei, UInt payloadSize, 
     if(hrd->getSubPicCpbParamsPresentFlag())
     {
       sei_read_code( pDecodedMessageOutputStream, hrd->getDpbOutputDelayDuLengthMinus1()+1, code, "pic_dpb_output_du_delay" );
+      sei.m_picDpbOutputDuDelay = code;
+    }
+
+    if( hrd->getSubPicCpbParamsPresentFlag() && hrd->getSubPicCpbParamsInPicTimingSEIFlag() )
+    {
+      sei_read_uvlc( pDecodedMessageOutputStream, code, "num_decoding_units_minus1");
+      sei.m_numDecodingUnitsMinus1 = code;
+      sei_read_flag( pDecodedMessageOutputStream, code, "du_common_cpb_removal_delay_flag" );
+      sei.m_duCommonCpbRemovalDelayFlag = code;
+      if( sei.m_duCommonCpbRemovalDelayFlag )
+      {
+        sei_read_code( pDecodedMessageOutputStream, ( hrd->getDuCpbRemovalDelayLengthMinus1() + 1 ), code, "du_common_cpb_removal_delay_increment_minus1" );
+        sei.m_duCommonCpbRemovalDelayMinus1 = code;
+      }
+      sei.m_numNalusInDuMinus1.resize(sei.m_numDecodingUnitsMinus1 + 1 );
+      sei.m_duCpbRemovalDelayMinus1.resize( sei.m_numDecodingUnitsMinus1 + 1 );
+
+      for( i = 0; i <= sei.m_numDecodingUnitsMinus1; i ++ )
+      {
+        sei_read_uvlc( pDecodedMessageOutputStream, code, "num_nalus_in_du_minus1[i]");
+        sei.m_numNalusInDuMinus1[ i ] = code;
+        if( ( !sei.m_duCommonCpbRemovalDelayFlag ) && ( i < sei.m_numDecodingUnitsMinus1 ) )
+        {
+          sei_read_code( pDecodedMessageOutputStream, ( hrd->getDuCpbRemovalDelayLengthMinus1() + 1 ), code, "du_cpb_removal_delay_minus1[i]" );
+          sei.m_duCpbRemovalDelayMinus1[ i ] = code;
+        }
+      }
+    }
+  }
+}
+
+
+Void SEIReader::xParseSEIPanScanRect(SEIPanScanRect& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "pan_scan_rect_id" );          sei.m_panScanRectId = code;
+  sei_read_flag( pDecodedMessageOutputStream, code, "pan_scan_rect_cancel_flag" ); sei.m_panScanRectCancelFlag = code!=0;
+  if (!sei.m_panScanRectCancelFlag)
+  {
+    UInt numRegions;
+    sei_read_uvlc( pDecodedMessageOutputStream, numRegions, "pan_scan_cnt_minus1" ); numRegions++;
+    sei.m_panScanRectRegions.resize(numRegions);
+    for(UInt region=0; region<numRegions; region++)
+    {
+      SEIPanScanRect::PanScanRect &rect=sei.m_panScanRectRegions[region];
+      Int  i;
+      sei_read_svlc( pDecodedMessageOutputStream, i, "pan_scan_rect_left_offset[i]" );   rect.leftOffset   = i;
+      sei_read_svlc( pDecodedMessageOutputStream, i, "pan_scan_rect_right_offset[i]" );  rect.rightOffset  = i;
+      sei_read_svlc( pDecodedMessageOutputStream, i, "pan_scan_rect_top_offset[i]" );    rect.topOffset    = i;
+      sei_read_svlc( pDecodedMessageOutputStream, i, "pan_scan_rect_bottom_offset[i]" ); rect.bottomOffset = i;
+    }
+    sei_read_flag( pDecodedMessageOutputStream, code, "pan_scan_rect_persistence_flag" ); sei.m_panScanRectPersistenceFlag = code!=0;
+  }
+  else
+  {
+    sei.m_panScanRectRegions.clear();
+    sei.m_panScanRectPersistenceFlag=false;
+  }
+}
+
+
+Void SEIReader::xParseSEIFillerPayload(SEIFillerPayload& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei.m_numFillerFFBytes = payloadSize;
+  Bool allBytesWereFF=true;
+  for(UInt k=0; k<payloadSize; k++)
+  {
+    UInt code;
+    sei_read_code( NULL, 8, code, "ff_byte" );
+    if (code!=0xff) allBytesWereFF=false;
+  }
+  if (pDecodedMessageOutputStream && !allBytesWereFF)
+  {
+    (*pDecodedMessageOutputStream) << "  not all filler payload bytes were 0xff\n";
+  }
+}
+
+
+Void SEIReader::xParseSEIUserDataRegistered(SEIUserDataRegistered& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  UInt code;
+  assert(payloadSize>0);
+  sei_read_code( pDecodedMessageOutputStream, 8, code, "itu_t_t35_country_code" ); payloadSize--;
+  if (code == 255)
+  {
+    assert(payloadSize>0);
+    sei_read_code( pDecodedMessageOutputStream, 8, code, "itu_t_t35_country_code_extension_byte" ); payloadSize--;
+    code+=255;
+  }
+  sei.m_ituCountryCode = code;
+  sei.m_userData.resize(payloadSize);
+  for (UInt i = 0; i < sei.m_userData.size(); i++)
+  {
+    sei_read_code( NULL, 8, code, "itu_t_t35_payload_byte" );
+    sei.m_userData[i] = code;
+  }
