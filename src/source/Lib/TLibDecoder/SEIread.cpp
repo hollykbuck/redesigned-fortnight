@@ -698,3 +698,103 @@ Void SEIReader::xParseSEIUserDataRegistered(SEIUserDataRegistered& sei, UInt pay
     sei_read_code( NULL, 8, code, "itu_t_t35_payload_byte" );
     sei.m_userData[i] = code;
   }
+  if (pDecodedMessageOutputStream)
+  {
+    (*pDecodedMessageOutputStream) << "  itu_t_t35 payload size: " << sei.m_userData.size() << "\n";
+  }
+}
+
+
+Void SEIReader::xParseSEIUserDataUnregistered(SEIUserDataUnregistered &sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  assert(payloadSize >= ISO_IEC_11578_LEN);
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  for (UInt i = 0; i < ISO_IEC_11578_LEN; i++)
+  {
+    sei_read_code( pDecodedMessageOutputStream, 8, val, "uuid_iso_iec_11578");
+    sei.m_uuid_iso_iec_11578[i] = val;
+  }
+
+  sei.m_userData.resize(payloadSize - ISO_IEC_11578_LEN);
+  for (UInt i = 0; i < sei.m_userData.size(); i++)
+  {
+    sei_read_code( NULL, 8, val, "user_data_payload_byte" );
+    sei.m_userData[i] = val;
+  }
+  if (pDecodedMessageOutputStream)
+  {
+    (*pDecodedMessageOutputStream) << "  User data payload size: " << sei.m_userData.size() << "\n";
+  }
+}
+
+
+Void SEIReader::xParseSEIRecoveryPoint(SEIRecoveryPoint& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  Int  iCode;
+  UInt uiCode;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_svlc( pDecodedMessageOutputStream, iCode,  "recovery_poc_cnt" );      sei.m_recoveryPocCnt     = iCode;
+  sei_read_flag( pDecodedMessageOutputStream, uiCode, "exact_matching_flag" );   sei.m_exactMatchingFlag  = uiCode;
+  sei_read_flag( pDecodedMessageOutputStream, uiCode, "broken_link_flag" );      sei.m_brokenLinkFlag     = uiCode;
+}
+
+
+Void SEIReader::xParseSEISceneInfo(SEISceneInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_flag( pDecodedMessageOutputStream, code, "scene_info_present_flag" ); sei.m_bSceneInfoPresentFlag = code!=0;
+  if (sei.m_bSceneInfoPresentFlag)
+  {
+    sei_read_flag( pDecodedMessageOutputStream, code, "prev_scene_id_valid_flag" ); sei.m_bPrevSceneIdValidFlag = code!=0;
+    sei_read_uvlc( pDecodedMessageOutputStream, code, "scene_id" );                 sei.m_sceneId = code;
+    sei_read_uvlc( pDecodedMessageOutputStream, code, "scene_transition_type" );    sei.m_sceneTransitionType = code;
+    if (sei.m_sceneTransitionType > 3)
+    {
+      sei_read_uvlc( pDecodedMessageOutputStream, code, "second_scene_id" );        sei.m_secondSceneId = code;
+    }
+    else
+    {
+      sei.m_secondSceneId = 0; // set to known value.
+    }
+  }
+}
+
+
+Void SEIReader::xParseSEIPictureSnapshot(SEIPictureSnapshot& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "snapshot_id" ); sei.m_snapshotId = code;
+}
+
+
+Void SEIReader::xParseSEIProgressiveRefinementSegmentStart(SEIProgressiveRefinementSegmentStart& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "progressive_refinement_id" ); sei.m_progressiveRefinementId = code;
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "pic_order_cnt_delta" );       sei.m_picOrderCntDelta = code;
+}
+
+
+Void SEIReader::xParseSEIProgressiveRefinementSegmentEnd(SEIProgressiveRefinementSegmentEnd& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, code, "progressive_refinement_id" ); sei.m_progressiveRefinementId = code;
+}
+
+
+Void SEIReader::xParseSEIFilmGrainCharacteristics(SEIFilmGrainCharacteristics& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
