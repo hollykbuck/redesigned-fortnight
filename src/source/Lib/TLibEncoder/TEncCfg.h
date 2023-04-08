@@ -598,3 +598,103 @@ public:
 
   Bool      getPrintMSEBasedSequencePSNR    ()         const { return m_printMSEBasedSequencePSNR;  }
   Void      setPrintMSEBasedSequencePSNR    (Bool value)     { m_printMSEBasedSequencePSNR = value; }
+
+  Bool      getPrintHexPsnr                 ()         const { return m_printHexPsnr;               }
+  Void      setPrintHexPsnr                 (Bool value)     { m_printHexPsnr = value;              }
+
+  Bool      getPrintFrameMSE                ()         const { return m_printFrameMSE;              }
+  Void      setPrintFrameMSE                (Bool value)     { m_printFrameMSE = value;             }
+
+  Bool      getPrintSequenceMSE             ()         const { return m_printSequenceMSE;           }
+  Void      setPrintSequenceMSE             (Bool value)     { m_printSequenceMSE = value;          }
+
+  Bool      getPrintMSSSIM                  ()         const { return m_printMSSSIM;               }
+  Void      setPrintMSSSIM                  (Bool value)     { m_printMSSSIM = value;              }
+
+  Bool      getXPSNREnableFlag              () const                     { return m_bXPSNREnableFlag;}
+  Double    getXPSNRWeight                  (const ComponentID id) const { return m_dXPSNRWeight[id];}
+
+  Void      setXPSNREnableFlag              ( Bool  i )      { m_bXPSNREnableFlag = i; }
+  Void      setXPSNRWeight                  ( Double dValue, ComponentID id) { m_dXPSNRWeight[id] = dValue;}
+
+  Bool      getCabacZeroWordPaddingEnabled()           const { return m_cabacZeroWordPaddingEnabled;  }
+  Void      setCabacZeroWordPaddingEnabled(Bool value)       { m_cabacZeroWordPaddingEnabled = value; }
+
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  Bool      getShutterFilterFlag()              const { return m_ShutterFilterEnable; }
+  Void      setShutterFilterFlag(Bool value)    { m_ShutterFilterEnable = value; }
+#endif
+
+  //====== Coding Structure ========
+  Void      setIntraPeriod                  ( Int   i )      { m_uiIntraPeriod = (UInt)i; }
+  Void      setDecodingRefreshType          ( Int   i )      { m_uiDecodingRefreshType = (UInt)i; }
+  Void      setReWriteParamSetsFlag         ( Bool  b )      { m_bReWriteParamSetsFlag = b; }
+  Void      setGOPSize                      ( Int   i )      { m_iGOPSize = i; }
+  Void      setGopList                      ( const GOPEntry GOPList[MAX_GOP] ) {  for ( Int i = 0; i < MAX_GOP; i++ ) m_GOPList[i] = GOPList[i]; }
+  Void      setExtraRPSs                    ( Int   i )      { m_extraRPSs = i; }
+  const GOPEntry &getGOPEntry               ( Int   i ) const { return m_GOPList[i]; }
+  Void      setEncodedFlag                  ( Int  i, Bool value )  { m_GOPList[i].m_isEncoded = value; }
+  Void      setMaxDecPicBuffering           ( UInt u, UInt tlayer ) { m_maxDecPicBuffering[tlayer] = u;    }
+  Void      setNumReorderPics               ( Int  i, UInt tlayer ) { m_numReorderPics[tlayer] = i;    }
+
+  Void      setQP                           ( Int   i )      { m_iQP = i; }
+  Void      setIntraQPOffset                ( Int   i )         { m_intraQPOffset = i; }
+  Void      setLambdaFromQPEnable           ( Bool  b )         { m_lambdaFromQPEnable = b; }
+  Void      setSourcePadding                ( Int*  padding )   { for ( Int i = 0; i < 2; i++ ) m_sourcePadding[i] = padding[i]; }
+
+  Int       getMaxRefPicNum                 ()                              { return m_iMaxRefPicNum;           }
+  Void      setMaxRefPicNum                 ( Int iMaxRefPicNum )           { m_iMaxRefPicNum = iMaxRefPicNum;  }
+
+  Int       getMaxTempLayer                 ()                              { return m_maxTempLayer;              } 
+  Void      setMaxTempLayer                 ( Int maxTempLayer )            { m_maxTempLayer = maxTempLayer;      }
+  Void      setMaxCUWidth                   ( UInt  u )      { m_maxCUWidth  = u; }
+  Void      setMaxCUHeight                  ( UInt  u )      { m_maxCUHeight = u; }
+  Void      setMaxTotalCUDepth              ( UInt  u )      { m_maxTotalCUDepth = u; }
+  Void      setLog2DiffMaxMinCodingBlockSize( UInt  u )      { m_log2DiffMaxMinCodingBlockSize = u; }
+
+  //======== Transform =============
+  Void      setQuadtreeTULog2MaxSize        ( UInt  u )      { m_uiQuadtreeTULog2MaxSize = u; }
+  Void      setQuadtreeTULog2MinSize        ( UInt  u )      { m_uiQuadtreeTULog2MinSize = u; }
+  Void      setQuadtreeTUMaxDepthInter      ( UInt  u )      { m_uiQuadtreeTUMaxDepthInter = u; }
+  Void      setQuadtreeTUMaxDepthIntra      ( UInt  u )      { m_uiQuadtreeTUMaxDepthIntra = u; }
+
+  Void setUseAMP( Bool b ) { m_useAMP = b; }
+
+  //====== Loop/Deblock Filter ========
+  Void      setLoopFilterDisable            ( Bool  b )      { m_bLoopFilterDisable        = b; }
+  Void      setLoopFilterOffsetInPPS        ( Bool  b )      { m_loopFilterOffsetInPPS     = b; }
+  Void      setLoopFilterBetaOffset         ( Int   i )      { m_loopFilterBetaOffsetDiv2  = i; }
+  Void      setLoopFilterTcOffset           ( Int   i )      { m_loopFilterTcOffsetDiv2    = i; }
+  Void      setDeblockingFilterMetric       ( Int   i )      { m_deblockingFilterMetric    = i; }
+
+  //====== Motion search ========
+  Void      setDisableIntraPUsInInterSlices ( Bool  b )      { m_bDisableIntraPUsInInterSlices = b; }
+  Void      setMotionEstimationSearchMethod ( MESearchMethod e ) { m_motionEstimationSearchMethod = e; }
+  Void      setSearchRange                  ( Int   i )      { m_iSearchRange = i; }
+  Void      setBipredSearchRange            ( Int   i )      { m_bipredSearchRange = i; }
+  Void      setClipForBiPredMeEnabled       ( Bool  b )      { m_bClipForBiPredMeEnabled = b; }
+  Void      setFastMEAssumingSmootherMVEnabled ( Bool b )    { m_bFastMEAssumingSmootherMVEnabled = b; }
+  Void      setMinSearchWindow              ( Int   i )      { m_minSearchWindow = i; }
+  Void      setRestrictMESampling           ( Bool  b )      { m_bRestrictMESampling = b; }
+
+  //====== Quality control ========
+  Void      setMaxDeltaQP                   ( Int   i )      { m_iMaxDeltaQP = i; }
+  Void      setMaxCuDQPDepth                ( Int   i )      { m_iMaxCuDQPDepth = i; }
+
+  Int       getDiffCuChromaQpOffsetDepth    ()         const { return m_diffCuChromaQpOffsetDepth;  }
+  Void      setDiffCuChromaQpOffsetDepth    (Int value)      { m_diffCuChromaQpOffsetDepth = value; }
+
+  Void      setChromaCbQpOffset             ( Int   i )      { m_chromaCbQpOffset = i; }
+  Void      setChromaCrQpOffset             ( Int   i )      { m_chromaCrQpOffset = i; }
+  Void      setWCGChromaQpControl           ( const WCGChromaQPControl &ctrl )     { m_wcgChromaQpControl = ctrl; }
+  const WCGChromaQPControl &getWCGChromaQPControl () const { return m_wcgChromaQpControl; }
+  Void      setSliceChromaOffsetQpIntraOrPeriodic( UInt periodicity, Int sliceChromaQpOffsetIntraOrPeriodic[2]) { m_sliceChromaQpOffsetPeriodicity = periodicity; memcpy(m_sliceChromaQpOffsetIntraOrPeriodic, sliceChromaQpOffsetIntraOrPeriodic, sizeof(m_sliceChromaQpOffsetIntraOrPeriodic)); }
+  Int       getSliceChromaOffsetQpIntraOrPeriodic( Bool bIsCr) const                                            { return m_sliceChromaQpOffsetIntraOrPeriodic[bIsCr?1:0]; }
+  UInt      getSliceChromaOffsetQpPeriodicity() const                                                           { return m_sliceChromaQpOffsetPeriodicity; }
+
+  Void      setChromaFormatIdc              ( ChromaFormat cf ) { m_chromaFormatIDC = cf; }
+  ChromaFormat  getChromaFormatIdc          ( )              { return m_chromaFormatIDC; }
+
+  Void      setLumaLevelToDeltaQPControls( const LumaLevelToDeltaQPMapping &lumaLevelToDeltaQPMapping ) { m_lumaLevelToDeltaQPMapping=lumaLevelToDeltaQPMapping; }
+  const LumaLevelToDeltaQPMapping& getLumaLevelToDeltaQPMapping() const { return m_lumaLevelToDeltaQPMapping; }
+
