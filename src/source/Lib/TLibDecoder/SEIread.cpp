@@ -798,3 +798,103 @@ Void SEIReader::xParseSEIFilmGrainCharacteristics(SEIFilmGrainCharacteristics& s
   UInt code;
   output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
 
+  sei_read_flag( pDecodedMessageOutputStream, code, "film_grain_characteristics_cancel_flag" );     sei.m_filmGrainCharacteristicsCancelFlag = code!=0;
+  if (!sei.m_filmGrainCharacteristicsCancelFlag)
+  {
+    sei_read_code( pDecodedMessageOutputStream, 2, code, "film_grain_model_id" );                   sei.m_filmGrainModelId = code;
+    sei_read_flag( pDecodedMessageOutputStream,    code, "separate_colour_description_present_flag" ); sei.m_separateColourDescriptionPresentFlag = code!=0;
+    if (sei.m_separateColourDescriptionPresentFlag)
+    {
+      sei_read_code( pDecodedMessageOutputStream, 3, code, "film_grain_bit_depth_luma_minus8" );    sei.m_filmGrainBitDepthLumaMinus8      = code;
+      sei_read_code( pDecodedMessageOutputStream, 3, code, "film_grain_bit_depth_chroma_minus8" );  sei.m_filmGrainBitDepthChromaMinus8    = code;
+      sei_read_flag( pDecodedMessageOutputStream,    code, "film_grain_full_range_flag" );          sei.m_filmGrainFullRangeFlag           = code!=0;
+      sei_read_code( pDecodedMessageOutputStream, 8, code, "film_grain_colour_primaries" );         sei.m_filmGrainColourPrimaries         = code;
+      sei_read_code( pDecodedMessageOutputStream, 8, code, "film_grain_transfer_characteristics" ); sei.m_filmGrainTransferCharacteristics = code;
+      sei_read_code( pDecodedMessageOutputStream, 8, code, "film_grain_matrix_coeffs" );            sei.m_filmGrainMatrixCoeffs            = code;
+    }
+    sei_read_code( pDecodedMessageOutputStream, 2, code, "blending_mode_id" );                      sei.m_blendingModeId                   = code;
+    sei_read_code( pDecodedMessageOutputStream, 4, code, "log2_scale_factor" );                     sei.m_log2ScaleFactor                  = code;
+    for(Int c=0; c<3; c++)
+    {
+      sei_read_flag( pDecodedMessageOutputStream,    code, "comp_model_present_flag[c]" );          sei.m_compModel[c].bPresentFlag        = code!=0;
+    }
+    for(Int c=0; c<3; c++)
+    {
+      SEIFilmGrainCharacteristics::CompModel &cm=sei.m_compModel[c];
+      if (cm.bPresentFlag)
+      {
+#if JVET_X0048_X0103_FILM_GRAIN
+        sei_read_code( pDecodedMessageOutputStream, 8, code, "num_intensity_intervals_minus1[c]"); cm.numIntensityIntervals = code + 1;
+#else
+        UInt numIntensityIntervals;
+        sei_read_code( pDecodedMessageOutputStream, 8, code, "num_intensity_intervals_minus1[c]" ); numIntensityIntervals = code+1;
+#endif
+        sei_read_code( pDecodedMessageOutputStream, 3, code, "num_model_values_minus1[c]" );        cm.numModelValues     = code+1;
+#if JVET_X0048_X0103_FILM_GRAIN
+        cm.intensityValues.resize(cm.numIntensityIntervals);
+        for (UInt interval = 0; interval < cm.numIntensityIntervals; interval++)
+#else
+        cm.intensityValues.resize(numIntensityIntervals);
+        for(UInt interval=0; interval<numIntensityIntervals; interval++)
+#endif
+        {
+          SEIFilmGrainCharacteristics::CompModelIntensityValues &cmiv=cm.intensityValues[interval];
+          sei_read_code( pDecodedMessageOutputStream, 8, code, "intensity_interval_lower_bound[c][i]" ); cmiv.intensityIntervalLowerBound=code;
+          sei_read_code( pDecodedMessageOutputStream, 8, code, "intensity_interval_upper_bound[c][i]" ); cmiv.intensityIntervalUpperBound=code;
+          cmiv.compModelValue.resize(cm.numModelValues);
+          for(UInt j=0; j<cm.numModelValues; j++)
+          {
+            sei_read_svlc( pDecodedMessageOutputStream, cmiv.compModelValue[j], "comp_model_value[c][i]" );
+          }
+        }
+      }
+    } // for c
+    sei_read_flag( pDecodedMessageOutputStream, code, "film_grain_characteristics_persistence_flag" ); sei.m_filmGrainCharacteristicsPersistenceFlag = code!=0;
+  } // cancel flag
+}
+
+
+Void SEIReader::xParseSEIPostFilterHint(SEIPostFilterHint& sei, UInt payloadSize, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream,    code, "filter_hint_size_y" ); sei.m_filterHintSizeY = code;
+  sei_read_uvlc( pDecodedMessageOutputStream,    code, "filter_hint_size_x" ); sei.m_filterHintSizeX = code;
+  sei_read_code( pDecodedMessageOutputStream, 2, code, "filter_hint_type"   ); sei.m_filterHintType  = code;
+
+  sei.m_bIsMonochrome = (sps->getChromaFormatIdc() == CHROMA_400);
+  const UInt numChromaChannels = sei.m_bIsMonochrome ? 1:3;
+
+  sei.m_filterHintValues.resize(numChromaChannels * sei.m_filterHintSizeX * sei.m_filterHintSizeY);
+  for(std::size_t i=0; i<sei.m_filterHintValues.size(); i++)
+  {
+    Int v;
+    sei_read_svlc( pDecodedMessageOutputStream, v, "filter_hint_value[][][]" ); sei.m_filterHintValues[i] = code;
+  }
+}
+
+
+Void SEIReader::xParseSEIToneMappingInfo(SEIToneMappingInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i;
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_uvlc( pDecodedMessageOutputStream, val, "tone_map_id" );                         sei.m_toneMapId = val;
+  sei_read_flag( pDecodedMessageOutputStream, val, "tone_map_cancel_flag" );                sei.m_toneMapCancelFlag = val;
+
+  if ( !sei.m_toneMapCancelFlag )
+  {
+    sei_read_flag( pDecodedMessageOutputStream, val, "tone_map_persistence_flag" );         sei.m_toneMapPersistenceFlag = val;
+    sei_read_code( pDecodedMessageOutputStream, 8, val, "coded_data_bit_depth" );           sei.m_codedDataBitDepth = val;
+    sei_read_code( pDecodedMessageOutputStream, 8, val, "target_bit_depth" );               sei.m_targetBitDepth = val;
+    sei_read_uvlc( pDecodedMessageOutputStream, val, "tone_map_model_id" );                 sei.m_modelId = val;
+    switch(sei.m_modelId)
+    {
+    case 0:
+      {
+        sei_read_code( pDecodedMessageOutputStream, 32, val, "min_value" );                 sei.m_minValue = val;
+        sei_read_code( pDecodedMessageOutputStream, 32, val, "max_value" );                 sei.m_maxValue = val;
+        break;
+      }
+    case 1:
