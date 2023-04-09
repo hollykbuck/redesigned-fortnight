@@ -698,3 +698,103 @@ public:
   Void      setLumaLevelToDeltaQPControls( const LumaLevelToDeltaQPMapping &lumaLevelToDeltaQPMapping ) { m_lumaLevelToDeltaQPMapping=lumaLevelToDeltaQPMapping; }
   const LumaLevelToDeltaQPMapping& getLumaLevelToDeltaQPMapping() const { return m_lumaLevelToDeltaQPMapping; }
 
+#if ADAPTIVE_QP_SELECTION
+  Void      setUseAdaptQpSelect             ( Bool   i ) { m_bUseAdaptQpSelect    = i; }
+  Bool      getUseAdaptQpSelect             ()           { return   m_bUseAdaptQpSelect; }
+#endif
+
+#if JVET_V0078
+  Bool      getSmoothQPReductionEnable       () const        { return m_bSmoothQPReductionEnable; }
+  void      setSmoothQPReductionEnable       (Bool value)    { m_bSmoothQPReductionEnable = value; }
+  Double    getSmoothQPReductionThreshold    () const        { return m_dSmoothQPReductionThreshold; }
+  void      setSmoothQPReductionThreshold    (Double value)  { m_dSmoothQPReductionThreshold = value; }
+  Double    getSmoothQPReductionModelScale   () const        { return m_dSmoothQPReductionModelScale; }
+  void      setSmoothQPReductionModelScale   (Double value)  { m_dSmoothQPReductionModelScale = value; }
+  Double    getSmoothQPReductionModelOffset  () const        { return m_dSmoothQPReductionModelOffset; }
+  void      setSmoothQPReductionModelOffset  (Double value)  { m_dSmoothQPReductionModelOffset = value; }
+  Int       getSmoothQPReductionLimit        ()              const { return m_iSmoothQPReductionLimit; }
+  void      setSmoothQPReductionLimit        (Int value)     { m_iSmoothQPReductionLimit = value; }
+  Int       getSmoothQPReductionPeriodicity  ()  const       { return m_iSmoothQPReductionPeriodicity; }
+  void      setSmoothQPReductionPeriodicity  (Int value)     { m_iSmoothQPReductionPeriodicity = value; }
+#endif
+
+  Bool      getExtendedPrecisionProcessingFlag         ()         const { return m_extendedPrecisionProcessingFlag;  }
+  Void      setExtendedPrecisionProcessingFlag         (Bool value)     { m_extendedPrecisionProcessingFlag = value; }
+
+  Bool      getHighPrecisionOffsetsEnabledFlag() const { return m_highPrecisionOffsetsEnabledFlag; }
+  Void      setHighPrecisionOffsetsEnabledFlag(Bool value) { m_highPrecisionOffsetsEnabledFlag = value; }
+
+  Void      setUseAdaptiveQP                ( Bool  b )      { m_bUseAdaptiveQP = b; }
+  Void      setQPAdaptationRange            ( Int   i )      { m_iQPAdaptationRange = i; }
+
+  //====== Sequence ========
+  Int       getFrameRate                    ()      { return  m_iFrameRate; }
+  UInt      getFrameSkip                    ()      { return  m_FrameSkip; }
+  UInt      getTemporalSubsampleRatio       ()      { return  m_temporalSubsampleRatio; }
+  Int       getSourceWidth                  ()      { return  m_iSourceWidth; }
+  Int       getSourceHeight                 ()      { return  m_iSourceHeight; }
+  Int       getFramesToBeEncoded            ()      { return  m_framesToBeEncoded; }
+  
+  //====== Lambda Modifiers ========
+  Void      setLambdaModifier               ( UInt uiIndex, Double dValue ) { m_adLambdaModifier[ uiIndex ] = dValue; }
+  Double    getLambdaModifier               ( UInt uiIndex )          const { return m_adLambdaModifier[ uiIndex ]; }
+  Void      setIntraLambdaModifier          ( const std::vector<Double> &dValue )               { m_adIntraLambdaModifier = dValue;       }
+  const std::vector<Double>& getIntraLambdaModifier()                        const { return m_adIntraLambdaModifier;         }
+  Void      setIntraQpFactor                ( Double dValue )               { m_dIntraQpFactor = dValue;              }
+  Double    getIntraQpFactor                ()                        const { return m_dIntraQpFactor;                }
+
+  //==== Coding Structure ========
+  UInt      getIntraPeriod                  ()      { return  m_uiIntraPeriod; }
+  UInt      getDecodingRefreshType          ()      { return  m_uiDecodingRefreshType; }
+  Bool      getReWriteParamSetsFlag         ()      { return m_bReWriteParamSetsFlag; }
+  Int       getGOPSize                      ()      { return  m_iGOPSize; }
+  Int       getMaxDecPicBuffering           (UInt tlayer) { return m_maxDecPicBuffering[tlayer]; }
+  Int       getNumReorderPics               (UInt tlayer) { return m_numReorderPics[tlayer]; }
+  Int       getIntraQPOffset                () const    { return  m_intraQPOffset; }
+  Int       getLambdaFromQPEnable           () const    { return  m_lambdaFromQPEnable; }
+protected:
+  Int       getBaseQP                       () const { return  m_iQP; } // public should use getQPForPicture.
+public:
+  Int       getQPForPicture                 (const UInt gopIndex, const TComSlice *pSlice) const; // Function actually defined in TEncTop.cpp
+  Int       getSourcePadding                ( Int i )  const  { assert (i < 2 ); return  m_sourcePadding[i]; }
+
+  Bool      getAccessUnitDelimiter() const  { return m_AccessUnitDelimiter; }
+  Void      setAccessUnitDelimiter(Bool val){ m_AccessUnitDelimiter = val; }
+
+  //======== Transform =============
+  UInt      getQuadtreeTULog2MaxSize        ()      const { return m_uiQuadtreeTULog2MaxSize; }
+  UInt      getQuadtreeTULog2MinSize        ()      const { return m_uiQuadtreeTULog2MinSize; }
+  UInt      getQuadtreeTUMaxDepthInter      ()      const { return m_uiQuadtreeTUMaxDepthInter; }
+  UInt      getQuadtreeTUMaxDepthIntra      ()      const { return m_uiQuadtreeTUMaxDepthIntra; }
+
+  //==== Loop/Deblock Filter ========
+  Bool      getLoopFilterDisable            ()      { return  m_bLoopFilterDisable;       }
+  Bool      getLoopFilterOffsetInPPS        ()      { return m_loopFilterOffsetInPPS; }
+  Int       getLoopFilterBetaOffset         ()      { return m_loopFilterBetaOffsetDiv2; }
+  Int       getLoopFilterTcOffset           ()      { return m_loopFilterTcOffsetDiv2; }
+  Int       getDeblockingFilterMetric       ()      { return m_deblockingFilterMetric; }
+
+  //==== Motion search ========
+  Bool      getDisableIntraPUsInInterSlices    () const { return m_bDisableIntraPUsInInterSlices; }
+  MESearchMethod getMotionEstimationSearchMethod ( ) const { return m_motionEstimationSearchMethod; }
+  Int       getSearchRange                     () const { return m_iSearchRange; }
+  Bool      getClipForBiPredMeEnabled          () const { return m_bClipForBiPredMeEnabled; }
+  Bool      getFastMEAssumingSmootherMVEnabled () const { return m_bFastMEAssumingSmootherMVEnabled; }
+  Int       getMinSearchWindow                 () const { return m_minSearchWindow; }
+  Bool      getRestrictMESampling              () const { return m_bRestrictMESampling; }
+
+  //==== Quality control ========
+  Int       getMaxDeltaQP                   () const { return  m_iMaxDeltaQP; }
+  Int       getMaxCuDQPDepth                () const { return  m_iMaxCuDQPDepth; }
+  Bool      getUseAdaptiveQP                () const { return  m_bUseAdaptiveQP; }
+  Int       getQPAdaptationRange            () const { return  m_iQPAdaptationRange; }
+#if JVET_X0048_X0103_FILM_GRAIN
+  int       getBitDepth(const ChannelType chType) const { return m_bitDepth[chType]; }
+  int*      getBitDepth() { return m_bitDepth; }
+  int       getBitDepthInput(const ChannelType chType) const { return m_bitDepthInput[chType]; }
+  int*      getBitDepthInput() { return m_bitDepthInput; }
+  Void      setBitDepthInput(const ChannelType chType, Int internalBitDepthForChannel) { m_bitDepthInput[chType] = internalBitDepthForChannel; }
+#endif
+
+  //==== Tool list ========
+  Void      setBitDepth( const ChannelType chType, Int internalBitDepthForChannel ) { m_bitDepth[chType] = internalBitDepthForChannel; }
