@@ -1098,3 +1098,103 @@ Void SEIReader::xParseSEIDecodingUnitInfo(SEIDecodingUnitInfo& sei, UInt payload
 }
 
 
+Void SEIReader::xParseSEITemporalLevel0Index(SEITemporalLevel0Index& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_code( pDecodedMessageOutputStream, 8, val, "temporal_sub_layer_zero_idx" );  sei.tl0Idx = val;
+  sei_read_code( pDecodedMessageOutputStream, 8, val, "irap_pic_id" );  sei.rapIdx = val;
+}
+
+
+Void SEIReader::xParseSEIDecodedPictureHash(SEIDecodedPictureHash& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt bytesRead = 0;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  UInt val;
+  sei_read_code( pDecodedMessageOutputStream, 8, val, "hash_type");
+  sei.method = static_cast<HashType>(val); bytesRead++;
+
+  const TChar *traceString="\0";
+  switch (sei.method)
+  {
+    case HASHTYPE_MD5: traceString="picture_md5"; break;
+    case HASHTYPE_CRC: traceString="picture_crc"; break;
+    case HASHTYPE_CHECKSUM: traceString="picture_checksum"; break;
+    default: assert(false); break;
+  }
+
+  if (pDecodedMessageOutputStream)
+  {
+    (*pDecodedMessageOutputStream) << "  " << std::setw(55) << traceString << ": " << std::hex << std::setfill('0');
+  }
+
+  sei.m_pictureHash.hash.clear();
+  for(;bytesRead < payloadSize; bytesRead++)
+  {
+    sei_read_code( NULL, 8, val, traceString);
+    sei.m_pictureHash.hash.push_back((UChar)val);
+    if (pDecodedMessageOutputStream)
+    {
+      (*pDecodedMessageOutputStream) << std::setw(2) << val;
+    }
+  }
+
+  if (pDecodedMessageOutputStream)
+  {
+    (*pDecodedMessageOutputStream) << std::dec << std::setfill(' ') << "\n";
+  }
+}
+
+
+Void SEIReader::xParseSEIScalableNesting(SEIScalableNesting& sei, const NalUnitType nalUnitType, UInt payloadSize, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt uiCode;
+  SEIMessages seis;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_flag( pDecodedMessageOutputStream, uiCode,            "bitstream_subset_flag"         ); sei.m_bitStreamSubsetFlag = uiCode;
+  sei_read_flag( pDecodedMessageOutputStream, uiCode,            "nesting_op_flag"               ); sei.m_nestingOpFlag = uiCode;
+  if (sei.m_nestingOpFlag)
+  {
+    sei_read_flag( pDecodedMessageOutputStream, uiCode,            "default_op_flag"               ); sei.m_defaultOpFlag = uiCode;
+    sei_read_uvlc( pDecodedMessageOutputStream, uiCode,            "nesting_num_ops_minus1"        ); sei.m_nestingNumOpsMinus1 = uiCode;
+    for (UInt i = sei.m_defaultOpFlag; i <= sei.m_nestingNumOpsMinus1; i++)
+    {
+      sei_read_code( pDecodedMessageOutputStream, 3,        uiCode,  "nesting_max_temporal_id_plus1[i]"   ); sei.m_nestingMaxTemporalIdPlus1[i] = uiCode;
+      sei_read_uvlc( pDecodedMessageOutputStream, uiCode,            "nesting_op_idx[i]"                  ); sei.m_nestingOpIdx[i] = uiCode;
+    }
+  }
+  else
+  {
+    sei_read_flag( pDecodedMessageOutputStream, uiCode,            "all_layers_flag"               ); sei.m_allLayersFlag       = uiCode;
+    if (!sei.m_allLayersFlag)
+    {
+      sei_read_code( pDecodedMessageOutputStream, 3,        uiCode,  "nesting_no_op_max_temporal_id_plus1"  ); sei.m_nestingNoOpMaxTemporalIdPlus1 = uiCode;
+      sei_read_uvlc( pDecodedMessageOutputStream, uiCode,            "nesting_num_layers_minus1"            ); sei.m_nestingNumLayersMinus1        = uiCode;
+      for (UInt i = 0; i <= sei.m_nestingNumLayersMinus1; i++)
+      {
+        sei_read_code( pDecodedMessageOutputStream, 6,           uiCode,     "nesting_layer_id[i]"      ); sei.m_nestingLayerId[i]   = uiCode;
+      }
+    }
+  }
+
+  // byte alignment
+  while ( m_pcBitstream->getNumBitsRead() % 8 != 0 )
+  {
+    UInt code;
+    sei_read_flag( pDecodedMessageOutputStream, code, "nesting_zero_bit" );
+  }
+
+  // read nested SEI messages
+  do
+  {
+    if(nalUnitType == NAL_UNIT_PREFIX_SEI)
+    {
+      xReadSEImessage(sei.m_nestedSEIs, nalUnitType, sps, pDecodedMessageOutputStream, SEI::prefix_sei_messages, std::string("scalable nested SEI"));
+    }
+    else
+    {
+      xReadSEImessage(sei.m_nestedSEIs, nalUnitType, sps, pDecodedMessageOutputStream, SEI::suffix_sei_messages, std::string("scalable nested SEI"));
+    }
