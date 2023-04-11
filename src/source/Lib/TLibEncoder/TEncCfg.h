@@ -798,3 +798,103 @@ public:
 
   //==== Tool list ========
   Void      setBitDepth( const ChannelType chType, Int internalBitDepthForChannel ) { m_bitDepth[chType] = internalBitDepthForChannel; }
+  Void      setUseASR                       ( Bool  b )     { m_bUseASR     = b; }
+  Void      setUseHADME                     ( Bool  b )     { m_bUseHADME   = b; }
+  Void      setUseRDOQ                      ( Bool  b )     { m_useRDOQ    = b; }
+  Void      setUseRDOQTS                    ( Bool  b )     { m_useRDOQTS  = b; }
+  Void      setUseSelectiveRDOQ             ( Bool b )      { m_useSelectiveRDOQ = b; }
+  Void      setRDpenalty                    ( UInt  u )     { m_rdPenalty  = u; }
+  Void      setFastInterSearchMode          ( FastInterSearchMode m ) { m_fastInterSearchMode = m; }
+  Void      setUseEarlyCU                   ( Bool  b )     { m_bUseEarlyCU = b; }
+  Void      setUseFastDecisionForMerge      ( Bool  b )     { m_useFastDecisionForMerge = b; }
+  Void      setUseCbfFastMode               ( Bool  b )     { m_bUseCbfFastMode = b; }
+  Void      setUseEarlySkipDetection        ( Bool  b )     { m_useEarlySkipDetection = b; }
+  Void      setUseConstrainedIntraPred      ( Bool  b )     { m_bUseConstrainedIntraPred = b; }
+  Void      setFastUDIUseMPMEnabled         ( Bool  b )     { m_bFastUDIUseMPMEnabled = b; }
+  Void      setFastMEForGenBLowDelayEnabled ( Bool  b )     { m_bFastMEForGenBLowDelayEnabled = b; }
+  Void      setUseBLambdaForNonKeyLowDelayPictures ( Bool b ) { m_bUseBLambdaForNonKeyLowDelayPictures = b; }
+
+  Void      setPCMInputBitDepthFlag         ( Bool  b )     { m_bPCMInputBitDepthFlag = b; }
+  Void      setPCMFilterDisableFlag         ( Bool  b )     {  m_bPCMFilterDisableFlag = b; }
+  Void      setUsePCM                       ( Bool  b )     {  m_usePCM = b;               }
+  Void      setPCMBitDepth( const ChannelType chType, Int pcmBitDepthForChannel ) { m_PCMBitDepth[chType] = pcmBitDepthForChannel; }
+  Void      setPCMLog2MaxSize               ( UInt u )      { m_pcmLog2MaxSize = u;      }
+  Void      setPCMLog2MinSize               ( UInt u )     { m_uiPCMLog2MinSize = u;      }
+  Void      setdQPs                         ( Int*  p )     { m_aidQP       = p; }
+  Void      setDeltaQpRD                    ( UInt  u )     {m_uiDeltaQpRD  = u; }
+  Void      setFastDeltaQp                  ( Bool  b )     {m_bFastDeltaQP = b; }
+  Bool      getUseASR                       ()      { return m_bUseASR;     }
+  Bool      getUseHADME                     ()      { return m_bUseHADME;   }
+  Bool      getUseRDOQ                      ()      { return m_useRDOQ;    }
+  Bool      getUseRDOQTS                    ()      { return m_useRDOQTS;  }
+  Bool      getUseSelectiveRDOQ             ()      { return m_useSelectiveRDOQ; }
+  Int       getRDpenalty                    ()      { return m_rdPenalty;  }
+  FastInterSearchMode getFastInterSearchMode() const{ return m_fastInterSearchMode;  }
+  Bool      getUseEarlyCU                   ()      { return m_bUseEarlyCU; }
+  Bool      getUseFastDecisionForMerge      ()      { return m_useFastDecisionForMerge; }
+  Bool      getUseCbfFastMode               ()      { return m_bUseCbfFastMode; }
+  Bool      getUseEarlySkipDetection        ()      { return m_useEarlySkipDetection; }
+  Bool      getUseConstrainedIntraPred      ()      { return m_bUseConstrainedIntraPred; }
+  Bool      getFastUDIUseMPMEnabled         ()      { return m_bFastUDIUseMPMEnabled; }
+  Bool      getFastMEForGenBLowDelayEnabled ()      { return m_bFastMEForGenBLowDelayEnabled; }
+  Bool      getUseBLambdaForNonKeyLowDelayPictures () { return m_bUseBLambdaForNonKeyLowDelayPictures; }
+  Bool      getPCMInputBitDepthFlag         ()      { return m_bPCMInputBitDepthFlag;   }
+  Bool      getPCMFilterDisableFlag         ()      { return m_bPCMFilterDisableFlag;   }
+  Bool      getUsePCM                       ()      { return m_usePCM;                 }
+  UInt      getPCMLog2MaxSize               ()      { return m_pcmLog2MaxSize;  }
+  UInt      getPCMLog2MinSize               ()      { return  m_uiPCMLog2MinSize;  }
+
+  Bool      getCrossComponentPredictionEnabledFlag     ()                const { return m_crossComponentPredictionEnabledFlag;   }
+  Void      setCrossComponentPredictionEnabledFlag     (const Bool value)      { m_crossComponentPredictionEnabledFlag = value;  }
+  Bool      getUseReconBasedCrossCPredictionEstimate ()                const { return m_reconBasedCrossCPredictionEstimate;  }
+  Void      setUseReconBasedCrossCPredictionEstimate (const Bool value)      { m_reconBasedCrossCPredictionEstimate = value; }
+  Void      setLog2SaoOffsetScale(ChannelType type, UInt uiBitShift)         { m_log2SaoOffsetScale[type] = uiBitShift; }
+
+  Bool getUseTransformSkip                             ()      { return m_useTransformSkip;        }
+  Void setUseTransformSkip                             ( Bool b ) { m_useTransformSkip  = b;       }
+  Bool getTransformSkipRotationEnabledFlag             ()            const { return m_transformSkipRotationEnabledFlag;  }
+  Void setTransformSkipRotationEnabledFlag             (const Bool value)  { m_transformSkipRotationEnabledFlag = value; }
+  Bool getTransformSkipContextEnabledFlag              ()            const { return m_transformSkipContextEnabledFlag;  }
+  Void setTransformSkipContextEnabledFlag              (const Bool value)  { m_transformSkipContextEnabledFlag = value; }
+  Bool getPersistentRiceAdaptationEnabledFlag          ()                 const { return m_persistentRiceAdaptationEnabledFlag;  }
+  Void setPersistentRiceAdaptationEnabledFlag          (const Bool value)       { m_persistentRiceAdaptationEnabledFlag = value; }
+  Bool getCabacBypassAlignmentEnabledFlag              ()       const      { return m_cabacBypassAlignmentEnabledFlag;  }
+  Void setCabacBypassAlignmentEnabledFlag              (const Bool value)  { m_cabacBypassAlignmentEnabledFlag = value; }
+  Bool getRdpcmEnabledFlag                             (const RDPCMSignallingMode signallingMode)        const      { return m_rdpcmEnabledFlag[signallingMode];  }
+  Void setRdpcmEnabledFlag                             (const RDPCMSignallingMode signallingMode, const Bool value) { m_rdpcmEnabledFlag[signallingMode] = value; }
+  Bool getUseTransformSkipFast                         ()      { return m_useTransformSkipFast;    }
+  Void setUseTransformSkipFast                         ( Bool b ) { m_useTransformSkipFast  = b;   }
+  UInt getLog2MaxTransformSkipBlockSize                () const      { return m_log2MaxTransformSkipBlockSize;     }
+  Void setLog2MaxTransformSkipBlockSize                ( UInt u )    { m_log2MaxTransformSkipBlockSize  = u;       }
+  Bool getIntraSmoothingDisabledFlag               ()      const { return m_intraSmoothingDisabledFlag; }
+  Void setIntraSmoothingDisabledFlag               (Bool bValue) { m_intraSmoothingDisabledFlag=bValue; }
+
+  const Int* getdQPs                        () const { return m_aidQP;       }
+  UInt      getDeltaQpRD                    () const { return m_uiDeltaQpRD; }
+  Bool      getFastDeltaQp                  () const { return m_bFastDeltaQP; }
+
+  //====== Slice ========
+  Void  setSliceMode                   ( SliceConstraint  i )        { m_sliceMode = i;              }
+  Void  setSliceArgument               ( Int  i )                    { m_sliceArgument = i;          }
+  SliceConstraint getSliceMode         () const                      { return m_sliceMode;           }
+  Int   getSliceArgument               ()                            { return m_sliceArgument;       }
+  //====== Dependent Slice ========
+  Void  setSliceSegmentMode            ( SliceConstraint  i )        { m_sliceSegmentMode = i;       }
+  Void  setSliceSegmentArgument        ( Int  i )                    { m_sliceSegmentArgument = i;   }
+  SliceConstraint getSliceSegmentMode  () const                      { return m_sliceSegmentMode;    }
+  Int   getSliceSegmentArgument        ()                            { return m_sliceSegmentArgument;}
+  Void      setLFCrossSliceBoundaryFlag     ( Bool   bValue  )       { m_bLFCrossSliceBoundaryFlag = bValue; }
+  Bool      getLFCrossSliceBoundaryFlag     ()                       { return m_bLFCrossSliceBoundaryFlag;   }
+
+  Void      setUseSAO                  (Bool bVal)                   { m_bUseSAO = bVal; }
+  Bool      getUseSAO                  ()                            { return m_bUseSAO; }
+  Void  setTestSAODisableAtPictureLevel (Bool bVal)                  { m_bTestSAODisableAtPictureLevel = bVal; }
+  Bool  getTestSAODisableAtPictureLevel ( ) const                    { return m_bTestSAODisableAtPictureLevel; }
+
+  Void   setSaoEncodingRate(Double v)                                { m_saoEncodingRate = v; }
+  Double getSaoEncodingRate() const                                  { return m_saoEncodingRate; }
+  Void   setSaoEncodingRateChroma(Double v)                          { m_saoEncodingRateChroma = v; }
+  Double getSaoEncodingRateChroma() const                            { return m_saoEncodingRateChroma; }
+  Void  setMaxNumOffsetsPerPic                   (Int iVal)          { m_maxNumOffsetsPerPic = iVal; }
+  Int   getMaxNumOffsetsPerPic                   ()                  { return m_maxNumOffsetsPerPic; }
+  Void  setSaoCtuBoundary              (Bool val)                    { m_saoCtuBoundary = val; }
