@@ -1298,3 +1298,103 @@ Void SEIReader::xParseSEIMasteringDisplayColourVolume(SEIMasteringDisplayColourV
   sei_read_code( pDecodedMessageOutputStream, 16, code, "display_primaries_y[2]" ); sei.values.primaries[2][1] = code;
 
 
+  sei_read_code( pDecodedMessageOutputStream, 16, code, "white_point_x" ); sei.values.whitePoint[0] = code;
+  sei_read_code( pDecodedMessageOutputStream, 16, code, "white_point_y" ); sei.values.whitePoint[1] = code;
+
+  sei_read_code( pDecodedMessageOutputStream, 32, code, "max_display_mastering_luminance" ); sei.values.maxLuminance = code;
+  sei_read_code( pDecodedMessageOutputStream, 32, code, "min_display_mastering_luminance" ); sei.values.minLuminance = code;
+}
+
+
+Void SEIReader::xParseSEISegmentedRectFramePacking(SEISegmentedRectFramePacking& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_flag( pDecodedMessageOutputStream, val,       "segmented_rect_frame_packing_arrangement_cancel_flag" );       sei.m_arrangementCancelFlag            = val;
+  if( !sei.m_arrangementCancelFlag )
+  {
+    sei_read_code( pDecodedMessageOutputStream, 2, val, "segmented_rect_content_interpretation_type" );                sei.m_contentInterpretationType = val;
+    sei_read_flag( pDecodedMessageOutputStream, val,     "segmented_rect_frame_packing_arrangement_persistence" );                              sei.m_arrangementPersistenceFlag               = val;
+  }
+}
+
+
+Void SEIReader::xParseSEITempMotionConstraintsTileSets(SEITempMotionConstrainedTileSets& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_flag( pDecodedMessageOutputStream, code, "mc_all_tiles_exact_sample_value_match_flag");  sei.m_mc_all_tiles_exact_sample_value_match_flag = (code != 0);
+  sei_read_flag( pDecodedMessageOutputStream, code, "each_tile_one_tile_set_flag");                 sei.m_each_tile_one_tile_set_flag                = (code != 0);
+
+  if(!sei.m_each_tile_one_tile_set_flag)
+  {
+    sei_read_flag( pDecodedMessageOutputStream, code, "limited_tile_set_display_flag");  sei.m_limited_tile_set_display_flag = (code != 0);
+    sei_read_uvlc( pDecodedMessageOutputStream, code, "num_sets_in_message_minus1");     sei.setNumberOfTileSets(code + 1);
+
+    if(sei.getNumberOfTileSets() != 0)
+    {
+      for(Int i = 0; i < sei.getNumberOfTileSets(); i++)
+      {
+        sei_read_uvlc( pDecodedMessageOutputStream, code, "mcts_id");  sei.tileSetData(i).m_mcts_id = code;
+
+        if(sei.m_limited_tile_set_display_flag)
+        {
+          sei_read_flag( pDecodedMessageOutputStream, code, "display_tile_set_flag");  sei.tileSetData(i).m_display_tile_set_flag = (code != 1);
+        }
+
+        sei_read_uvlc( pDecodedMessageOutputStream, code, "num_tile_rects_in_set_minus1");  sei.tileSetData(i).setNumberOfTileRects(code + 1);
+
+        for(Int j=0; j<sei.tileSetData(i).getNumberOfTileRects(); j++)
+        {
+          sei_read_uvlc( pDecodedMessageOutputStream, code, "top_left_tile_index");      sei.tileSetData(i).topLeftTileIndex(j)     = code;
+          sei_read_uvlc( pDecodedMessageOutputStream, code, "bottom_right_tile_index");  sei.tileSetData(i).bottomRightTileIndex(j) = code;
+        }
+
+        if(!sei.m_mc_all_tiles_exact_sample_value_match_flag)
+        {
+          sei_read_flag( pDecodedMessageOutputStream, code, "exact_sample_value_match_flag");   sei.tileSetData(i).m_exact_sample_value_match_flag    = (code != 0);
+        }
+        sei_read_flag( pDecodedMessageOutputStream, code, "mcts_tier_level_idc_present_flag");  sei.tileSetData(i).m_mcts_tier_level_idc_present_flag = (code != 0);
+
+        if(sei.tileSetData(i).m_mcts_tier_level_idc_present_flag)
+        {
+          sei_read_flag( pDecodedMessageOutputStream, code,    "mcts_tier_flag"); sei.tileSetData(i).m_mcts_tier_flag = (code != 0);
+          sei_read_code( pDecodedMessageOutputStream, 8, code, "mcts_level_idc"); sei.tileSetData(i).m_mcts_level_idc =  code;
+        }
+      }
+    }
+  }
+  else
+  {
+    sei_read_flag( pDecodedMessageOutputStream, code, "max_mcs_tier_level_idc_present_flag");  sei.m_max_mcs_tier_level_idc_present_flag = code;
+    if(sei.m_max_mcs_tier_level_idc_present_flag)
+    {
+      sei_read_flag( pDecodedMessageOutputStream, code, "max_mcts_tier_flag");  sei.m_max_mcts_tier_flag = code;
+      sei_read_code( pDecodedMessageOutputStream, 8, code, "max_mcts_level_idc"); sei.m_max_mcts_level_idc = code;
+    }
+  }
+}
+
+#if MCTS_EXTRACTION
+Void SEIReader::xParseSEIMCTSExtractionInfoSet(SEIMCTSExtractionInfoSet& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt code;
+  UInt numInfoSetsMinus1;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc(pDecodedMessageOutputStream, code, "num_sets_in_message_minus1"); numInfoSetsMinus1 = code;
+  for (Int i = 0; i <= numInfoSetsMinus1; i++)
+  {
+    SEIMCTSExtractionInfoSet::MCTSExtractionInfo EIS;
+
+    sei_read_uvlc(pDecodedMessageOutputStream, code, "num_mcts_sets_minus1[ i ]");
+    EIS.m_idxOfMctsInSet.resize(code + 1);
+    for (Int j = 0; j < EIS.m_idxOfMctsInSet.size(); j++)
+    {
+      sei_read_uvlc(pDecodedMessageOutputStream, code, "num_mcts_in_set_minus1[ i ][ j ]");
+      EIS.m_idxOfMctsInSet[j].resize(code + 1);
+      for (Int k = 0; k < EIS.m_idxOfMctsInSet[j].size(); k++)
+      {
+        sei_read_uvlc(pDecodedMessageOutputStream, code, "idx_of_mcts_in_set[ i ][ j ][ k ]"); EIS.m_idxOfMctsInSet[j][k] = code;
+      }
+    }
