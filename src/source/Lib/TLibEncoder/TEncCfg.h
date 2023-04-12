@@ -998,3 +998,103 @@ public:
   Int   getSegmentedRectFramePackingArrangementSEIPersistence()      { return m_segmentedRectFramePackingSEIPersistence; }
   Void  setDisplayOrientationSEIAngle(Int b)                         { m_displayOrientationSEIAngle = b; }
   Int   getDisplayOrientationSEIAngle()                              { return m_displayOrientationSEIAngle; }
+  Void  setTemporalLevel0IndexSEIEnabled(Bool b)                     { m_temporalLevel0IndexSEIEnabled = b; }
+  Bool  getTemporalLevel0IndexSEIEnabled() const                     { return m_temporalLevel0IndexSEIEnabled; }
+  Void  setGradualDecodingRefreshInfoEnabled(Bool b)                 { m_gradualDecodingRefreshInfoEnabled = b;    }
+  Bool  getGradualDecodingRefreshInfoEnabled() const                 { return m_gradualDecodingRefreshInfoEnabled; }
+  Void  setNoDisplaySEITLayer(Int b)                                 { m_noDisplaySEITLayer = b;    }
+  Int   getNoDisplaySEITLayer()                                      { return m_noDisplaySEITLayer; }
+  Void  setDecodingUnitInfoSEIEnabled(Bool b)                        { m_decodingUnitInfoSEIEnabled = b;    }
+  Bool  getDecodingUnitInfoSEIEnabled() const                        { return m_decodingUnitInfoSEIEnabled; }
+  Void  setSOPDescriptionSEIEnabled(Bool b)                          { m_SOPDescriptionSEIEnabled = b; }
+  Bool  getSOPDescriptionSEIEnabled() const                          { return m_SOPDescriptionSEIEnabled; }
+  Void  setScalableNestingSEIEnabled(Bool b)                         { m_scalableNestingSEIEnabled = b; }
+  Bool  getScalableNestingSEIEnabled() const                         { return m_scalableNestingSEIEnabled; }
+  Void  setTMCTSSEIEnabled(Bool b)                                   { m_tmctsSEIEnabled = b; }
+  Bool  getTMCTSSEIEnabled()                                         { return m_tmctsSEIEnabled; }
+#if MCTS_ENC_CHECK
+  Void  setTMCTSSEITileConstraint(Bool b)                            { m_tmctsSEITileConstraint = b; }
+  Bool  getTMCTSSEITileConstraint()                                  { return m_tmctsSEITileConstraint; }
+#endif
+#if MCTS_EXTRACTION
+  Void  setTMCTSExtractionSEIEnabled(Bool b)                         { m_tmctsExtractionSEIEnabled = b; }
+  Bool  getTMCTSExtractionSEIEnabled() const                         { return m_tmctsExtractionSEIEnabled; }
+#endif
+  Void  setTimeCodeSEIEnabled(Bool b)                                { m_timeCodeSEIEnabled = b; }
+  Bool  getTimeCodeSEIEnabled()                                      { return m_timeCodeSEIEnabled; }
+  Void  setNumberOfTimeSets(Int value)                               { m_timeCodeSEINumTs = value; }
+  Int   getNumberOfTimesets()                                        { return m_timeCodeSEINumTs; }
+  Void  setTimeSet(TComSEITimeSet element, Int index)                { m_timeSetArray[index] = element; }
+  TComSEITimeSet &getTimeSet(Int index)                              { return m_timeSetArray[index]; }
+  const TComSEITimeSet &getTimeSet(Int index) const                  { return m_timeSetArray[index]; }
+  Void  setKneeSEIEnabled(Int b)                                     { m_kneeSEIEnabled = b; }
+  Bool  getKneeSEIEnabled()                                          { return m_kneeSEIEnabled; }
+  Void  setKneeFunctionInformationSEI(const TEncSEIKneeFunctionInformation &seiknee) { m_kneeFunctionInformationSEI = seiknee; }
+  const TEncSEIKneeFunctionInformation &getKneeFunctionInformationSEI() const        { return m_kneeFunctionInformationSEI; }
+
+  Void     setCcvSEIEnabled(Bool b)                                  { m_ccvSEIEnabled = b; }
+  Bool     getCcvSEIEnabled()                                        { return m_ccvSEIEnabled; }
+  Void     setCcvSEICancelFlag(Bool b)                               { m_ccvSEICancelFlag = b; }
+  Bool     getCcvSEICancelFlag()                                     { return m_ccvSEICancelFlag; }
+  Void     setCcvSEIPersistenceFlag(Bool b)                          { m_ccvSEIPersistenceFlag = b; }
+  Bool     getCcvSEIPersistenceFlag()                                { return m_ccvSEIPersistenceFlag; }
+  Void     setCcvSEIPrimariesPresentFlag(Bool b)                     { m_ccvSEIPrimariesPresentFlag = b; }
+  Bool     getCcvSEIPrimariesPresentFlag()                           { return m_ccvSEIPrimariesPresentFlag; }
+  Void     setCcvSEIMinLuminanceValuePresentFlag(Bool b)             { m_ccvSEIMinLuminanceValuePresentFlag = b; }
+  Bool     getCcvSEIMinLuminanceValuePresentFlag()                   { return m_ccvSEIMinLuminanceValuePresentFlag; }
+  Void     setCcvSEIMaxLuminanceValuePresentFlag(Bool b)             { m_ccvSEIMaxLuminanceValuePresentFlag = b; }
+  Bool     getCcvSEIMaxLuminanceValuePresentFlag()                   { return m_ccvSEIMaxLuminanceValuePresentFlag; }
+  Void     setCcvSEIAvgLuminanceValuePresentFlag(Bool b)             { m_ccvSEIAvgLuminanceValuePresentFlag = b; }
+  Bool     getCcvSEIAvgLuminanceValuePresentFlag()                   { return m_ccvSEIAvgLuminanceValuePresentFlag; }
+  Void     setCcvSEIPrimariesX(Double dValue, Int index)             { m_ccvSEIPrimariesX[index] = dValue; }
+  Double   getCcvSEIPrimariesX(Int index)                            { return m_ccvSEIPrimariesX[index]; }
+  Void     setCcvSEIPrimariesY(Double dValue, Int index)             { m_ccvSEIPrimariesY[index] = dValue; }
+  Double   getCcvSEIPrimariesY(Int index)                            { return m_ccvSEIPrimariesY[index]; }
+  Void     setCcvSEIMinLuminanceValue  (Double dValue)               { m_ccvSEIMinLuminanceValue = dValue; }
+  Double   getCcvSEIMinLuminanceValue  ()                            { return m_ccvSEIMinLuminanceValue;  }
+  Void     setCcvSEIMaxLuminanceValue  (Double dValue)               { m_ccvSEIMaxLuminanceValue = dValue; }
+  Double   getCcvSEIMaxLuminanceValue  ()                            { return m_ccvSEIMaxLuminanceValue;  }
+  Void     setCcvSEIAvgLuminanceValue  (Double dValue)               { m_ccvSEIAvgLuminanceValue = dValue; }
+  Double   getCcvSEIAvgLuminanceValue  ()                            { return m_ccvSEIAvgLuminanceValue;  }
+
+  #if SHUTTER_INTERVAL_SEI_MESSAGE
+  Void     setSiiSEIEnabled(Bool b)                                  { m_siiSEIEnabled = b; }
+  Bool     getSiiSEIEnabled()                                        { return m_siiSEIEnabled; }
+  Void     setSiiSEINumUnitsInShutterInterval(UInt value)            { m_siiSEINumUnitsInShutterInterval = value; }
+  UInt     getSiiSEINumUnitsInShutterInterval()                      { return m_siiSEINumUnitsInShutterInterval; }
+  Void     setSiiSEITimeScale(UInt value)                            { m_siiSEITimeScale = value; }
+  UInt     getSiiSEITimeScale()                                      { return m_siiSEITimeScale; }
+  UInt     getSiiSEIMaxSubLayersMinus1()                             { return UInt(std::max(1u, UInt(m_siiSEISubLayerNumUnitsInSI.size()))-1 ); }
+  Bool     getSiiSEIFixedSIwithinCLVS()                              { return m_siiSEISubLayerNumUnitsInSI.empty(); }
+  Void     setSiiSEISubLayerNumUnitsInSI(const std::vector<UInt>& b) { m_siiSEISubLayerNumUnitsInSI = b; }
+  UInt     getSiiSEISubLayerNumUnitsInSI(UInt idx) const             { return m_siiSEISubLayerNumUnitsInSI[idx]; }
+#endif
+#if SEI_ENCODER_CONTROL
+  // film grain SEI
+  Void  setFilmGrainCharactersticsSEIEnabled (Bool b)                { m_fgcSEIEnabled = b; }
+  Bool  getFilmGrainCharactersticsSEIEnabled()                       { return m_fgcSEIEnabled; }
+  Void  setFilmGrainCharactersticsSEICancelFlag(Bool b)              { m_fgcSEICancelFlag = b; }
+  Bool  getFilmGrainCharactersticsSEICancelFlag()                    { return m_fgcSEICancelFlag; }
+  Void  setFilmGrainCharactersticsSEIPersistenceFlag(Bool b)         { m_fgcSEIPersistenceFlag = b; }
+  Bool  getFilmGrainCharactersticsSEIPersistenceFlag()               { return m_fgcSEIPersistenceFlag; }
+  Void  setFilmGrainCharactersticsSEIModelID(UChar v )               { m_fgcSEIModelID = v; }
+  UChar getFilmGrainCharactersticsSEIModelID()                       { return m_fgcSEIModelID; }
+  Void  setFilmGrainCharactersticsSEISepColourDescPresent(Bool b)    { m_fgcSEISepColourDescPresentFlag = b; }
+  Bool  getFilmGrainCharactersticsSEISepColourDescPresent()          { return m_fgcSEISepColourDescPresentFlag; }
+  Void  setFilmGrainCharactersticsSEIBlendingModeID(UChar v )        { m_fgcSEIBlendingModeID = v; }
+  UChar getFilmGrainCharactersticsSEIBlendingModeID()                { return m_fgcSEIBlendingModeID; }
+  Void  setFilmGrainCharactersticsSEILog2ScaleFactor(UChar v )       { m_fgcSEILog2ScaleFactor = v; }
+  UChar getFilmGrainCharactersticsSEILog2ScaleFactor()               { return m_fgcSEILog2ScaleFactor; }
+  Void  setFGCSEICompModelPresent(Bool b, Int index)                 { m_fgcSEICompModelPresent[index] = b; }
+  Bool  getFGCSEICompModelPresent(Int index)                         { return m_fgcSEICompModelPresent[index]; }
+#if JVET_X0048_X0103_FILM_GRAIN
+  bool*   getFGCSEICompModelPresent                 ()               { return m_fgcSEICompModelPresent; }
+  void    setFilmGrainAnalysisEnabled               (bool b)         { m_fgcSEIAnalysisEnabled = b; }
+  bool    getFilmGrainAnalysisEnabled               ()               { return m_fgcSEIAnalysisEnabled; }
+  void    setFilmGrainExternalMask(std::string s) { m_fgcSEIExternalMask = s; }
+  void    setFilmGrainExternalDenoised(std::string s) { m_fgcSEIExternalDenoised = s; }
+  std::string getFilmGrainExternalMask() { return m_fgcSEIExternalMask; }
+  std::string getFilmGrainExternalDenoised() { return m_fgcSEIExternalDenoised; }
+  void    setFilmGrainCharactersticsSEIPerPictureSEI(bool b)         { m_fgcSEIPerPictureSEI = b; }
+  bool    getFilmGrainCharactersticsSEIPerPictureSEI()               { return m_fgcSEIPerPictureSEI; }
+  Void    setFGCSEINumIntensityIntervalMinus1(UChar v, Int index) { m_fgcSEINumIntensityIntervalMinus1[index] = v; }
