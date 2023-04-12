@@ -1498,3 +1498,103 @@ Void SEIReader::xParseSEIChromaResamplingFilterHint(SEIChromaResamplingFilterHin
       }
     }
     if(sei.m_horChromaFilterIdc == 1)
+    {
+      UInt numHorizontalFilters;
+      sei_read_uvlc( pDecodedMessageOutputStream, numHorizontalFilters, "num_horizontal_filters"); sei.m_horFilterCoeff.resize(numHorizontalFilters);
+      if(numHorizontalFilters  > 0)
+      {
+        for(Int i = 0; i < numHorizontalFilters; i++)
+        {
+          UInt horTapLengthMinus1;
+          sei_read_uvlc( pDecodedMessageOutputStream, horTapLengthMinus1, "hor_tap_length_minus_1"); sei.m_horFilterCoeff[i].resize(horTapLengthMinus1+1);
+          for(Int j = 0; j < (horTapLengthMinus1 + 1); j++)
+          {
+            sei_read_svlc( pDecodedMessageOutputStream, sei.m_horFilterCoeff[i][j], "hor_filter_coeff");
+          }
+        }
+      }
+    }
+  }
+}
+
+
+Void SEIReader::xParseSEIKneeFunctionInfo(SEIKneeFunctionInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i;
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, val, "knee_function_id" );                   sei.m_kneeId = val;
+  sei_read_flag( pDecodedMessageOutputStream, val, "knee_function_cancel_flag" );          sei.m_kneeCancelFlag = val;
+  if ( !sei.m_kneeCancelFlag )
+  {
+    sei_read_flag( pDecodedMessageOutputStream, val, "knee_function_persistence_flag" );   sei.m_kneePersistenceFlag = val;
+    sei_read_code( pDecodedMessageOutputStream, 32, val, "input_d_range" );                sei.m_kneeInputDrange = val;
+    sei_read_code( pDecodedMessageOutputStream, 32, val, "input_disp_luminance" );         sei.m_kneeInputDispLuminance = val;
+    sei_read_code( pDecodedMessageOutputStream, 32, val, "output_d_range" );               sei.m_kneeOutputDrange = val;
+    sei_read_code( pDecodedMessageOutputStream, 32, val, "output_disp_luminance" );        sei.m_kneeOutputDispLuminance = val;
+    sei_read_uvlc( pDecodedMessageOutputStream, val, "num_knee_points_minus1" );           sei.m_kneeNumKneePointsMinus1 = val;
+    assert( sei.m_kneeNumKneePointsMinus1 > 0 );
+    sei.m_kneeInputKneePoint.resize(sei.m_kneeNumKneePointsMinus1+1);
+    sei.m_kneeOutputKneePoint.resize(sei.m_kneeNumKneePointsMinus1+1);
+    for(i = 0; i <= sei.m_kneeNumKneePointsMinus1; i++ )
+    {
+      sei_read_code( pDecodedMessageOutputStream, 10, val, "input_knee_point" );           sei.m_kneeInputKneePoint[i] = val;
+      sei_read_code( pDecodedMessageOutputStream, 10, val, "output_knee_point" );          sei.m_kneeOutputKneePoint[i] = val;
+    }
+  }
+}
+
+Void SEIReader::xParseSEIContentColourVolume(SEIContentColourVolume& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i;
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_flag( pDecodedMessageOutputStream, val, "ccv_cancel_flag" );          sei.m_ccvCancelFlag = val;
+  if ( !sei.m_ccvCancelFlag )
+  {
+    Int iVal;
+    sei_read_flag( pDecodedMessageOutputStream, val, "ccv_persistence_flag" );   sei.m_ccvPersistenceFlag = val;
+    sei_read_flag( pDecodedMessageOutputStream, val, "ccv_primaries_present_flag" );   sei.m_ccvPrimariesPresentFlag = val;
+    sei_read_flag( pDecodedMessageOutputStream, val, "ccv_min_luminance_value_present_flag" );   sei.m_ccvMinLuminanceValuePresentFlag = val;
+    sei_read_flag( pDecodedMessageOutputStream, val, "ccv_max_luminance_value_present_flag" );   sei.m_ccvMaxLuminanceValuePresentFlag = val;
+    sei_read_flag( pDecodedMessageOutputStream, val, "ccv_avg_luminance_value_present_flag" );   sei.m_ccvAvgLuminanceValuePresentFlag = val;
+    
+    if (sei.m_ccvPrimariesPresentFlag) 
+    {
+      for (i = 0; i < MAX_NUM_COMPONENT; i++) 
+      {
+        sei_read_scode( pDecodedMessageOutputStream, 32, iVal, "ccv_primaries_x[i]" );          sei.m_ccvPrimariesX[i] = iVal;
+        sei_read_scode( pDecodedMessageOutputStream, 32, iVal, "ccv_primaries_y[i]" );          sei.m_ccvPrimariesY[i] = iVal;
+      }
+    }
+    if (sei.m_ccvMinLuminanceValuePresentFlag) 
+    {
+      sei_read_code( pDecodedMessageOutputStream, 32, val,     "ccv_min_luminance_value" );   sei.m_ccvMinLuminanceValue = val;
+    }
+    if (sei.m_ccvMaxLuminanceValuePresentFlag) 
+    {
+      sei_read_code( pDecodedMessageOutputStream, 32, val,     "ccv_max_luminance_value" );   sei.m_ccvMaxLuminanceValue = val;
+    }
+    if (sei.m_ccvAvgLuminanceValuePresentFlag) 
+    {
+      sei_read_code( pDecodedMessageOutputStream, 32, val,     "ccv_avg_luminance_value" );   sei.m_ccvAvgLuminanceValue = val;
+    }
+  }
+}
+
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+Void SEIReader::xParseSEIShutterInterval(SEIShutterIntervalInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  Int i;
+  UInt val;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  sei_read_code(pDecodedMessageOutputStream, 32, val, "sii_time_scale");                      sei.m_siiTimeScale = val;
+  sei_read_flag(pDecodedMessageOutputStream, val, "fixed_shutter_interval_within_clvs_flag"); sei.m_siiFixedSIwithinCLVS = val;
+  if (sei.m_siiFixedSIwithinCLVS)
+  {
+    sei_read_code(pDecodedMessageOutputStream, 32, val, "sii_num_units_in_shutter_interval");   sei.m_siiNumUnitsInShutterInterval = val;
+  }
+  else
+  {
