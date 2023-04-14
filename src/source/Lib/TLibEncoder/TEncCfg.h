@@ -1098,3 +1098,103 @@ public:
   void    setFilmGrainCharactersticsSEIPerPictureSEI(bool b)         { m_fgcSEIPerPictureSEI = b; }
   bool    getFilmGrainCharactersticsSEIPerPictureSEI()               { return m_fgcSEIPerPictureSEI; }
   Void    setFGCSEINumIntensityIntervalMinus1(UChar v, Int index) { m_fgcSEINumIntensityIntervalMinus1[index] = v; }
+  UChar   getFGCSEINumIntensityIntervalMinus1(Int index) { return m_fgcSEINumIntensityIntervalMinus1[index]; }
+  Void    setFGCSEINumModelValuesMinus1(UChar v, Int index) { m_fgcSEINumModelValuesMinus1[index] = v; }
+  UChar   getFGCSEINumModelValuesMinus1(Int index) { return m_fgcSEINumModelValuesMinus1[index]; }
+  Void    setFGCSEIIntensityIntervalLowerBound(UChar v, Int index, Int ctr) { m_fgcSEIIntensityIntervalLowerBound[index][ctr] = v; }
+  UChar   getFGCSEIIntensityIntervalLowerBound(Int index, Int ctr) { return m_fgcSEIIntensityIntervalLowerBound[index][ctr]; }
+  Void    setFGCSEIIntensityIntervalUpperBound(UChar v, Int index, Int ctr) { m_fgcSEIIntensityIntervalUpperBound[index][ctr] = v; }
+  UChar   getFGCSEIIntensityIntervalUpperBound(Int index, Int ctr) { return m_fgcSEIIntensityIntervalUpperBound[index][ctr]; }
+  Void    setFGCSEICompModelValue(UInt v, Int index, Int ctr, Int modelCtr) { m_fgcSEICompModelValue[index][ctr][modelCtr] = v; }
+  UInt    getFGCSEICompModelValue(Int index, Int ctr, Int modelCtr) { return m_fgcSEICompModelValue[index][ctr][modelCtr]; }
+#endif
+  // cll SEI
+  Void  setCLLSEIEnabled(Bool b)                                     { m_cllSEIEnabled = b; }
+  Bool  getCLLSEIEnabled()                                           { return m_cllSEIEnabled; }
+  Void  setCLLSEIMaxContentLightLevel (UShort v)                     { m_cllSEIMaxContentLevel = v; }
+  UShort  getCLLSEIMaxContentLightLevel()                            { return m_cllSEIMaxContentLevel; }
+  Void  setCLLSEIMaxPicAvgLightLevel(UShort v)                       { m_cllSEIMaxPicAvgLevel = v; }
+  UShort  getCLLSEIMaxPicAvgLightLevel()                             { return m_cllSEIMaxPicAvgLevel; }
+  // ave SEI
+  Void  setAmbientViewingEnvironmentSEIEnabled (Bool b)              { m_aveSEIEnabled = b; }
+  Bool  getAmbientViewingEnvironmentSEIEnabled ()                    { return m_aveSEIEnabled; }
+  Void  setAmbientViewingEnvironmentSEIIlluminance(UInt v )          { m_aveSEIAmbientIlluminance = v; }
+  UInt  getAmbientViewingEnvironmentSEIIlluminance()                 { return m_aveSEIAmbientIlluminance; }
+  Void  setAmbientViewingEnvironmentSEIAmbientLightX(UShort v )      { m_aveSEIAmbientLightX = v; }
+  UShort getAmbientViewingEnvironmentSEIAmbientLightX()              { return m_aveSEIAmbientLightX; }
+  Void  setAmbientViewingEnvironmentSEIAmbientLightY(UShort v )      { m_aveSEIAmbientLightY = v; }
+  UShort getAmbientViewingEnvironmentSEIAmbientLightY()              { return m_aveSEIAmbientLightY; }
+#endif
+  Void  setErpSEIEnabled(Bool b)                                     { m_erpSEIEnabled = b; }                                                         
+  Bool  getErpSEIEnabled()                                           { return m_erpSEIEnabled; }
+  Void  setErpSEICancelFlag(Bool b)                                  { m_erpSEICancelFlag = b; }                                                         
+  Bool  getErpSEICancelFlag()                                        { return m_erpSEICancelFlag; }
+  Void  setErpSEIPersistenceFlag(Bool b)                             { m_erpSEIPersistenceFlag = b; }                                                         
+  Bool  getErpSEIPersistenceFlag()                                   { return m_erpSEIPersistenceFlag; }
+  Void  setErpSEIGuardBandFlag(Bool b)                               { m_erpSEIGuardBandFlag = b; }                                                         
+  Bool  getErpSEIGuardBandFlag()                                     { return m_erpSEIGuardBandFlag; }
+  Void  setErpSEIGuardBandType(UInt b)                               { m_erpSEIGuardBandType = b; } 
+  UInt  getErpSEIGuardBandType()                                     { return m_erpSEIGuardBandType; }  
+  Void  setErpSEILeftGuardBandWidth(UInt b)                          { m_erpSEILeftGuardBandWidth = b; } 
+  UInt  getErpSEILeftGuardBandWidth()                                { return m_erpSEILeftGuardBandWidth; }  
+  Void  setErpSEIRightGuardBandWidth(UInt b)                         { m_erpSEIRightGuardBandWidth = b; } 
+  UInt  getErpSEIRightGuardBandWidth()                               { return m_erpSEIRightGuardBandWidth; }      
+  Void  setSphereRotationSEIEnabled(Bool b)                          { m_sphereRotationSEIEnabled = b; }                                                         
+  Bool  getSphereRotationSEIEnabled()                                { return m_sphereRotationSEIEnabled; }
+  Void  setSphereRotationSEICancelFlag(Bool b)                       { m_sphereRotationSEICancelFlag = b; }                                                         
+  Bool  getSphereRotationSEICancelFlag()                             { return m_sphereRotationSEICancelFlag; }
+  Void  setSphereRotationSEIPersistenceFlag(Bool b)                  { m_sphereRotationSEIPersistenceFlag = b; }
+  Bool  getSphereRotationSEIPersistenceFlag()                        { return m_sphereRotationSEIPersistenceFlag; }
+  Void  setSphereRotationSEIYaw(Int b)                               { m_sphereRotationSEIYaw = b; }
+  Int   getSphereRotationSEIYaw()                                    { return m_sphereRotationSEIYaw; }
+  Void  setSphereRotationSEIPitch(Int b)                             { m_sphereRotationSEIPitch = b; }
+  Int   getSphereRotationSEIPitch()                                  { return m_sphereRotationSEIPitch; }
+  Void  setSphereRotationSEIRoll(Int b)                              { m_sphereRotationSEIRoll = b; }
+  Int   getSphereRotationSEIRoll()                                   { return m_sphereRotationSEIRoll; }
+  Void  setOmniViewportSEIEnabled(Bool b)                            { m_omniViewportSEIEnabled = b; }
+  Bool  getOmniViewportSEIEnabled()                                  { return m_omniViewportSEIEnabled; }
+  Void  setOmniViewportSEIId(UInt b)                                 { m_omniViewportSEIId = b; }
+  UInt  getOmniViewportSEIId()                                       { return m_omniViewportSEIId; }
+  Void  setOmniViewportSEICancelFlag(Bool b)                         { m_omniViewportSEICancelFlag = b; }
+  Bool  getOmniViewportSEICancelFlag()                               { return m_omniViewportSEICancelFlag; }
+  Void  setOmniViewportSEIPersistenceFlag(Bool b)                    { m_omniViewportSEIPersistenceFlag = b; }
+  Bool  getOmniViewportSEIPersistenceFlag()                          { return m_omniViewportSEIPersistenceFlag; }
+  Void  setOmniViewportSEICntMinus1(UInt b)                          { m_omniViewportSEICntMinus1 = b; }
+  UInt  getOmniViewportSEICntMinus1()                                { return m_omniViewportSEICntMinus1; }
+  Void  setOmniViewportSEIAzimuthCentre(const std::vector<Int>& vi)  { m_omniViewportSEIAzimuthCentre = vi; }
+  Int   getOmniViewportSEIAzimuthCentre(Int idx)                     { return m_omniViewportSEIAzimuthCentre[idx]; }
+  Void  setOmniViewportSEIElevationCentre(const std::vector<Int>& vi){ m_omniViewportSEIElevationCentre = vi; }
+  Int   getOmniViewportSEIElevationCentre(Int idx)                   { return m_omniViewportSEIElevationCentre[idx]; }
+  Void  setOmniViewportSEITiltCentre(const std::vector<Int>& vi)     { m_omniViewportSEITiltCentre = vi; }
+  Int   getOmniViewportSEITiltCentre(Int idx)                        { return m_omniViewportSEITiltCentre[idx]; }
+  Void  setOmniViewportSEIHorRange(const std::vector<UInt>& vi)      { m_omniViewportSEIHorRange = vi; }
+  UInt  getOmniViewportSEIHorRange(Int idx)                          { return m_omniViewportSEIHorRange[idx]; }
+  Void  setOmniViewportSEIVerRange(const std::vector<UInt>& vi)      { m_omniViewportSEIVerRange = vi; } 
+  UInt  getOmniViewportSEIVerRange(Int idx)                          { return m_omniViewportSEIVerRange[idx]; }
+  Void  setGopBasedTemporalFilterEnabled(Bool flag)                  { m_gopBasedTemporalFilterEnabled = flag; }
+  Bool  getGopBasedTemporalFilterEnabled() const                     { return m_gopBasedTemporalFilterEnabled; }
+#if JVET_Y0077_BIM
+  void  setBIM(Bool flag)                                            { m_bimEnabled = flag; }
+  Bool  getBIM() const                                               { return m_bimEnabled; }
+  void  setAdaptQPmap(std::map<Int, Int*> map)                       { m_adaptQPmap = map; }
+  Int*  getAdaptQPmap(Int poc)                                       { return m_adaptQPmap[poc]; }
+  std::map<Int, Int*> *getAdaptQPmap()                               { return &m_adaptQPmap; }
+#endif
+  Void     setCmpSEIEnabled(Bool b)                                  { m_cmpSEIEnabled = b; }
+  Bool     getCmpSEIEnabled()                                        { return m_cmpSEIEnabled; }
+  Void     setCmpSEICmpCancelFlag(Bool b)                            { m_cmpSEICmpCancelFlag = b; }
+  Bool     getCmpSEICmpCancelFlag()                                  { return m_cmpSEICmpCancelFlag; }
+  Void     setCmpSEICmpPersistenceFlag(Bool b)                       { m_cmpSEICmpPersistenceFlag = b; }
+  Bool     getCmpSEICmpPersistenceFlag()                             { return m_cmpSEICmpPersistenceFlag; }
+  Void     setRwpSEIEnabled(Bool b)                                                                     { m_rwpSEIEnabled = b; }
+  Bool     getRwpSEIEnabled()                                                                           { return m_rwpSEIEnabled; }
+  Void     setRwpSEIRwpCancelFlag(Bool b)                                                               { m_rwpSEIRwpCancelFlag = b; }
+  Bool     getRwpSEIRwpCancelFlag()                                                                     { return m_rwpSEIRwpCancelFlag; }
+  Void     setRwpSEIRwpPersistenceFlag (Bool b)                                                         { m_rwpSEIRwpPersistenceFlag = b; }
+  Bool     getRwpSEIRwpPersistenceFlag ()                                                               { return m_rwpSEIRwpPersistenceFlag; }
+  Void     setRwpSEIConstituentPictureMatchingFlag (Bool b)                                             { m_rwpSEIConstituentPictureMatchingFlag = b; }
+  Bool     getRwpSEIConstituentPictureMatchingFlag ()                                                   { return m_rwpSEIConstituentPictureMatchingFlag; }
+  Void     setRwpSEINumPackedRegions (Int value)                                                        { m_rwpSEINumPackedRegions = value; }
+  Int      getRwpSEINumPackedRegions ()                                                                 { return m_rwpSEINumPackedRegions; }
+  Void     setRwpSEIProjPictureWidth (Int value)                                                        { m_rwpSEIProjPictureWidth = value; }
+  Int      getRwpSEIProjPictureWidth ()                                                                 { return m_rwpSEIProjPictureWidth; }
