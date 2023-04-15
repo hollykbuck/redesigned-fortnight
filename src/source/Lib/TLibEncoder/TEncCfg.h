@@ -1198,3 +1198,103 @@ public:
   Int      getRwpSEINumPackedRegions ()                                                                 { return m_rwpSEINumPackedRegions; }
   Void     setRwpSEIProjPictureWidth (Int value)                                                        { m_rwpSEIProjPictureWidth = value; }
   Int      getRwpSEIProjPictureWidth ()                                                                 { return m_rwpSEIProjPictureWidth; }
+  Void     setRwpSEIProjPictureHeight (Int value)                                                       { m_rwpSEIProjPictureHeight = value; }
+  Int      getRwpSEIProjPictureHeight ()                                                                { return m_rwpSEIProjPictureHeight; }
+  Void     setRwpSEIPackedPictureWidth (Int value)                                                      { m_rwpSEIPackedPictureWidth = value; }
+  Int      getRwpSEIPackedPictureWidth ()                                                               { return m_rwpSEIPackedPictureWidth; }
+  Void     setRwpSEIPackedPictureHeight (Int value)                                                     { m_rwpSEIPackedPictureHeight = value; }
+  Int      getRwpSEIPackedPictureHeight ()                                                              { return m_rwpSEIPackedPictureHeight; }
+  Void     setRwpSEIRwpTransformType(const std::vector<UChar>& rwpTransformType)                        { m_rwpSEIRwpTransformType =rwpTransformType; }
+  UChar    getRwpSEIRwpTransformType(UInt idx) const                                                    { return m_rwpSEIRwpTransformType[idx]; } 
+  Void     setRwpSEIRwpGuardBandFlag(const std::vector<Bool>& rwpGuardBandFlag)                         { m_rwpSEIRwpGuardBandFlag = rwpGuardBandFlag; }
+  Bool     getRwpSEIRwpGuardBandFlag(UInt idx) const                                                    { return m_rwpSEIRwpGuardBandFlag[idx]; }
+  Void     setRwpSEIProjRegionWidth(const std::vector<UInt>& projRegionWidth)                           { m_rwpSEIProjRegionWidth = projRegionWidth; }
+  UInt     getRwpSEIProjRegionWidth(UInt idx) const                                                     { return m_rwpSEIProjRegionWidth[idx]; } 
+  Void     setRwpSEIProjRegionHeight(const std::vector<UInt>& projRegionHeight)                         { m_rwpSEIProjRegionHeight = projRegionHeight; } 
+  UInt     getRwpSEIProjRegionHeight(UInt idx) const                                                    { return m_rwpSEIProjRegionHeight[idx]; } 
+  Void     setRwpSEIRwpSEIProjRegionTop(const std::vector<UInt>& projRegionTop)                         { m_rwpSEIRwpSEIProjRegionTop = projRegionTop; }
+  UInt     getRwpSEIRwpSEIProjRegionTop(UInt idx) const                                                 { return m_rwpSEIRwpSEIProjRegionTop[idx]; } 
+  Void     setRwpSEIProjRegionLeft(const std::vector<UInt>& projRegionLeft)                             { m_rwpSEIProjRegionLeft = projRegionLeft; } 
+  UInt     getRwpSEIProjRegionLeft(UInt idx) const                                                      { return m_rwpSEIProjRegionLeft[idx]; } 
+  Void    setRwpSEIPackedRegionWidth(const std::vector<UShort>& packedRegionWidth)                      { m_rwpSEIPackedRegionWidth  = packedRegionWidth; }
+  UShort  getRwpSEIPackedRegionWidth(UInt idx) const                                                    { return m_rwpSEIPackedRegionWidth[idx]; } 
+  Void    setRwpSEIPackedRegionHeight(const std::vector<UShort>& packedRegionHeight)                    { m_rwpSEIPackedRegionHeight = packedRegionHeight; }
+  UShort  getRwpSEIPackedRegionHeight(UInt idx) const                                                   { return m_rwpSEIPackedRegionHeight[idx]; } 
+  Void    setRwpSEIPackedRegionTop(const std::vector<UShort>& packedRegionTop)                          { m_rwpSEIPackedRegionTop = packedRegionTop; }
+  UShort  getRwpSEIPackedRegionTop(UInt idx) const                                                      { return m_rwpSEIPackedRegionTop[idx]; } 
+  Void    setRwpSEIPackedRegionLeft(const std::vector<UShort>& packedRegionLeft)                        { m_rwpSEIPackedRegionLeft = packedRegionLeft; } 
+  UShort  getRwpSEIPackedRegionLeft(UInt idx) const                                                     { return m_rwpSEIPackedRegionLeft[idx]; }
+  Void    setRwpSEIRwpLeftGuardBandWidth(const std::vector<UChar>& rwpLeftGuardBandWidth)               { m_rwpSEIRwpLeftGuardBandWidth = rwpLeftGuardBandWidth; } 
+  UChar   getRwpSEIRwpLeftGuardBandWidth(UInt idx) const                                                { return m_rwpSEIRwpLeftGuardBandWidth[idx]; }
+  Void    setRwpSEIRwpRightGuardBandWidth(const std::vector<UChar>& rwpRightGuardBandWidth)             { m_rwpSEIRwpRightGuardBandWidth = rwpRightGuardBandWidth; } 
+  UChar   getRwpSEIRwpRightGuardBandWidth(UInt idx) const                                               { return m_rwpSEIRwpRightGuardBandWidth[idx]; } 
+  Void    setRwpSEIRwpTopGuardBandHeight(const std::vector<UChar>& rwpTopGuardBandHeight)               { m_rwpSEIRwpTopGuardBandHeight = rwpTopGuardBandHeight; } 
+  UChar   getRwpSEIRwpTopGuardBandHeight(UInt idx) const                                                { return m_rwpSEIRwpTopGuardBandHeight[idx]; }
+  Void    setRwpSEIRwpBottomGuardBandHeight(const std::vector<UChar>& rwpBottomGuardBandHeight)         { m_rwpSEIRwpBottomGuardBandHeight = rwpBottomGuardBandHeight; }
+  UChar   getRwpSEIRwpBottomGuardBandHeight(UInt idx) const                                             { return m_rwpSEIRwpBottomGuardBandHeight[idx]; } 
+  Void    setRwpSEIRwpGuardBandNotUsedForPredFlag(const std::vector<Bool>& rwpGuardBandNotUsedForPredFlag){ m_rwpSEIRwpGuardBandNotUsedForPredFlag = rwpGuardBandNotUsedForPredFlag; }
+  Bool    getRwpSEIRwpGuardBandNotUsedForPredFlag(UInt idx) const                                         { return m_rwpSEIRwpGuardBandNotUsedForPredFlag[idx]; }
+  Void    setRwpSEIRwpGuardBandType(const std::vector<UChar>& rwpGuardBandType)                           { m_rwpSEIRwpGuardBandType = rwpGuardBandType; }
+  UChar   getRwpSEIRwpGuardBandType(UInt idx) const                                                       { return m_rwpSEIRwpGuardBandType[idx]; } 
+  Void    setFviSEIDisabled()                                        { m_fviSEIEnabled = false; }
+  Void    setFviSEIEnabled(const TComSEIFisheyeVideoInfo& fvi)       { m_fisheyeVideoInfo=fvi; m_fviSEIEnabled=true; }
+  Bool    getFviSEIEnabled() const                                   { return m_fviSEIEnabled; }
+  const TComSEIFisheyeVideoInfo& getFviSEIData() const               { return m_fisheyeVideoInfo; }
+  Void  setColourRemapInfoSEIFileRoot( const std::string &s )        { m_colourRemapSEIFileRoot = s; }
+  const std::string &getColourRemapInfoSEIFileRoot() const           { return m_colourRemapSEIFileRoot; }
+  Void  setMasteringDisplaySEI(const TComSEIMasteringDisplay &src)   { m_masteringDisplay = src; }
+  Void  setSEIAlternativeTransferCharacteristicsSEIEnable( Bool b)   { m_alternativeTransferCharacteristicsSEIEnabled = b;    }
+  Bool  getSEIAlternativeTransferCharacteristicsSEIEnable( ) const   { return m_alternativeTransferCharacteristicsSEIEnabled; }
+  Void  setSEIPreferredTransferCharacteristics(UChar v)              { m_preferredTransferCharacteristics = v;    }
+  UChar getSEIPreferredTransferCharacteristics() const               { return m_preferredTransferCharacteristics; }
+  Void  setSEIGreenMetadataInfoSEIEnable( Bool b)                    { m_greenMetadataInfoSEIEnabled = b;    }
+  Bool  getSEIGreenMetadataInfoSEIEnable( ) const                    { return m_greenMetadataInfoSEIEnabled; }
+  Void  setSEIGreenMetadataType(UChar v)                             { m_greenMetadataType = v;    }
+  UChar getSEIGreenMetadataType() const                              { return m_greenMetadataType; }
+  Void  setSEIXSDMetricType(UChar v)                                 { m_xsdMetricType = v;    }
+  UChar getSEIXSDMetricType() const                                  { return m_xsdMetricType; }
+  Void  setRegionalNestingSEIFileRoot( const std::string &s )        { m_regionalNestingSEIFileRoot = s; }
+  const std::string &getRegionalNestingSEIFileRoot() const           { return m_regionalNestingSEIFileRoot; }
+#if JVET_T0050_ANNOTATED_REGIONS_SEI
+  Void  setAnnotatedRegionSEIFileRoot(const std::string &s)          { m_arSEIFileRoot = s; m_arObjects.clear(); }
+#else
+  Void  setAnnotatedRegionSEIFileRoot(const std::string &s)          { m_arSEIFileRoot = s; }
+#endif
+  const std::string &getAnnotatedRegionSEIFileRoot() const           { return m_arSEIFileRoot; }
+
+  const TComSEIMasteringDisplay &getMasteringDisplaySEI() const      { return m_masteringDisplay; }
+  Void         setUseWP               ( Bool b )                     { m_useWeightedPred   = b;    }
+  Void         setWPBiPred            ( Bool b )                     { m_useWeightedBiPred = b;    }
+  Bool         getUseWP               ()                             { return m_useWeightedPred;   }
+  Bool         getWPBiPred            ()                             { return m_useWeightedBiPred; }
+  Void         setLog2ParallelMergeLevelMinus2   ( UInt u )          { m_log2ParallelMergeLevelMinus2       = u;    }
+  UInt         getLog2ParallelMergeLevelMinus2   ()                  { return m_log2ParallelMergeLevelMinus2;       }
+  Void         setMaxNumMergeCand                ( UInt u )          { m_maxNumMergeCand = u;      }
+  UInt         getMaxNumMergeCand                ()                  { return m_maxNumMergeCand;   }
+  Void         setUseScalingListId    ( ScalingListMode u )          { m_useScalingListId       = u;   }
+  ScalingListMode getUseScalingListId    ()                          { return m_useScalingListId;      }
+  Void         setScalingListFileName       ( const std::string &s ) { m_scalingListFileName = s;      }
+  const std::string& getScalingListFileName () const                 { return m_scalingListFileName;   }
+  Void         setTMVPModeId ( Int  u )                              { m_TMVPModeId = u;    }
+  Int          getTMVPModeId ()                                      { return m_TMVPModeId; }
+  WeightedPredictionMethod getWeightedPredictionMethod() const       { return m_weightedPredictionMethod; }
+  Void         setWeightedPredictionMethod( WeightedPredictionMethod m ) { m_weightedPredictionMethod = m; }
+  Void         setSignDataHidingEnabledFlag( Bool b )                { m_SignDataHidingEnabledFlag = b;    }
+  Bool         getSignDataHidingEnabledFlag()                        { return m_SignDataHidingEnabledFlag; }
+  Bool         getUseRateCtrl         ()                             { return m_RCEnableRateControl;   }
+  Void         setUseRateCtrl         ( Bool b )                     { m_RCEnableRateControl = b;      }
+  Int          getTargetBitrate       ()                             { return m_RCTargetBitrate;       }
+  Void         setTargetBitrate       ( Int bitrate )                { m_RCTargetBitrate  = bitrate;   }
+  Int          getKeepHierBit         ()                             { return m_RCKeepHierarchicalBit; }
+  Void         setKeepHierBit         ( Int i )                      { m_RCKeepHierarchicalBit = i;    }
+  Bool         getLCULevelRC          ()                             { return m_RCLCULevelRC; }
+  Void         setLCULevelRC          ( Bool b )                     { m_RCLCULevelRC = b; }
+  Bool         getUseLCUSeparateModel ()                             { return m_RCUseLCUSeparateModel; }
+  Void         setUseLCUSeparateModel ( Bool b )                     { m_RCUseLCUSeparateModel = b;    }
+  Int          getInitialQP           ()                             { return m_RCInitialQP;           }
+  Void         setInitialQP           ( Int QP )                     { m_RCInitialQP = QP;             }
+  Bool         getForceIntraQP        ()                             { return m_RCForceIntraQP;        }
+  Void         setForceIntraQP        ( Bool b )                     { m_RCForceIntraQP = b;           }
+  Bool         getCpbSaturationEnabled()                             { return m_RCCpbSaturationEnabled;}
+  Void         setCpbSaturationEnabled( Bool b )                     { m_RCCpbSaturationEnabled = b;   }
+  UInt         getCpbSize             ()                             { return m_RCCpbSize;}
