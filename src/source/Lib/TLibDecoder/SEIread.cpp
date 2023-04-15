@@ -1898,3 +1898,103 @@ Void SEIReader::xParseSEIFisheyeVideoInfo(SEIFisheyeVideoInfo& sei, UInt payload
     info.m_fisheyeActiveAreas.resize(val+1);
 
     for (std::size_t i = 0; i < info.m_fisheyeActiveAreas.size(); i++)
+    {
+      TComSEIFisheyeVideoInfo::ActiveAreaInfo &area=info.m_fisheyeActiveAreas[i];
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_circular_region_centre_x[i]");  area.m_fisheyeCircularRegionCentreX = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_circular_region_centre_y[i]");  area.m_fisheyeCircularRegionCentreY = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_rect_region_top[i]");           area.m_fisheyeRectRegionTop = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_rect_region_left[i]");          area.m_fisheyeRectRegionLeft = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_rect_region_width[i]");         area.m_fisheyeRectRegionWidth = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_rect_region_Height[i]");        area.m_fisheyeRectRegionHeight = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_circular_region_radius[i]");    area.m_fisheyeCircularRegionRadius = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_scene_radius[i]");              area.m_fisheyeSceneRadius = val;
+
+      sei_read_scode(pDecodedMessageOutputStream, 32, sval, "fisheye_camera_centre_azimuth[i]");   area.m_fisheyeCameraCentreAzimuth = sval;
+      sei_read_scode(pDecodedMessageOutputStream, 32, sval, "fisheye_camera_centre_elevation[i]"); area.m_fisheyeCameraCentreElevation = sval;
+      sei_read_scode(pDecodedMessageOutputStream, 32, sval, "fisheye_camera_centre_tilt[i]");      area.m_fisheyeCameraCentreTilt = sval;
+
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_camera_centre_offset_x[i]");    area.m_fisheyeCameraCentreOffsetX = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_camera_centre_offset_y[i]");    area.m_fisheyeCameraCentreOffsetY = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_camera_centre_offset_z[i]");    area.m_fisheyeCameraCentreOffsetZ = val;
+      sei_read_code(pDecodedMessageOutputStream, 32, val, "fisheye_field_of_view[i]");             area.m_fisheyeFieldOfView = val;
+      sei_read_code(pDecodedMessageOutputStream, 16, val, "fisheye_num_polynomial_coeffs[i]");
+      area.m_fisheyePolynomialCoeff.resize(val);
+
+      for (std::size_t j = 0; j < area.m_fisheyePolynomialCoeff.size(); j++)
+      {
+        sei_read_scode(pDecodedMessageOutputStream, 32, sval, "fisheye_polynomial_coeff[i][j]");   area.m_fisheyePolynomialCoeff[j] = sval;
+      }
+    }
+  }
+}
+
+Void SEIReader::xParseSEIColourRemappingInfo(SEIColourRemappingInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream)
+{
+  UInt  uiVal;
+  Int   iVal;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc( pDecodedMessageOutputStream, uiVal, "colour_remap_id" );          sei.m_colourRemapId = uiVal;
+  sei_read_flag( pDecodedMessageOutputStream, uiVal, "colour_remap_cancel_flag" ); sei.m_colourRemapCancelFlag = uiVal;
+  if( !sei.m_colourRemapCancelFlag ) 
+  {
+    sei_read_flag( pDecodedMessageOutputStream, uiVal, "colour_remap_persistence_flag" );                sei.m_colourRemapPersistenceFlag = uiVal;
+    sei_read_flag( pDecodedMessageOutputStream, uiVal, "colour_remap_video_signal_info_present_flag" );  sei.m_colourRemapVideoSignalInfoPresentFlag = uiVal;
+    if ( sei.m_colourRemapVideoSignalInfoPresentFlag )
+    {
+      sei_read_flag( pDecodedMessageOutputStream, uiVal,    "colour_remap_full_range_flag" );            sei.m_colourRemapFullRangeFlag = uiVal;
+      sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "colour_remap_primaries" );                  sei.m_colourRemapPrimaries = uiVal;
+      sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "colour_remap_transfer_function" );          sei.m_colourRemapTransferFunction = uiVal;
+      sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "colour_remap_matrix_coefficients" );        sei.m_colourRemapMatrixCoefficients = uiVal;
+    }
+    sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "colour_remap_input_bit_depth" );              sei.m_colourRemapInputBitDepth = uiVal;
+    sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "colour_remap_bit_depth" );                    sei.m_colourRemapBitDepth = uiVal;
+  
+    for( Int c=0 ; c<3 ; c++ )
+    {
+      sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "pre_lut_num_val_minus1[c]" ); sei.m_preLutNumValMinus1[c] = (uiVal==0) ? 1 : uiVal;
+      sei.m_preLut[c].resize(sei.m_preLutNumValMinus1[c]+1);
+      if( uiVal> 0 )
+      {
+        for ( Int i=0 ; i<=sei.m_preLutNumValMinus1[c] ; i++ )
+        {
+          sei_read_code( pDecodedMessageOutputStream, (( sei.m_colourRemapInputBitDepth   + 7 ) >> 3 ) << 3, uiVal, "pre_lut_coded_value[c][i]" );  sei.m_preLut[c][i].codedValue  = uiVal;
+          sei_read_code( pDecodedMessageOutputStream, (( sei.m_colourRemapBitDepth + 7 ) >> 3 ) << 3, uiVal, "pre_lut_target_value[c][i]" ); sei.m_preLut[c][i].targetValue = uiVal;
+        }
+      }
+      else // pre_lut_num_val_minus1[c] == 0
+      {
+        sei.m_preLut[c][0].codedValue  = 0;
+        sei.m_preLut[c][0].targetValue = 0;
+        sei.m_preLut[c][1].codedValue  = (1 << sei.m_colourRemapInputBitDepth) - 1 ;
+        sei.m_preLut[c][1].targetValue = (1 << sei.m_colourRemapBitDepth) - 1 ;
+      }
+    }
+
+    sei_read_flag( pDecodedMessageOutputStream, uiVal,      "colour_remap_matrix_present_flag" ); sei.m_colourRemapMatrixPresentFlag = uiVal;
+    if( sei.m_colourRemapMatrixPresentFlag )
+    {
+      sei_read_code( pDecodedMessageOutputStream, 4, uiVal, "log2_matrix_denom" ); sei.m_log2MatrixDenom = uiVal;
+      for ( Int c=0 ; c<3 ; c++ )
+      {
+        for ( Int i=0 ; i<3 ; i++ )
+        {
+          sei_read_svlc( pDecodedMessageOutputStream, iVal, "colour_remap_coeffs[c][i]" ); sei.m_colourRemapCoeffs[c][i] = iVal;
+        }
+      }
+    }
+    else // setting default matrix (I3)
+    {
+      sei.m_log2MatrixDenom = 10;
+      for ( Int c=0 ; c<3 ; c++ )
+      {
+        for ( Int i=0 ; i<3 ; i++ )
+        {
+          sei.m_colourRemapCoeffs[c][i] = (c==i) << sei.m_log2MatrixDenom;
+        }
+      }
+    }
+    for( Int c=0 ; c<3 ; c++ )
+    {
+      sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "post_lut_num_val_minus1[c]" ); sei.m_postLutNumValMinus1[c] = (uiVal==0) ? 1 : uiVal;
+      sei.m_postLut[c].resize(sei.m_postLutNumValMinus1[c]+1);
