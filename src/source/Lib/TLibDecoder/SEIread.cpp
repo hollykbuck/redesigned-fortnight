@@ -1998,3 +1998,103 @@ Void SEIReader::xParseSEIColourRemappingInfo(SEIColourRemappingInfo& sei, UInt p
     {
       sei_read_code( pDecodedMessageOutputStream, 8, uiVal, "post_lut_num_val_minus1[c]" ); sei.m_postLutNumValMinus1[c] = (uiVal==0) ? 1 : uiVal;
       sei.m_postLut[c].resize(sei.m_postLutNumValMinus1[c]+1);
+      if( uiVal > 0 )
+      {
+        for ( Int i=0 ; i<=sei.m_postLutNumValMinus1[c] ; i++ )
+        {
+          sei_read_code( pDecodedMessageOutputStream, (( sei.m_colourRemapBitDepth + 7 ) >> 3 ) << 3, uiVal, "post_lut_coded_value[c][i]" );  sei.m_postLut[c][i].codedValue = uiVal;
+          sei_read_code( pDecodedMessageOutputStream, (( sei.m_colourRemapBitDepth + 7 ) >> 3 ) << 3, uiVal, "post_lut_target_value[c][i]" ); sei.m_postLut[c][i].targetValue = uiVal;
+        }
+      }
+      else
+      {
+        sei.m_postLut[c][0].codedValue  = 0;
+        sei.m_postLut[c][0].targetValue = 0;
+        sei.m_postLut[c][1].targetValue = (1 << sei.m_colourRemapBitDepth) - 1;
+        sei.m_postLut[c][1].codedValue  = (1 << sei.m_colourRemapBitDepth) - 1;
+      }
+    }
+  }
+}
+
+
+Void SEIReader::xParseSEIDeinterlaceFieldIdentification( SEIDeinterlaceFieldIdentification& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream )
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_flag(pDecodedMessageOutputStream, code, "deinterlaced_picture_source_parity_flag"); sei.m_deinterlacedPictureSourceParityFlag = code!=0;
+}
+
+
+Void SEIReader::xParseSEIContentLightLevelInfo( SEIContentLightLevelInfo& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream )
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_code(pDecodedMessageOutputStream, 16, code, "max_content_light_level");     sei.m_maxContentLightLevel    = code;
+  sei_read_code(pDecodedMessageOutputStream, 16, code, "max_pic_average_light_level"); sei.m_maxPicAverageLightLevel = code;
+}
+
+
+Void SEIReader::xParseSEIDependentRAPIndication( SEIDependentRAPIndication& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream )
+{
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+}
+
+
+Void SEIReader::xParseSEICodedRegionCompletion( SEICodedRegionCompletion& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream )
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_uvlc(pDecodedMessageOutputStream, code, "next_segment_address"); sei.m_nextSegmentAddress= code;
+  if (code)
+  {
+    sei_read_flag(pDecodedMessageOutputStream, code, "independent_slice_segment_flag"); sei.m_independentSliceSegmentFlag = code!=0;
+  }
+  else
+  {
+    sei.m_independentSliceSegmentFlag=false; // initialise to known value.
+  }
+}
+
+
+Void SEIReader::xParseSEIAlternativeTransferCharacteristics(SEIAlternativeTransferCharacteristics& sei, UInt payloadSize, ostream* pDecodedMessageOutputStream)
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_code(pDecodedMessageOutputStream, 8, code, "preferred_transfer_characteristics"); sei.m_preferredTransferCharacteristics = code;
+}
+
+
+Void SEIReader::xParseSEIAmbientViewingEnvironment( SEIAmbientViewingEnvironment& sei, UInt payloadSize, std::ostream *pDecodedMessageOutputStream )
+{
+  UInt code;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+
+  sei_read_code(pDecodedMessageOutputStream, 32, code, "ambient_illuminance"); sei.m_ambientIlluminance= code;
+  sei_read_code(pDecodedMessageOutputStream, 16, code, "ambient_light_x");     sei.m_ambientLightX     = (UShort)code;
+  sei_read_code(pDecodedMessageOutputStream, 16, code, "ambient_light_y");     sei.m_ambientLightY     = (UShort)code;
+}
+Void SEIReader::xParseSEIRegionalNesting( SEIRegionalNesting& sei, UInt payloadSize, const TComSPS *sps, std::ostream *pDecodedMessageOutputStream )
+{
+  UInt uiCode;
+  output_sei_message_header(sei, pDecodedMessageOutputStream, payloadSize);
+  UInt numRegions, numSEIs;
+  
+  sei_read_code(pDecodedMessageOutputStream, 16, uiCode, "regional_nesting_id");
+  sei_read_code(pDecodedMessageOutputStream,  8, uiCode, "regional_nesting_num_rect_regions"); numRegions = uiCode;
+
+  sei.clearRegions();
+  for(UInt i = 0; i < numRegions; i++)
+  {
+    RNSEIWindow region;
+    Int lOffset, rOffset, tOffset, bOffset, regionId;
+    sei_read_code(pDecodedMessageOutputStream,  8, uiCode, "regional_nesting_rect_region_id");      regionId = uiCode;
+    sei_read_code(pDecodedMessageOutputStream, 16, uiCode, "regional_nesting_rect_left_offset");    lOffset  = uiCode;
+    sei_read_code(pDecodedMessageOutputStream, 16, uiCode, "regional_nesting_rect_right_offset");   rOffset  = uiCode;
+    sei_read_code(pDecodedMessageOutputStream, 16, uiCode, "regional_nesting_rect_top_offset");     tOffset  = uiCode;
+    sei_read_code(pDecodedMessageOutputStream, 16, uiCode, "regional_nesting_rect_bottom_offset");  bOffset  = uiCode;
+    region.setRegionId(regionId);
