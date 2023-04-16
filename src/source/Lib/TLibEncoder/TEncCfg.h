@@ -1298,3 +1298,103 @@ public:
   Bool         getCpbSaturationEnabled()                             { return m_RCCpbSaturationEnabled;}
   Void         setCpbSaturationEnabled( Bool b )                     { m_RCCpbSaturationEnabled = b;   }
   UInt         getCpbSize             ()                             { return m_RCCpbSize;}
+  Void         setCpbSize             ( UInt ui )                    { m_RCCpbSize = ui;   }
+  Double       getInitialCpbFullness  ()                             { return m_RCInitialCpbFullness;  }
+  Void         setInitialCpbFullness  (Double f)                     { m_RCInitialCpbFullness = f;     }
+  Bool         getTransquantBypassEnabledFlag()                      { return m_TransquantBypassEnabledFlag; }
+  Void         setTransquantBypassEnabledFlag(Bool flag)             { m_TransquantBypassEnabledFlag = flag; }
+  Bool         getCUTransquantBypassFlagForceValue()                 { return m_CUTransquantBypassFlagForce; }
+  Void         setCUTransquantBypassFlagForceValue(Bool flag)        { m_CUTransquantBypassFlagForce = flag; }
+  CostMode     getCostMode( ) const                                  { return m_costMode; }
+  Void         setCostMode(CostMode m )                              { m_costMode = m; }
+
+  Void         setVPS(TComVPS *p)                                    { m_cVPS = *p; }
+  TComVPS *    getVPS()                                              { return &m_cVPS; }
+  Void         setUseRecalculateQPAccordingToLambda (Bool b)         { m_recalculateQPAccordingToLambda = b;    }
+  Bool         getUseRecalculateQPAccordingToLambda ()               { return m_recalculateQPAccordingToLambda; }
+
+  Void         setUseStrongIntraSmoothing ( Bool b )                 { m_useStrongIntraSmoothing = b;    }
+  Bool         getUseStrongIntraSmoothing ()                         { return m_useStrongIntraSmoothing; }
+
+  Void         setEfficientFieldIRAPEnabled( Bool b )                { m_bEfficientFieldIRAPEnabled = b; }
+  Bool         getEfficientFieldIRAPEnabled( ) const                 { return m_bEfficientFieldIRAPEnabled; }
+
+  Void         setHarmonizeGopFirstFieldCoupleEnabled( Bool b )      { m_bHarmonizeGopFirstFieldCoupleEnabled = b; }
+  Bool         getHarmonizeGopFirstFieldCoupleEnabled( ) const       { return m_bHarmonizeGopFirstFieldCoupleEnabled; }
+
+  Void         setActiveParameterSetsSEIEnabled ( Int b )            { m_activeParameterSetsSEIEnabled = b; }
+  Int          getActiveParameterSetsSEIEnabled ()                   { return m_activeParameterSetsSEIEnabled; }
+  Bool         getVuiParametersPresentFlag()                         { return m_vuiParametersPresentFlag; }
+  Void         setVuiParametersPresentFlag(Bool i)                   { m_vuiParametersPresentFlag = i; }
+  Bool         getAspectRatioInfoPresentFlag()                       { return m_aspectRatioInfoPresentFlag; }
+  Void         setAspectRatioInfoPresentFlag(Bool i)                 { m_aspectRatioInfoPresentFlag = i; }
+  Int          getAspectRatioIdc()                                   { return m_aspectRatioIdc; }
+  Void         setAspectRatioIdc(Int i)                              { m_aspectRatioIdc = i; }
+  Int          getSarWidth()                                         { return m_sarWidth; }
+  Void         setSarWidth(Int i)                                    { m_sarWidth = i; }
+  Int          getSarHeight()                                        { return m_sarHeight; }
+  Void         setSarHeight(Int i)                                   { m_sarHeight = i; }
+  Bool         getOverscanInfoPresentFlag()                          { return m_overscanInfoPresentFlag; }
+  Void         setOverscanInfoPresentFlag(Bool i)                    { m_overscanInfoPresentFlag = i; }
+  Bool         getOverscanAppropriateFlag()                          { return m_overscanAppropriateFlag; }
+  Void         setOverscanAppropriateFlag(Bool i)                    { m_overscanAppropriateFlag = i; }
+  Bool         getVideoSignalTypePresentFlag()                       { return m_videoSignalTypePresentFlag; }
+  Void         setVideoSignalTypePresentFlag(Bool i)                 { m_videoSignalTypePresentFlag = i; }
+  Int          getVideoFormat()                                      { return m_videoFormat; }
+  Void         setVideoFormat(Int i)                                 { m_videoFormat = i; }
+  Bool         getVideoFullRangeFlag()                               { return m_videoFullRangeFlag; }
+  Void         setVideoFullRangeFlag(Bool i)                         { m_videoFullRangeFlag = i; }
+  Bool         getColourDescriptionPresentFlag()                     { return m_colourDescriptionPresentFlag; }
+  Void         setColourDescriptionPresentFlag(Bool i)               { m_colourDescriptionPresentFlag = i; }
+  Int          getColourPrimaries()                                  { return m_colourPrimaries; }
+  Void         setColourPrimaries(Int i)                             { m_colourPrimaries = i; }
+  Int          getTransferCharacteristics()                          { return m_transferCharacteristics; }
+  Void         setTransferCharacteristics(Int i)                     { m_transferCharacteristics = i; }
+  Int          getMatrixCoefficients()                               { return m_matrixCoefficients; }
+  Void         setMatrixCoefficients(Int i)                          { m_matrixCoefficients = i; }
+  Bool         getChromaLocInfoPresentFlag()                         { return m_chromaLocInfoPresentFlag; }
+  Void         setChromaLocInfoPresentFlag(Bool i)                   { m_chromaLocInfoPresentFlag = i; }
+  Int          getChromaSampleLocTypeTopField()                      { return m_chromaSampleLocTypeTopField; }
+  Void         setChromaSampleLocTypeTopField(Int i)                 { m_chromaSampleLocTypeTopField = i; }
+  Int          getChromaSampleLocTypeBottomField()                   { return m_chromaSampleLocTypeBottomField; }
+  Void         setChromaSampleLocTypeBottomField(Int i)              { m_chromaSampleLocTypeBottomField = i; }
+  Bool         getNeutralChromaIndicationFlag()                      { return m_neutralChromaIndicationFlag; }
+  Void         setNeutralChromaIndicationFlag(Bool i)                { m_neutralChromaIndicationFlag = i; }
+  Window      &getDefaultDisplayWindow()                             { return m_defaultDisplayWindow; }
+  Void         setDefaultDisplayWindow (Int offsetLeft, Int offsetRight, Int offsetTop, Int offsetBottom ) { m_defaultDisplayWindow.setWindow (offsetLeft, offsetRight, offsetTop, offsetBottom); }
+  Bool         getFrameFieldInfoPresentFlag()                        { return m_frameFieldInfoPresentFlag; }
+  Void         setFrameFieldInfoPresentFlag(Bool i)                  { m_frameFieldInfoPresentFlag = i; }
+  Bool         getPocProportionalToTimingFlag()                      { return m_pocProportionalToTimingFlag; }
+  Void         setPocProportionalToTimingFlag(Bool x)                { m_pocProportionalToTimingFlag = x;    }
+  Int          getNumTicksPocDiffOneMinus1()                         { return m_numTicksPocDiffOneMinus1;    }
+  Void         setNumTicksPocDiffOneMinus1(Int x)                    { m_numTicksPocDiffOneMinus1 = x;       }
+  Bool         getBitstreamRestrictionFlag()                         { return m_bitstreamRestrictionFlag; }
+  Void         setBitstreamRestrictionFlag(Bool i)                   { m_bitstreamRestrictionFlag = i; }
+  Bool         getTilesFixedStructureFlag()                          { return m_tilesFixedStructureFlag; }
+  Void         setTilesFixedStructureFlag(Bool i)                    { m_tilesFixedStructureFlag = i; }
+  Bool         getMotionVectorsOverPicBoundariesFlag()               { return m_motionVectorsOverPicBoundariesFlag; }
+  Void         setMotionVectorsOverPicBoundariesFlag(Bool i)         { m_motionVectorsOverPicBoundariesFlag = i; }
+  Int          getMinSpatialSegmentationIdc()                        { return m_minSpatialSegmentationIdc; }
+  Void         setMinSpatialSegmentationIdc(Int i)                   { m_minSpatialSegmentationIdc = i; }
+  Int          getMaxBytesPerPicDenom()                              { return m_maxBytesPerPicDenom; }
+  Void         setMaxBytesPerPicDenom(Int i)                         { m_maxBytesPerPicDenom = i; }
+  Int          getMaxBitsPerMinCuDenom()                             { return m_maxBitsPerMinCuDenom; }
+  Void         setMaxBitsPerMinCuDenom(Int i)                        { m_maxBitsPerMinCuDenom = i; }
+  Int          getLog2MaxMvLengthHorizontal()                        { return m_log2MaxMvLengthHorizontal; }
+  Void         setLog2MaxMvLengthHorizontal(Int i)                   { m_log2MaxMvLengthHorizontal = i; }
+  Int          getLog2MaxMvLengthVertical()                          { return m_log2MaxMvLengthVertical; }
+  Void         setLog2MaxMvLengthVertical(Int i)                     { m_log2MaxMvLengthVertical = i; }
+
+  Bool         getProgressiveSourceFlag() const                      { return m_progressiveSourceFlag; }
+  Void         setProgressiveSourceFlag(Bool b)                      { m_progressiveSourceFlag = b; }
+
+  Bool         getInterlacedSourceFlag() const                       { return m_interlacedSourceFlag; }
+  Void         setInterlacedSourceFlag(Bool b)                       { m_interlacedSourceFlag = b; }
+
+  Bool         getNonPackedConstraintFlag() const                    { return m_nonPackedConstraintFlag; }
+  Void         setNonPackedConstraintFlag(Bool b)                    { m_nonPackedConstraintFlag = b; }
+
+  Bool         getFrameOnlyConstraintFlag() const                    { return m_frameOnlyConstraintFlag; }
+  Void         setFrameOnlyConstraintFlag(Bool b)                    { m_frameOnlyConstraintFlag = b; }
+
+  UInt         getBitDepthConstraintValue() const                    { return m_bitDepthConstraintValue; }
