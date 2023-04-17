@@ -1398,3 +1398,46 @@ public:
   Void         setFrameOnlyConstraintFlag(Bool b)                    { m_frameOnlyConstraintFlag = b; }
 
   UInt         getBitDepthConstraintValue() const                    { return m_bitDepthConstraintValue; }
+  Void         setBitDepthConstraintValue(UInt v)                    { m_bitDepthConstraintValue=v; }
+
+  ChromaFormat getChromaFormatConstraintValue() const                { return m_chromaFormatConstraintValue; }
+  Void         setChromaFormatConstraintValue(ChromaFormat v)        { m_chromaFormatConstraintValue=v; }
+
+  Bool         getIntraConstraintFlag() const                        { return m_intraConstraintFlag; }
+  Void         setIntraConstraintFlag(Bool b)                        { m_intraConstraintFlag=b; }
+
+  Bool         getOnePictureOnlyConstraintFlag() const               { return m_onePictureOnlyConstraintFlag; }
+  Void         setOnePictureOnlyConstraintFlag(Bool b)               { m_onePictureOnlyConstraintFlag=b; }
+
+  Bool         getLowerBitRateConstraintFlag() const                 { return m_lowerBitRateConstraintFlag; }
+  Void         setLowerBitRateConstraintFlag(Bool b)                 { m_lowerBitRateConstraintFlag=b; }
+
+  Bool         getChromaResamplingFilterHintEnabled()                { return m_chromaResamplingFilterHintEnabled;}
+  Void         setChromaResamplingFilterHintEnabled(Bool i)          { m_chromaResamplingFilterHintEnabled = i;}
+  Int          getChromaResamplingHorFilterIdc()                     { return m_chromaResamplingHorFilterIdc;}
+  Void         setChromaResamplingHorFilterIdc(Int i)                { m_chromaResamplingHorFilterIdc = i;}
+  Int          getChromaResamplingVerFilterIdc()                     { return m_chromaResamplingVerFilterIdc;}
+  Void         setChromaResamplingVerFilterIdc(Int i)                { m_chromaResamplingVerFilterIdc = i;}
+
+  Void      setSummaryOutFilename(const std::string &s)              { m_summaryOutFilename = s; }
+  const std::string& getSummaryOutFilename() const                   { return m_summaryOutFilename; }
+  Void      setSummaryPicFilenameBase(const std::string &s)          { m_summaryPicFilenameBase = s; }
+  const std::string& getSummaryPicFilenameBase() const               { return m_summaryPicFilenameBase; }
+
+  Void      setSummaryVerboseness(UInt v)                            { m_summaryVerboseness = v; }
+  UInt      getSummaryVerboseness( ) const                           { return m_summaryVerboseness; }
+
+#if JCTVC_AD0021_SEI_MANIFEST
+  Void     setSEIManifestSEIEnabled(Bool b) { m_SEIManifestSEIEnabled = b; }
+  Bool     getSEIManifestSEIEnabled() { return m_SEIManifestSEIEnabled; }
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  Void     setSEIPrefixIndicationSEIEnabled(Bool b) { m_SEIPrefixIndicationSEIEnabled = b; }
+  Bool     getSEIPrefixIndicationSEIEnabled() { return m_SEIPrefixIndicationSEIEnabled; }
+#endif
+
+};
+
+//! \}
+
+#endif // !defined(AFX_TENCCFG_H__6B99B797_F4DA_4E46_8E78_7656339A6C41__INCLUDED_)
