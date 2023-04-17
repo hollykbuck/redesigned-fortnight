@@ -98,3 +98,47 @@ Void TEncBinCABACCounter::encodeBin( UInt binValue, ContextModel &rcCtxModel )
   }
   g_debugCounter++;
 #endif
+}
+
+/**
+ * \brief Encode equiprobable bin
+ *
+ * \param binValue bin value
+ */
+Void TEncBinCABACCounter::encodeBinEP( UInt /*binValue*/ )
+{
+  m_uiBinsCoded += m_binCountIncrement;
+  m_fracBits += 32768;
+}
+
+/**
+ * \brief Encode equiprobable bins
+ *
+ * \param binValues bin values
+ * \param numBins number of bins
+ */
+Void TEncBinCABACCounter::encodeBinsEP( UInt /*binValues*/, Int numBins )
+{
+  m_uiBinsCoded += numBins & -m_binCountIncrement;
+  m_fracBits += 32768 * numBins;
+}
+
+/**
+ * \brief Encode terminating bin
+ *
+ * \param binValue bin value
+ */
+Void TEncBinCABACCounter::encodeBinTrm( UInt binValue )
+{
+  m_uiBinsCoded += m_binCountIncrement;
+  m_fracBits += ContextModel::getEntropyBitsTrm( binValue );
+}
+
+Void TEncBinCABACCounter::align()
+{
+  m_fracBits = (m_fracBits + 32767) & (~32767);
+}
+
+//! \}
+#endif
+
