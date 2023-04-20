@@ -198,3 +198,16 @@ Int ProfileLevelTierFeatures::getMaxDPBNumFrames(const UInt PicSizeInSamplesY) /
     else if( PicSizeInSamplesY <= ( MaxLumaPs >> 1 ) )
     {
        MaxDpbSize = min( 2 * maxDpbPicBuf, 16 );
+    }
+    else if( PicSizeInSamplesY <= ( ( 3 * MaxLumaPs ) >> 2 ) )
+    {
+       MaxDpbSize = min( ( 4 * maxDpbPicBuf ) / 3, 16 );
+    }
+    else
+    {
+       MaxDpbSize = maxDpbPicBuf;
+    }
+  }
+  return MaxDpbSize;
+}
+
