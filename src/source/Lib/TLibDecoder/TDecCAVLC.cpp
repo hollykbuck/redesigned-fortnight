@@ -398,3 +398,103 @@ Void TDecCavlc::parsePPS(TComPPS* pcPPS)
               else
               {
                 READ_UVLC(uiCode, "diff_cu_chroma_qp_offset_depth"); ppsRangeExtension.setDiffCuChromaQpOffsetDepth(uiCode);
+                UInt tableSizeMinus1 = 0;
+                READ_UVLC_CHK(tableSizeMinus1, "chroma_qp_offset_list_len_minus1", 0, MAX_QP_OFFSET_LIST_SIZE-1);
+                assert(tableSizeMinus1 < MAX_QP_OFFSET_LIST_SIZE);
+
+                for (Int cuChromaQpOffsetIdx = 0; cuChromaQpOffsetIdx <= (tableSizeMinus1); cuChromaQpOffsetIdx++)
+                {
+                  Int cbOffset;
+                  Int crOffset;
+                  READ_SVLC_CHK(cbOffset, "cb_qp_offset_list[i]", -12, 12);
+                  assert(cbOffset >= -12 && cbOffset <= 12);
+                  READ_SVLC_CHK(crOffset, "cr_qp_offset_list[i]", -12, 12);
+                  assert(crOffset >= -12 && crOffset <= 12);
+                  // table uses +1 for index (see comment inside the function)
+                  ppsRangeExtension.setChromaQpOffsetListEntry(cuChromaQpOffsetIdx+1, cbOffset, crOffset);
+                }
+                assert(ppsRangeExtension.getChromaQpOffsetListLen() == tableSizeMinus1 + 1);
+              }
+
+              READ_UVLC( uiCode, "log2_sao_offset_scale_luma");
+              ppsRangeExtension.setLog2SaoOffsetScale(CHANNEL_TYPE_LUMA, uiCode);
+              READ_UVLC( uiCode, "log2_sao_offset_scale_chroma");
+              ppsRangeExtension.setLog2SaoOffsetScale(CHANNEL_TYPE_CHROMA, uiCode);
+            }
+            break;
+          default:
+            bSkipTrailingExtensionBits=true;
+            break;
+        }
+      }
+    }
+    if (bSkipTrailingExtensionBits)
+    {
+      while ( xMoreRbspData() )
+      {
+        READ_FLAG( uiCode, "pps_extension_data_flag");
+      }
+    }
+  }
+  xReadRbspTrailingBits();
+}
+
+Void  TDecCavlc::parseVUI(TComVUI* pcVUI, TComSPS *pcSPS)
+{
+#if ENC_DEC_TRACE
+  fprintf( g_hTrace, "----------- vui_parameters -----------\n");
+#endif
+  UInt  uiCode;
+
+  READ_FLAG(     uiCode, "aspect_ratio_info_present_flag");           pcVUI->setAspectRatioInfoPresentFlag(uiCode);
+  if (pcVUI->getAspectRatioInfoPresentFlag())
+  {
+    READ_CODE(8, uiCode, "aspect_ratio_idc");                         pcVUI->setAspectRatioIdc(uiCode);
+    if (pcVUI->getAspectRatioIdc() == 255)
+    {
+      READ_CODE(16, uiCode, "sar_width");                             pcVUI->setSarWidth(uiCode);
+      READ_CODE(16, uiCode, "sar_height");                            pcVUI->setSarHeight(uiCode);
+    }
+  }
+
+  READ_FLAG(     uiCode, "overscan_info_present_flag");               pcVUI->setOverscanInfoPresentFlag(uiCode);
+  if (pcVUI->getOverscanInfoPresentFlag())
+  {
+    READ_FLAG(   uiCode, "overscan_appropriate_flag");                pcVUI->setOverscanAppropriateFlag(uiCode);
+  }
+
+  READ_FLAG(     uiCode, "video_signal_type_present_flag");           pcVUI->setVideoSignalTypePresentFlag(uiCode);
+  if (pcVUI->getVideoSignalTypePresentFlag())
+  {
+    READ_CODE(3, uiCode, "video_format");                             pcVUI->setVideoFormat(uiCode);
+    READ_FLAG(   uiCode, "video_full_range_flag");                    pcVUI->setVideoFullRangeFlag(uiCode);
+    READ_FLAG(   uiCode, "colour_description_present_flag");          pcVUI->setColourDescriptionPresentFlag(uiCode);
+    if (pcVUI->getColourDescriptionPresentFlag())
+    {
+      READ_CODE(8, uiCode, "colour_primaries");                       pcVUI->setColourPrimaries(uiCode);
+      READ_CODE(8, uiCode, "transfer_characteristics");               pcVUI->setTransferCharacteristics(uiCode);
+      READ_CODE(8, uiCode, "matrix_coeffs");                          pcVUI->setMatrixCoefficients(uiCode);
+    }
+  }
+
+  READ_FLAG(     uiCode, "chroma_loc_info_present_flag");             pcVUI->setChromaLocInfoPresentFlag(uiCode);
+  if (pcVUI->getChromaLocInfoPresentFlag())
+  {
+    READ_UVLC(   uiCode, "chroma_sample_loc_type_top_field" );        pcVUI->setChromaSampleLocTypeTopField(uiCode);
+    READ_UVLC(   uiCode, "chroma_sample_loc_type_bottom_field" );     pcVUI->setChromaSampleLocTypeBottomField(uiCode);
+  }
+
+  READ_FLAG(     uiCode, "neutral_chroma_indication_flag");           pcVUI->setNeutralChromaIndicationFlag(uiCode);
+
+  READ_FLAG(     uiCode, "field_seq_flag");                           pcVUI->setFieldSeqFlag(uiCode);
+
+  READ_FLAG(uiCode, "frame_field_info_present_flag");                 pcVUI->setFrameFieldInfoPresentFlag(uiCode);
+
+  READ_FLAG(     uiCode, "default_display_window_flag");
+  if (uiCode != 0)
+  {
+    Window &defDisp = pcVUI->getDefaultDisplayWindow();
+    READ_UVLC(   uiCode, "def_disp_win_left_offset" );                defDisp.setWindowLeftOffset  ( uiCode * TComSPS::getWinUnitX( pcSPS->getChromaFormatIdc()) );
+    READ_UVLC(   uiCode, "def_disp_win_right_offset" );               defDisp.setWindowRightOffset ( uiCode * TComSPS::getWinUnitX( pcSPS->getChromaFormatIdc()) );
+    READ_UVLC(   uiCode, "def_disp_win_top_offset" );                 defDisp.setWindowTopOffset   ( uiCode * TComSPS::getWinUnitY( pcSPS->getChromaFormatIdc()) );
+    READ_UVLC(   uiCode, "def_disp_win_bottom_offset" );              defDisp.setWindowBottomOffset( uiCode * TComSPS::getWinUnitY( pcSPS->getChromaFormatIdc()) );
