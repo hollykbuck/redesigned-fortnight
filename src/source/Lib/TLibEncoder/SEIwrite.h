@@ -98,3 +98,66 @@ protected:
     , Int SEIPrefixIndicationIdx = 0
 #endif  
   );
+  Void xWriteSEISphereRotation                    (const SEISphereRotation &sei
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    , Int SEIPrefixIndicationIdx = 0
+#endif
+  );
+  Void xWriteSEIOmniViewport                      (const SEIOmniViewport& sei);
+  Void xWriteSEICubemapProjection                 (const SEICubemapProjection &sei);
+  Void xWriteSEIRegionWisePacking                 (const SEIRegionWisePacking &sei
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    , Int SEIPrefixIndicationIdx = 0
+#endif
+  );
+  Void xWriteSEIFisheyeVideoInfo                  (const SEIFisheyeVideoInfo &sei);
+  Void xWriteSEIColourRemappingInfo               (const SEIColourRemappingInfo& sei);
+  Void xWriteSEIDeinterlaceFieldIdentification    (const SEIDeinterlaceFieldIdentification& sei);
+  Void xWriteSEIContentLightLevelInfo             (const SEIContentLightLevelInfo& sei);
+  Void xWriteSEIDependentRAPIndication            (const SEIDependentRAPIndication& sei);
+  Void xWriteSEICodedRegionCompletion             (const SEICodedRegionCompletion& sei);
+  Void xWriteSEIAlternativeTransferCharacteristics(const SEIAlternativeTransferCharacteristics& sei);
+  Void xWriteSEIAmbientViewingEnvironment         (const SEIAmbientViewingEnvironment& sei);
+  Void xWriteSEIRegionalNesting                   (TComBitIf& bs, const SEIRegionalNesting& sei, const TComSPS *sps);
+
+  Void xWriteSEIAnnotatedRegions                  (const SEIAnnotatedRegions& sei, const TComSPS *sps);
+#if JCTVC_AD0021_SEI_MANIFEST
+  //SEI manifest
+  Void xWriteSEISEIManifest(const SEIManifest& sei);
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  //SEI prefix indication
+  Void xWriteSEISEIPrefixIndication(TComBitIf& bs, const SEIPrefixIndication& sei, const TComSPS* sps);
+  Void xWriteSEIPrefixIndicationByteAlign();
+  UInt getBitsUe(UInt x)
+  {
+    UInt n = 0;
+    x += 1;
+    for (Int s = 4; s >= 0; s--)
+    {
+      Int b = 1 << s;
+      UInt m = (1u << b) - 1u;
+      if ((x & ~m) != 0)
+      {
+        x >>= b;
+        n += b;
+      }
+    }
+    return 2 * n + 1;
+  }
+#endif 
+
+#if SHUTTER_INTERVAL_SEI_MESSAGE
+  Void xWriteSEIShutterInterval                   (const SEIShutterIntervalInfo& sei);
+#endif
+  Void xWriteSEIpayloadData(TComBitIf& bs, const SEI& sei, const TComSPS *sps
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+    , Int SEIPrefixIndicationIdx = 0
+#endif
+  );
+  Void xWriteByteAlign();
+};
+
+//! \}
+
+#endif
