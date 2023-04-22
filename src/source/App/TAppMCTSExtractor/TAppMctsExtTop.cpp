@@ -98,3 +98,103 @@ Void TAppMctsExtTop::extract()
   // create & initialize internal classes
   xCreateMctsExtLib();
   xInitMctsExtLib();
+
+  Int iSkipFrame = 0;
+  Int iPOCLastDisplay = 0;
+
+  fstream bitstreamFileOut(m_outputBitstreamFileName.c_str(), fstream::binary | fstream::out);
+  if (!bitstreamFileOut)
+  {
+    fprintf(stderr, "\nfailed to open output bitstream file `%s' for writing\n", m_outputBitstreamFileName.c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  AccessUnit outAccessUnit;
+  while (!!bitstreamFile)
+  {
+    streampos location = bitstreamFile.tellg();
+    AnnexBStats stats = AnnexBStats();
+    InputNALUnit inNalu;
+
+    byteStreamNALUnit(bytestream, inNalu.getBitstream().getFifo(), stats);
+
+    Bool bNewPicture = false;
+    if (inNalu.getBitstream().getFifo().empty())
+    {
+      fprintf(stderr, "Warning: Attempt to extract an empty NAL unit\n");
+    }
+    else
+    {
+      read(inNalu);
+      m_pcSlice = m_cTDecTop.getApcSlicePilot();
+      // decode HLS, skipping cabac decoding and reconstruction
+      bNewPicture = m_cTDecTop.decode(inNalu, iSkipFrame, iPOCLastDisplay, true);
+
+      if (bNewPicture)
+      {
+        bitstreamFile.clear();
+        bitstreamFile.seekg(location - streamoff(3));
+        bytestream.reset();
+      }
+    }
+
+    if ((bNewPicture || !bitstreamFile || inNalu.m_nalUnitType == NAL_UNIT_EOS) &&
+      !m_cTDecTop.getFirstSliceInSequence())
+    {
+      m_cTDecTop.getPcPic()->setReconMark(true);
+      if (bitstreamFile || inNalu.m_nalUnitType == NAL_UNIT_EOS)
+      {
+        m_cTDecTop.setFirstSliceInPicture(true);
+      }
+    }
+
+    if ((inNalu.m_nalUnitType == NAL_UNIT_VPS || inNalu.m_nalUnitType == NAL_UNIT_SPS ||
+      inNalu.m_nalUnitType == NAL_UNIT_PPS))
+    {
+      continue;
+    }
+    else if (!m_mctsExtractionInfoPresent && inNalu.isSei())
+    {
+      // search matching EIS and push parameter sets into AU
+      m_cTDecTop.xParsePrefixSEImessages();
+      if (!m_cTDecTop.getSEIs().empty())
+      {
+        xExtractSuitableParameterSets(
+          getSeisByType(m_cTDecTop.getSEIs(), SEI::TEMP_MOTION_CONSTRAINED_TILE_SETS),
+          getSeisByType(m_cTDecTop.getSEIs(), SEI::MCTS_EXTRACTION_INFO_SET),
+          outAccessUnit);
+      }
+    }
+    else if (!bNewPicture && m_mctsExtractionInfoPresent && inNalu.isSlice() && xIsNaluWithinMCTSSet(m_targetMctsIdx))
+    {
+      //rewrite input slice 
+
+      // setup
+      UInt numCtusInOutputPictures = m_cTDecTop.getPcPic()->getPicSym()->getTComTile(m_targetMctsIdx)->getTileHeightInCtus() * m_cTDecTop.getPcPic()->getPicSym()->getTComTile(m_targetMctsIdx)->getTileWidthInCtus();
+      UInt numCtusInInputPictures = m_cTDecTop.getPcPic()->getNumberOfCtusInFrame();
+ 
+      m_cSlicePicSym.setNumberOfCtusInFrame(m_cTDecTop.getPcPic()->getPicSym(), numCtusInOutputPictures);
+      m_pcSlice->setPic(m_cTDecTop.getPcPic());
+      m_pcSlice->setSliceSegmentCurStartCtuTsAddr(0);
+      OutputNALUnit outNalu(m_pcSlice->getNalUnitType(), m_pcSlice->getTLayer());
+      m_cEntropyCoder.setEntropyCoder(&m_cCavlcCoder);
+      m_cEntropyCoder.setBitstream(&outNalu.m_Bitstream);
+      m_cEntropyCoder.encodeSliceHeader(m_pcSlice);
+
+      //convert
+      xInputToOutputSliceNaluConversion(inNalu, outNalu, m_pcSlice);
+
+      //write to file
+      outAccessUnit.push_back(new NALUnitEBSP(outNalu));
+      xWriteOutput(bitstreamFileOut, outAccessUnit);
+      outAccessUnit.clear();
+
+      //m_cTDecTop.getPcPic()->setNumberOfCtusInFrame(numCtusInInputPictures);
+      m_cSlicePicSym.setNumberOfCtusInFrame(m_cTDecTop.getPcPic()->getPicSym(), numCtusInInputPictures);
+
+      // console output
+      TChar c = (m_pcSlice->isIntra() ? 'I' : m_pcSlice->isInterP() ? 'P' : 'B');
+      if (!m_pcSlice->isReferenced())
+      {
+        c += 32;
+      }
