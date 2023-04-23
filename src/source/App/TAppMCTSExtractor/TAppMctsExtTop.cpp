@@ -298,3 +298,103 @@ Void TAppMctsExtTop::xExtractSuitableParameterSets(SEIMessages SEIMctsSEIs, SEIM
             m_cEntropyDecoder.setEntropyDecoder(&m_cCavlcDecoder);
             m_cEntropyDecoder.setBitstream(&sps_rbsps[0]);
             m_cEntropyDecoder.decodeSPS(nestedSps);
+
+            printf("MCTS extraction info for target MCTS index %d found\n", m_targetMctsIdx);
+            printf("Output bitstream resolution: %dx%d\n\n", nestedSps->getPicWidthInLumaSamples(), nestedSps->getPicHeightInLumaSamples());
+
+            m_mctsExtractionInfoPresent = true;
+          }
+        }
+      }
+    }
+  }
+}
+
+
+Bool TAppMctsExtTop::xIsNaluWithinMCTSSet(Int mcts_id)
+{
+  UInt currNaluTSSliceSegAddr = m_pcSlice->getSliceSegmentCurStartCtuTsAddr();
+  UInt firstCtuAddrTSInMcts = m_cTDecTop.getPcPic()->getPicSym()->getCtuRsToTsAddrMap(m_cTDecTop.getPcPic()->getPicSym()->getTComTile(m_targetMctsIdx)->getFirstCtuRsAddr());
+  UInt lastCtuAddrTSInMcts = -1;
+
+  if (mcts_id < (m_cTDecTop.getPcPic()->getPicSym()->getNumTiles() - 1))
+  {// not last tile
+    lastCtuAddrTSInMcts = m_cTDecTop.getPcPic()->getPicSym()->getCtuRsToTsAddrMap(m_cTDecTop.getPcPic()->getPicSym()->getTComTile(m_targetMctsIdx + 1)->getFirstCtuRsAddr()) - 1;
+  }
+  else
+  {
+    lastCtuAddrTSInMcts = m_cTDecTop.getPcPic()->getNumberOfCtusInFrame() - 1;
+  }
+
+  return (currNaluTSSliceSegAddr >= firstCtuAddrTSInMcts && currNaluTSSliceSegAddr <= lastCtuAddrTSInMcts);
+}
+
+
+Void TAppMctsExtTop::xInputToOutputSliceNaluConversion(InputNALUnit &inNalu, OutputNALUnit &outNalu, TComSlice* curSlice)
+{
+  const UInt uiNumSubstreams = curSlice->getNumberOfSubstreamSizes() + 1;
+
+  TComInputBitstream **ppcSubstreams = NULL;
+  ppcSubstreams = new TComInputBitstream*[uiNumSubstreams];
+  for (UInt ui = 0; ui < uiNumSubstreams; ui++)
+  {
+    ppcSubstreams[ui] = inNalu.getBitstream().extractSubstream(ui + 1 < uiNumSubstreams ? (curSlice->getSubstreamSize(ui) << 3) : inNalu.getBitstream().getNumBitsLeft());
+  }
+
+  TComOutputBitstream  *pcBitstreamRedirect;
+  pcBitstreamRedirect = new TComOutputBitstream;
+
+  // Append substreams...
+  TComOutputBitstream *pcOut = pcBitstreamRedirect;
+  std::vector<TComOutputBitstream> substreamsOut(uiNumSubstreams);
+
+  for (UInt ui = 0; ui < uiNumSubstreams; ui++)
+  {
+    std::vector<uint8_t> &bufIn = ppcSubstreams[ui]->getFifo();
+    std::vector<uint8_t> &bufOut = substreamsOut[ui].getFIFO();
+    bufOut.resize(bufIn.size());
+    bufOut = bufIn;
+    pcOut->addSubstream(&(substreamsOut[ui]));
+  }
+
+  // Byte-align
+  outNalu.m_Bitstream.writeByteAlignment();
+
+  // Perform bitstream concatenation
+  if (pcOut->getNumberOfWrittenBits() > 0)
+  {
+    outNalu.m_Bitstream.addSubstream(pcOut);
+  }
+
+  // clean-up
+  for (UInt ui = 0; ui < uiNumSubstreams; ui++)
+  {
+    delete ppcSubstreams[ui];
+  }
+  delete[] ppcSubstreams;
+  delete pcBitstreamRedirect;
+
+  return;
+
+}
+
+Void TAppMctsExtTop::xWriteOutput(std::ostream& bitstreamFile, const AccessUnit accessUnit)
+{
+  for (AccessUnit::const_iterator it = accessUnit.begin(); it != accessUnit.end(); it++)
+  {
+    const NALUnitEBSP& nalu = **it;
+
+    static const UChar start_code_prefix[] = { 0,0,0,1 };
+    if (it == accessUnit.begin() || nalu.m_nalUnitType == NAL_UNIT_VPS || nalu.m_nalUnitType == NAL_UNIT_SPS || nalu.m_nalUnitType == NAL_UNIT_PPS)
+    {
+      /* From AVC, When any of the following conditions are fulfilled, the
+      * zero_byte syntax element shall be present:
+      *  - the nal_unit_type within the nal_unit() is equal to 7 (sequence
+      *    parameter set) or 8 (picture parameter set),
+      *  - the byte stream NAL unit syntax structure contains the first NAL
+      *    unit of an access unit in decoding order, as specified by subclause
+      *    7.4.1.2.3.
+      */
+      bitstreamFile.write(reinterpret_cast<const TChar*>(start_code_prefix), 4);
+    }
+    else
