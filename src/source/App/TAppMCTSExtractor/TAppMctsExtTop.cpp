@@ -398,3 +398,11 @@ Void TAppMctsExtTop::xWriteOutput(std::ostream& bitstreamFile, const AccessUnit 
       bitstreamFile.write(reinterpret_cast<const TChar*>(start_code_prefix), 4);
     }
     else
+    {
+      bitstreamFile.write(reinterpret_cast<const TChar*>(start_code_prefix + 1), 3);
+    }
+    bitstreamFile << nalu.m_nalUnitData.str();
+
+  }
+}
+#endif
