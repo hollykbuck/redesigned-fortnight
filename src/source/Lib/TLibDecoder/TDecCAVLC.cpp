@@ -698,3 +698,103 @@ Void TDecCavlc::parseSPS(TComSPS* pcSPS)
   pcSPS->setQpBDOffset(CHANNEL_TYPE_CHROMA,  (Int) (6*(pcSPS->getStreamBitDepth(CHANNEL_TYPE_CHROMA)-8)) );
 #else
   pcSPS->setQpBDOffset(CHANNEL_TYPE_CHROMA,  (Int) (6*uiCode) );
+#endif
+
+  READ_UVLC_CHK( uiCode,    "log2_max_pic_order_cnt_lsb_minus4", 0, 12 );   pcSPS->setBitsForPOC( 4 + uiCode );
+
+  UInt subLayerOrderingInfoPresentFlag;
+  READ_FLAG(subLayerOrderingInfoPresentFlag, "sps_sub_layer_ordering_info_present_flag");
+
+  for(UInt i=0; i <= pcSPS->getMaxTLayers()-1; i++)
+  {
+    READ_UVLC ( uiCode, "sps_max_dec_pic_buffering_minus1[i]");
+    pcSPS->setMaxDecPicBuffering( uiCode + 1, i);
+    READ_UVLC ( uiCode, "sps_max_num_reorder_pics[i]" );
+    pcSPS->setNumReorderPics(uiCode, i);
+    READ_UVLC ( uiCode, "sps_max_latency_increase_plus1[i]");
+    pcSPS->setMaxLatencyIncreasePlus1( uiCode, i );
+
+    if (!subLayerOrderingInfoPresentFlag)
+    {
+      for (i++; i <= pcSPS->getMaxTLayers()-1; i++)
+      {
+        pcSPS->setMaxDecPicBuffering(pcSPS->getMaxDecPicBuffering(0), i);
+        pcSPS->setNumReorderPics(pcSPS->getNumReorderPics(0), i);
+        pcSPS->setMaxLatencyIncreasePlus1(pcSPS->getMaxLatencyIncreasePlus1(0), i);
+      }
+      break;
+    }
+  }
+
+  const UInt maxLog2CtbSize = TDecConformanceCheck::getMaxLog2CtbSize(*(pcSPS->getPTL()));
+  const UInt minLog2CtbSize = TDecConformanceCheck::getMinLog2CtbSize(*(pcSPS->getPTL()));
+  READ_UVLC_CHK( uiCode, "log2_min_luma_coding_block_size_minus3", 0, maxLog2CtbSize-3 );
+  assert(uiCode <= maxLog2CtbSize-3);
+  Int minCbLog2SizeY = uiCode + 3;
+  pcSPS->setLog2MinCodingBlockSize(minCbLog2SizeY);
+
+  // Difference + log2MinCUSize must be <= maxLog2CtbSize
+  // Difference + log2MinCUSize must be >= minLog2CtbSize
+  const UInt minLog2DiffMaxMinLumaCodingBlockSize = minLog2CtbSize < minCbLog2SizeY ? 0 : minLog2CtbSize - minCbLog2SizeY;
+  const UInt maxLog2DiffMaxMinLumaCodingBlockSize = maxLog2CtbSize - minCbLog2SizeY;
+
+  READ_UVLC_CHK( uiCode, "log2_diff_max_min_luma_coding_block_size", minLog2DiffMaxMinLumaCodingBlockSize, maxLog2DiffMaxMinLumaCodingBlockSize);
+  assert(uiCode >= minLog2DiffMaxMinLumaCodingBlockSize && uiCode <= maxLog2DiffMaxMinLumaCodingBlockSize);
+  pcSPS->setLog2DiffMaxMinCodingBlockSize(uiCode);
+  
+  const Int maxCUDepthDelta = uiCode;
+  const Int ctbLog2SizeY = minCbLog2SizeY + maxCUDepthDelta;
+  pcSPS->setMaxCUWidth  ( 1<<ctbLog2SizeY );
+  pcSPS->setMaxCUHeight ( 1<<ctbLog2SizeY );
+  READ_UVLC_CHK( uiCode, "log2_min_luma_transform_block_size_minus2", 0, minCbLog2SizeY-1-2 );
+  const UInt minTbLog2SizeY = uiCode + 2;
+  pcSPS->setQuadtreeTULog2MinSize( minTbLog2SizeY );
+
+  //  log2_diff <= Min(CtbLog2SizeY, 5) - minTbLog2SizeY
+  READ_UVLC_CHK( uiCode, "log2_diff_max_min_luma_transform_block_size", 0, min<UInt>(5U, ctbLog2SizeY) - minTbLog2SizeY );
+  pcSPS->setQuadtreeTULog2MaxSize( uiCode + pcSPS->getQuadtreeTULog2MinSize() );
+  pcSPS->setMaxTrSize( 1<<(uiCode + pcSPS->getQuadtreeTULog2MinSize()) );
+
+  READ_UVLC_CHK( uiCode, "max_transform_hierarchy_depth_inter", 0, ctbLog2SizeY - minTbLog2SizeY);    pcSPS->setQuadtreeTUMaxDepthInter( uiCode+1 );
+  READ_UVLC_CHK( uiCode, "max_transform_hierarchy_depth_intra", 0, ctbLog2SizeY - minTbLog2SizeY);    pcSPS->setQuadtreeTUMaxDepthIntra( uiCode+1 );
+
+  Int addCuDepth = max (0, minCbLog2SizeY - (Int)pcSPS->getQuadtreeTULog2MinSize() );
+  pcSPS->setMaxTotalCUDepth( maxCUDepthDelta + addCuDepth  + getMaxCUDepthOffset(pcSPS->getChromaFormatIdc(), pcSPS->getQuadtreeTULog2MinSize()) );
+
+  READ_FLAG( uiCode, "scaling_list_enabled_flag" );                 pcSPS->setScalingListFlag ( uiCode );
+  if(pcSPS->getScalingListFlag())
+  {
+    READ_FLAG( uiCode, "sps_scaling_list_data_present_flag" );                 pcSPS->setScalingListPresentFlag ( uiCode );
+    if(pcSPS->getScalingListPresentFlag ())
+    {
+      parseScalingList( &(pcSPS->getScalingList()) );
+    }
+  }
+  READ_FLAG( uiCode, "amp_enabled_flag" );                          pcSPS->setUseAMP( uiCode );
+  READ_FLAG( uiCode, "sample_adaptive_offset_enabled_flag" );       pcSPS->setUseSAO ( uiCode ? true : false );
+
+  READ_FLAG( uiCode, "pcm_enabled_flag" ); pcSPS->setUsePCM( uiCode ? true : false );
+  if( pcSPS->getUsePCM() )
+  {
+#if O0043_BEST_EFFORT_DECODING
+    READ_CODE_CHK( 4, uiCode, "pcm_sample_bit_depth_luma_minus1",   0, pcSPS->getStreamBitDepth(CHANNEL_TYPE_LUMA) );    pcSPS->setPCMBitDepth    ( CHANNEL_TYPE_LUMA, 1 + uiCode );
+    READ_CODE_CHK( 4, uiCode, "pcm_sample_bit_depth_chroma_minus1", 0, pcSPS->getStreamBitDepth(CHANNEL_TYPE_LUMA) );    pcSPS->setPCMBitDepth    ( CHANNEL_TYPE_CHROMA, 1 + uiCode );
+#else
+    READ_CODE_CHK( 4, uiCode, "pcm_sample_bit_depth_luma_minus1",   0, pcSPS->getBitDepth(CHANNEL_TYPE_LUMA) );          pcSPS->setPCMBitDepth    ( CHANNEL_TYPE_LUMA, 1 + uiCode );
+    READ_CODE_CHK( 4, uiCode, "pcm_sample_bit_depth_chroma_minus1", 0, pcSPS->getBitDepth(CHANNEL_TYPE_CHROMA) );        pcSPS->setPCMBitDepth    ( CHANNEL_TYPE_CHROMA, 1 + uiCode );
+#endif
+    READ_UVLC_CHK( uiCode, "log2_min_pcm_luma_coding_block_size_minus3", std::min<UInt>(minCbLog2SizeY, 5 )-3, std::min<UInt>(ctbLog2SizeY, 5)-3);
+    const UInt log2MinIpcmCbSizeY = uiCode+3;
+    pcSPS->setPCMLog2MinSize (log2MinIpcmCbSizeY);
+    READ_UVLC_CHK( uiCode, "log2_diff_max_min_pcm_luma_coding_block_size", 0, (std::min<UInt>(ctbLog2SizeY,5) - log2MinIpcmCbSizeY) );
+    pcSPS->setPCMLog2MaxSize ( uiCode+pcSPS->getPCMLog2MinSize() );
+    READ_FLAG( uiCode, "pcm_loop_filter_disable_flag" );                 pcSPS->setPCMFilterDisableFlag ( uiCode ? true : false );
+  }
+
+  READ_UVLC_CHK( uiCode, "num_short_term_ref_pic_sets", 0, 64 );
+  assert(uiCode <= 64);
+  pcSPS->createRPSList(uiCode);
+
+  TComRPSList* rpsList = pcSPS->getRPSList();
+  TComReferencePictureSet* rps;
+
