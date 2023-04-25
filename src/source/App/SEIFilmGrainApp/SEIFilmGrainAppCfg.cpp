@@ -98,3 +98,103 @@ istream& SMultiValueInput<T>::readValues(std::istream &in)
       if (maxNumValuesIncl != 0 && values.size() >= maxNumValuesIncl)
       {
         in.setstate(ios::failbit);
+        break;
+      }
+      values.push_back(val);
+      // soak up any whitespace and up to 1 comma.
+      for (; isspace(*pStr); pStr++);
+      if (*pStr == ',')
+      {
+        pStr++;
+      }
+      for (; isspace(*pStr); pStr++);
+    }
+  }
+  if (values.size() < minNumValuesIncl)
+  {
+    in.setstate(ios::failbit);
+  }
+  return in;
+}
+
+template <class T1, class T2>
+static inline istream& operator >> (std::istream &in, std::map<T1, T2> &map)
+{
+  T1 key;
+  T2 value;
+  try
+  {
+    in >> key;
+    in >> value;
+  }
+  catch (...)
+  {
+    in.setstate(ios::failbit);
+  }
+
+  map[key] = value;
+  return in;
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+/** \param argc number of arguments
+    \param argv array of arguments
+ */
+Bool SEIFilmGrainAppCfg::parseCfg( Int argc, TChar* argv[] )
+{
+  Bool do_help = false;
+  Int warnUnknowParameter = 0;
+
+  // default values used for FGC SEI parameter parsing
+  SMultiValueInput<UInt>  cfg_FgcSEIIntensityIntervalLowerBoundComp[MAX_NUM_COMPONENT]={SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256)};
+  SMultiValueInput<UInt>  cfg_FgcSEIIntensityIntervalUpperBoundComp[MAX_NUM_COMPONENT]={SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256), SMultiValueInput<UInt> (0, 255, 0, 256)};
+  SMultiValueInput<UInt>  cfg_FgcSEICompModelValueComp[MAX_NUM_COMPONENT]={SMultiValueInput<UInt> (0, 65535, 0, 256 * 6), SMultiValueInput<UInt> (0, 65535, 0, 256 * 6), SMultiValueInput<UInt> (0, 65535, 0, 256 * 6)};
+
+  po::Options opts;
+  opts.addOptions()
+
+  ("help",                      do_help,                               false,      "this help text")
+  ("c",                         po::parseConfigFile,                               "film grain configuration file name")
+  ("BitstreamFileIn,b",         m_bitstreamFileNameIn,                 string(""), "bitstream input file name")
+  ("BitstreamFileOut,o",        m_bitstreamFileNameOut,                string(""), "bitstream output file name")
+  ("SEIFilmGrainOption",        m_seiFilmGrainOption,                  0,          "process FGC SEI option (0:disable, 1:remove, 2:insert, 3:change)" )
+  ("SEIFilmGrainPrint",         m_seiFilmGrainPrint,                   false,      "print output film grain characteristics SEI message (1:enable)")
+// film grain characteristics SEI
+  ("SEIFGCEnabled",                                   m_fgcSEIEnabled,                                   false, "Control generation of the film grain characteristics SEI message")
+  ("SEIFGCAnalysisEnabled",                           m_fgcSEIAnalysisEnabled,                           false, "Control adaptive film grain parameter estimation - film grain analysis")
+  ("SEIFGCCancelFlag",                                m_fgcSEICancelFlag,                                false, "Specifies the persistence of any previous film grain characteristics SEI message in output order.")
+  ("SEIFGCPersistenceFlag",                           m_fgcSEIPersistenceFlag,                           false, "Specifies the persistence of the film grain characteristics SEI message for the current layer.")
+  ("SEIFGCPerPictureSEI",                             m_fgcSEIPerPictureSEI,                             false, "Film Grain SEI is added for each picture as speciffied in RDD5 to ensure bit accurate synthesis in tricky mode")
+  ("SEIFGCModelID",                                   m_fgcSEIModelID,                                      0u, "Specifies the film grain simulation model. 0: frequency filtering; 1: auto-regression.")
+  ("SEIFGCSepColourDescPresentFlag",                  m_fgcSEISepColourDescPresentFlag,                  false, "Specifies the presence of a distinct colour space description for the film grain characteristics specified in the SEI message.")
+  ("SEIFGCBlendingModeID",                            m_fgcSEIBlendingModeID,                               0u, "Specifies the blending mode used to blend the simulated film grain with the decoded images. 0: additive; 1: multiplicative.")
+  ("SEIFGCLog2ScaleFactor",                           m_fgcSEILog2ScaleFactor,                              2u, "Specifies a scale factor used in the film grain characterization equations.")
+  ("SEIFGCCompModelPresentComp0",                     m_fgcSEICompModelPresent[0],                       false, "Specifies the presence of film grain modelling on colour component 0.")
+  ("SEIFGCCompModelPresentComp1",                     m_fgcSEICompModelPresent[1],                       false, "Specifies the presence of film grain modelling on colour component 1.")
+  ("SEIFGCCompModelPresentComp2",                     m_fgcSEICompModelPresent[2],                       false, "Specifies the presence of film grain modelling on colour component 2.")
+  ("SEIFGCNumIntensityIntervalMinus1Comp0",           m_fgcSEINumIntensityIntervalMinus1[0],                0u, "Specifies the number of intensity intervals minus1 on colour component 0.")
+  ("SEIFGCNumIntensityIntervalMinus1Comp1",           m_fgcSEINumIntensityIntervalMinus1[1],                0u, "Specifies the number of intensity intervals minus1 on colour component 1.")
+  ("SEIFGCNumIntensityIntervalMinus1Comp2",           m_fgcSEINumIntensityIntervalMinus1[2],                0u, "Specifies the number of intensity intervals minus1 on colour component 2.")
+  ("SEIFGCNumModelValuesMinus1Comp0",                 m_fgcSEINumModelValuesMinus1[0],                      0u, "Specifies the number of component model values minus1 on colour component 0.")
+  ("SEIFGCNumModelValuesMinus1Comp1",                 m_fgcSEINumModelValuesMinus1[1],                      0u, "Specifies the number of component model values minus1 on colour component 1.")
+  ("SEIFGCNumModelValuesMinus1Comp2",                 m_fgcSEINumModelValuesMinus1[2],                      0u, "Specifies the number of component model values minus1 on colour component 2.")
+  ("SEIFGCIntensityIntervalLowerBoundComp0", cfg_FgcSEIIntensityIntervalLowerBoundComp[0], cfg_FgcSEIIntensityIntervalLowerBoundComp[0], "Specifies the lower bound for the intensity intervals on colour component 0.")
+  ("SEIFGCIntensityIntervalLowerBoundComp1", cfg_FgcSEIIntensityIntervalLowerBoundComp[1], cfg_FgcSEIIntensityIntervalLowerBoundComp[1], "Specifies the lower bound for the intensity intervals on colour component 1.")
+  ("SEIFGCIntensityIntervalLowerBoundComp2", cfg_FgcSEIIntensityIntervalLowerBoundComp[2], cfg_FgcSEIIntensityIntervalLowerBoundComp[2], "Specifies the lower bound for the intensity intervals on colour component 2.")
+  ("SEIFGCIntensityIntervalUpperBoundComp0", cfg_FgcSEIIntensityIntervalUpperBoundComp[0], cfg_FgcSEIIntensityIntervalUpperBoundComp[0], "Specifies the upper bound for the intensity intervals on colour component 0.")
+  ("SEIFGCIntensityIntervalUpperBoundComp1", cfg_FgcSEIIntensityIntervalUpperBoundComp[1], cfg_FgcSEIIntensityIntervalUpperBoundComp[1], "Specifies the upper bound for the intensity intervals on colour component 1.")
+  ("SEIFGCIntensityIntervalUpperBoundComp2", cfg_FgcSEIIntensityIntervalUpperBoundComp[2], cfg_FgcSEIIntensityIntervalUpperBoundComp[2], "Specifies the upper bound for the intensity intervals on colour component 2.")
+  ("SEIFGCCompModelValuesComp0", cfg_FgcSEICompModelValueComp[0], cfg_FgcSEICompModelValueComp[0], "Specifies the component model values on colour component 0.")
+  ("SEIFGCCompModelValuesComp1", cfg_FgcSEICompModelValueComp[1], cfg_FgcSEICompModelValueComp[1], "Specifies the component model values on colour component 1.")
+  ("SEIFGCCompModelValuesComp2", cfg_FgcSEICompModelValueComp[2], cfg_FgcSEICompModelValueComp[2], "Specifies the component model values on colour component 2.")
+
+  ("WarnUnknowParameter,w",     warnUnknowParameter,                   0,          "warn for unknown configuration parameters instead of failing")
+  ;
+
+  po::setDefaults(opts);
+  po::ErrorReporter err;
+  const list<const TChar*>& argv_unhandled = po::scanArgv(opts, argc, (const TChar**)argv, err);
+
