@@ -198,3 +198,93 @@ Bool SEIFilmGrainAppCfg::parseCfg( Int argc, TChar* argv[] )
   po::ErrorReporter err;
   const list<const TChar*>& argv_unhandled = po::scanArgv(opts, argc, (const TChar**)argv, err);
 
+  for (list<const TChar*>::const_iterator it = argv_unhandled.begin(); it != argv_unhandled.end(); it++)
+  {
+    std::cerr << "Unhandled argument ignored: "<< *it << std::endl;
+  }
+
+  if (argc == 1 || do_help)
+  {
+    po::doHelp(cout, opts);
+    return false;
+  }
+
+  if (err.is_errored)
+  {
+    if (!warnUnknowParameter)
+    {
+      /* errors have already been reported to stderr */
+      return false;
+    }
+  }
+
+  if (m_bitstreamFileNameIn.empty())
+  {
+    std::cerr << "No input file specified, aborting" << std::endl;
+    return false;
+  }
+  if (m_bitstreamFileNameOut.empty())
+  {
+    std::cerr << "No output file specified, aborting" << std::endl;
+    return false;
+  }
+
+  // set sei film grain parameters.
+  if (m_fgcSEIEnabled)
+  {
+    if (m_fgcSEIAnalysisEnabled) {
+      fprintf(stderr, "*************************************************************************\n");
+      fprintf(stderr, "* WARNING: SEIFGCAnalysisEnabled needs to be set to 0! *\n");
+      fprintf(stderr, "*************************************************************************\n");
+      m_fgcSEIAnalysisEnabled = false;
+    }
+    if (!m_fgcSEIPerPictureSEI && !m_fgcSEIPersistenceFlag) {
+      fprintf(stderr, "*************************************************************************\n");
+      fprintf(stderr, "* WARNING: SEIPerPictureSEI is set to 0, SEIPersistenceFlag needs to be set to 1! *\n");
+      fprintf(stderr, "*************************************************************************\n");
+      m_fgcSEIPersistenceFlag = true;
+    }
+    else if (m_fgcSEIPerPictureSEI && m_fgcSEIPersistenceFlag) {
+      fprintf(stderr, "*************************************************************************\n");
+      fprintf(stderr, "* WARNING: SEIPerPictureSEI is set to 1, SEIPersistenceFlag needs to be set to 0! *\n");
+      fprintf(stderr, "*************************************************************************\n");
+      m_fgcSEIPersistenceFlag = false;
+    }
+
+    UInt numModelCtr;
+    for (UInt c = 0; c <= 2; c++)
+    {
+      if (m_fgcSEICompModelPresent[c])
+      {
+        numModelCtr = 0;
+        for (UInt i = 0; i <= m_fgcSEINumIntensityIntervalMinus1[c]; i++)
+        {
+          m_fgcSEIIntensityIntervalLowerBound[c][i] = UChar((cfg_FgcSEIIntensityIntervalLowerBoundComp[c].values.size() > i) ? cfg_FgcSEIIntensityIntervalLowerBoundComp[c].values[i] : 0);
+          m_fgcSEIIntensityIntervalUpperBound[c][i] = UChar((cfg_FgcSEIIntensityIntervalUpperBoundComp[c].values.size() > i) ? cfg_FgcSEIIntensityIntervalUpperBoundComp[c].values[i] : 0);
+          for (UInt j = 0; j <= m_fgcSEINumModelValuesMinus1[c]; j++)
+          {
+            m_fgcSEICompModelValue[c][i][j] = UInt((cfg_FgcSEICompModelValueComp[c].values.size() > numModelCtr) ? cfg_FgcSEICompModelValueComp[c].values[numModelCtr] : 0);
+            numModelCtr++;
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+SEIFilmGrainAppCfg::SEIFilmGrainAppCfg()
+: m_bitstreamFileNameIn()
+, m_bitstreamFileNameOut()
+, m_seiFilmGrainOption()
+, m_seiFilmGrainPrint(false)
+{
+}
+
+SEIFilmGrainAppCfg::~SEIFilmGrainAppCfg()
+{
+}
+
+//! \}
+#endif
