@@ -1198,3 +1198,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
             }
             if(deltaFlag)
             {
+              deltaPocMSBCycleLT = uiCode;
+            }
+            else
+            {
+              deltaPocMSBCycleLT = uiCode + prevDeltaMSB;
+            }
+
+            Int pocLTCurr = pcSlice->getPOC() - deltaPocMSBCycleLT * maxPicOrderCntLSB
+                                        - iPOClsb + pocLsbLt;
+            rps->setPOC     (j, pocLTCurr);
+            rps->setDeltaPOC(j, - pcSlice->getPOC() + pocLTCurr);
+            rps->setCheckLTMSBPresent(j,true);
+          }
+          else
+          {
+            rps->setPOC     (j, pocLsbLt);
+            rps->setDeltaPOC(j, - pcSlice->getPOC() + pocLsbLt);
+            rps->setCheckLTMSBPresent(j,false);
+
+            // reset deltaPocMSBCycleLT for first LTRP from slice header if MSB not present
+            if( j == offset+(numOfLtrp-numLtrpInSPS)-1 )
+            {
+              deltaPocMSBCycleLT = 0;
+            }
+          }
+          prevDeltaMSB = deltaPocMSBCycleLT;
+        }
+        offset += rps->getNumberOfLongtermPictures();
+        rps->setNumberOfPictures(offset);
+      }
+      if ( pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_LP
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_W_RADL
+        || pcSlice->getNalUnitType() == NAL_UNIT_CODED_SLICE_BLA_N_LP )
+      {
+        // In the case of BLA picture types, rps data is read from slice header but ignored
+        rps = pcSlice->getLocalRPS();
+        (*rps)=TComReferencePictureSet();
+        pcSlice->setRPS(rps);
+      }
+      if (sps->getSPSTemporalMVPEnabledFlag())
+      {
+        READ_FLAG( uiCode, "slice_temporal_mvp_enabled_flag" );
+        pcSlice->setEnableTMVPFlag( uiCode == 1 ? true : false );
+      }
+      else
+      {
+        pcSlice->setEnableTMVPFlag(false);
+      }
+    }
+    if(sps->getUseSAO())
+    {
+      READ_FLAG(uiCode, "slice_sao_luma_flag");  pcSlice->setSaoEnabledFlag(CHANNEL_TYPE_LUMA, (Bool)uiCode);
+
+      if (bChroma)
+      {
+        READ_FLAG(uiCode, "slice_sao_chroma_flag");  pcSlice->setSaoEnabledFlag(CHANNEL_TYPE_CHROMA, (Bool)uiCode);
+      }
+    }
+
+    if (pcSlice->getIdrPicFlag())
+    {
+      pcSlice->setEnableTMVPFlag(false);
+    }
+    if (!pcSlice->isIntra())
+    {
+
+      READ_FLAG( uiCode, "num_ref_idx_active_override_flag");
+      if (uiCode)
+      {
+        READ_UVLC (uiCode, "num_ref_idx_l0_active_minus1" );  pcSlice->setNumRefIdx( REF_PIC_LIST_0, uiCode + 1 );
+        if (pcSlice->isInterB())
+        {
+          READ_UVLC (uiCode, "num_ref_idx_l1_active_minus1" );  pcSlice->setNumRefIdx( REF_PIC_LIST_1, uiCode + 1 );
+        }
+        else
+        {
+          pcSlice->setNumRefIdx(REF_PIC_LIST_1, 0);
+        }
+      }
+      else
+      {
+        pcSlice->setNumRefIdx(REF_PIC_LIST_0, pps->getNumRefIdxL0DefaultActive());
+        if (pcSlice->isInterB())
+        {
+          pcSlice->setNumRefIdx(REF_PIC_LIST_1, pps->getNumRefIdxL1DefaultActive());
+        }
+        else
+        {
+          pcSlice->setNumRefIdx(REF_PIC_LIST_1,0);
+        }
+      }
+    }
+    // }
+    TComRefPicListModification* refPicListModification = pcSlice->getRefPicListModification();
+    if(!pcSlice->isIntra())
+    {
+      if( !pps->getListsModificationPresentFlag() || pcSlice->getNumRpsCurrTempList() <= 1 )
+      {
+        refPicListModification->setRefPicListModificationFlagL0( 0 );
+      }
