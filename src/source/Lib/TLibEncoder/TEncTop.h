@@ -98,3 +98,103 @@ private:
   TComRdCost              m_cRdCost;                      ///< RD cost computation class
   TEncSbac***             m_pppcRDSbacCoder;              ///< temporal storage for RD computation
   TEncSbac                m_cRDGoOnSbacCoder;             ///< going on SBAC model for RD stage
+#if FAST_BIT_EST
+  TEncBinCABACCounter***  m_pppcBinCoderCABAC;            ///< temporal CABAC state storage for RD computation
+  TEncBinCABACCounter     m_cRDGoOnBinCoderCABAC;         ///< going on bin coder CABAC for RD stage
+#else
+  TEncBinCABAC***         m_pppcBinCoderCABAC;            ///< temporal CABAC state storage for RD computation
+  TEncBinCABAC            m_cRDGoOnBinCoderCABAC;         ///< going on bin coder CABAC for RD stage
+#endif
+
+  // quality control
+  TEncPreanalyzer         m_cPreanalyzer;                 ///< image characteristics analyzer for TM5-step3-like adaptive QP
+
+  TEncRateCtrl            m_cRateCtrl;                    ///< Rate control class
+
+protected:
+  Void  xGetNewPicBuffer  ( TComPic*& rpcPic, Int ppsId ); ///< get picture buffer which will be processed. If ppsId<0, then the ppsMap will be queried for the first match.
+  Void  xInitVPS          (TComVPS &vps, const TComSPS &sps); ///< initialize VPS from encoder options
+  Void  xInitSPS          (TComSPS &sps);                 ///< initialize SPS from encoder options
+  Void  xInitPPS          (TComPPS &pps, const TComSPS &sps); ///< initialize PPS from encoder options
+  Void  xInitScalingLists (TComSPS &sps, TComPPS &pps);   ///< initialize scaling lists
+  Void  xInitHrdParameters(TComSPS &sps);                 ///< initialize HRD parameters
+
+  Void  xInitPPSforTiles  (TComPPS &pps);
+  Void  xInitRPS          (TComSPS &sps, Bool isFieldCoding);           ///< initialize PPS from encoder options
+
+public:
+  TEncTop();
+  virtual ~TEncTop();
+
+  Void      create          ();
+  Void      destroy         ();
+  Void      init            (Bool isFieldCoding);
+  Void      deletePicBuffer ();
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // member access functions
+  // -------------------------------------------------------------------------------------------------------------------
+
+  TComList<TComPic*>*     getListPic            () { return  &m_cListPic;             }
+  TEncSearch*             getPredSearch         () { return  &m_cSearch;              }
+
+  TComTrQuant*            getTrQuant            () { return  &m_cTrQuant;             }
+  TComLoopFilter*         getLoopFilter         () { return  &m_cLoopFilter;          }
+  TEncSampleAdaptiveOffset* getSAO              () { return  &m_cEncSAO;              }
+  TEncGOP*                getGOPEncoder         () { return  &m_cGOPEncoder;          }
+  TEncSlice*              getSliceEncoder       () { return  &m_cSliceEncoder;        }
+  TEncCu*                 getCuEncoder          () { return  &m_cCuEncoder;           }
+  TEncEntropy*            getEntropyCoder       () { return  &m_cEntropyCoder;        }
+  TEncCavlc*              getCavlcCoder         () { return  &m_cCavlcCoder;          }
+  TEncSbac*               getSbacCoder          () { return  &m_cSbacCoder;           }
+  TEncBinCABAC*           getBinCABAC           () { return  &m_cBinCoderCABAC;       }
+
+  TComRdCost*             getRdCost             () { return  &m_cRdCost;              }
+  TEncSbac***             getRDSbacCoder        () { return  m_pppcRDSbacCoder;       }
+  TEncSbac*               getRDGoOnSbacCoder    () { return  &m_cRDGoOnSbacCoder;     }
+  TEncRateCtrl*           getRateCtrl           () { return &m_cRateCtrl;             }
+  Void selectReferencePictureSet(TComSlice* slice, Int POCCurr, Int GOPid );
+  Int getReferencePictureSetIdxForSOP(Int POCCurr, Int GOPid );
+
+  Void                   setParamSetChanged(Int spsId, Int ppsId);
+  Bool                   PPSNeedsWriting(Int ppsId);
+  Bool                   SPSNeedsWriting(Int spsId);
+
+  // -------------------------------------------------------------------------------------------------------------------
+  // encoder function
+  // -------------------------------------------------------------------------------------------------------------------
+
+  /// encode several number of pictures until end-of-sequence
+#if JVET_X0048_X0103_FILM_GRAIN
+  Void encode(Bool bEos,
+    TComPicYuv* pcPicYuvOrg,
+    TComPicYuv* pcPicYuvTrueOrg,
+    TComPicYuv* pcfilteredOrgPicForFG,
+    const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, // used for SNR calculations. Picture in original colour space.
+    TComList<TComPicYuv*>& rcListPicYuvRecOut,
+    std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded);
+#else
+  Void encode( Bool bEos,
+               TComPicYuv* pcPicYuvOrg,
+               TComPicYuv* pcPicYuvTrueOrg,
+               const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, // used for SNR calculations. Picture in original colour space.
+               TComList<TComPicYuv*>& rcListPicYuvRecOut,
+               std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded );
+#endif
+
+  /// encode several number of pictures until end-of-sequence
+  Void encode( Bool bEos, TComPicYuv* pcPicYuvOrg,
+               TComPicYuv* pcPicYuvTrueOrg,
+               const InputColourSpaceConversion ipCSC, const InputColourSpaceConversion snrCSC, // used for SNR calculations. Picture in original colour space.
+               TComList<TComPicYuv*>& rcListPicYuvRecOut,
+               std::list<AccessUnit>& accessUnitsOut, Int& iNumEncoded, Bool isTff);
+
+  TEncAnalyze::OutputLogControl getOutputLogControl() const
+  {
+    TEncAnalyze::OutputLogControl outputLogCtrl;
+    outputLogCtrl.printFrameMSE=m_printFrameMSE;
+    outputLogCtrl.printMSEBasedSNR=m_printMSEBasedSequencePSNR;
+    outputLogCtrl.printMSSSIM=m_printMSSSIM;
+    outputLogCtrl.printSequenceMSE=m_printSequenceMSE;
+    outputLogCtrl.printXPSNR=m_bXPSNREnableFlag;
+    outputLogCtrl.printHexPerPOCPSNRs=m_printHexPsnr;
