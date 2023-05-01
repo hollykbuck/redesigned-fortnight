@@ -198,3 +198,17 @@ public:
     outputLogCtrl.printSequenceMSE=m_printSequenceMSE;
     outputLogCtrl.printXPSNR=m_bXPSNREnableFlag;
     outputLogCtrl.printHexPerPOCPSNRs=m_printHexPsnr;
+    return outputLogCtrl;
+  }
+
+  Void printSummary(Bool isField)
+  {
+    m_cGOPEncoder.printOutSummary (m_uiNumAllPicCoded, isField, getOutputLogControl(), m_spsMap.getFirstPS()->getBitDepths());
+  }
+
+};
+
+//! \}
+
+#endif // __TENCTOP__
+
