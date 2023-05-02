@@ -1398,3 +1398,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
       }
       else
       {
+        pcSlice->setColFromL0Flag( 1 );
+      }
+
+      if ( pcSlice->getSliceType() != I_SLICE &&
+          ((pcSlice->getColFromL0Flag() == 1 && pcSlice->getNumRefIdx(REF_PIC_LIST_0) > 1)||
+           (pcSlice->getColFromL0Flag() == 0 && pcSlice->getNumRefIdx(REF_PIC_LIST_1) > 1)))
+      {
+        READ_UVLC( uiCode, "collocated_ref_idx" );
+        pcSlice->setColRefIdx(uiCode);
+      }
+      else
+      {
+        pcSlice->setColRefIdx(0);
+      }
+    }
+    if ( (pps->getUseWP() && pcSlice->getSliceType()==P_SLICE) || (pps->getWPBiPred() && pcSlice->getSliceType()==B_SLICE) )
+    {
+      xParsePredWeightTable(pcSlice, sps);
+      pcSlice->initWpScaling(sps);
+    }
+    if (!pcSlice->isIntra())
+    {
+      READ_UVLC( uiCode, "five_minus_max_num_merge_cand");
+      pcSlice->setMaxNumMergeCand(MRG_MAX_NUM_CANDS - uiCode);
+    }
+
+    READ_SVLC( iCode, "slice_qp_delta" );
+    pcSlice->setSliceQp (26 + pps->getPicInitQPMinus26() + iCode);
+
+    assert( pcSlice->getSliceQp() >= -sps->getQpBDOffset(CHANNEL_TYPE_LUMA) );
+    assert( pcSlice->getSliceQp() <=  51 );
+
+    if (pps->getSliceChromaQpFlag())
+    {
+      if (numValidComp>COMPONENT_Cb)
+      {
+        READ_SVLC( iCode, "slice_cb_qp_offset" );
+        pcSlice->setSliceChromaQpDelta(COMPONENT_Cb, iCode );
+        assert( pcSlice->getSliceChromaQpDelta(COMPONENT_Cb) >= -12 );
+        assert( pcSlice->getSliceChromaQpDelta(COMPONENT_Cb) <=  12 );
+        assert( (pps->getQpOffset(COMPONENT_Cb) + pcSlice->getSliceChromaQpDelta(COMPONENT_Cb)) >= -12 );
+        assert( (pps->getQpOffset(COMPONENT_Cb) + pcSlice->getSliceChromaQpDelta(COMPONENT_Cb)) <=  12 );
+      }
+
+      if (numValidComp>COMPONENT_Cr)
+      {
+        READ_SVLC( iCode, "slice_cr_qp_offset" );
+        pcSlice->setSliceChromaQpDelta(COMPONENT_Cr, iCode );
+        assert( pcSlice->getSliceChromaQpDelta(COMPONENT_Cr) >= -12 );
+        assert( pcSlice->getSliceChromaQpDelta(COMPONENT_Cr) <=  12 );
+        assert( (pps->getQpOffset(COMPONENT_Cr) + pcSlice->getSliceChromaQpDelta(COMPONENT_Cr)) >= -12 );
+        assert( (pps->getQpOffset(COMPONENT_Cr) + pcSlice->getSliceChromaQpDelta(COMPONENT_Cr)) <=  12 );
+      }
+    }
+
+    if (pps->getPpsRangeExtension().getChromaQpOffsetListEnabledFlag())
+    {
+      READ_FLAG(uiCode, "cu_chroma_qp_offset_enabled_flag"); pcSlice->setUseChromaQpAdj(uiCode != 0);
+    }
+    else
+    {
+      pcSlice->setUseChromaQpAdj(false);
+    }
+
+    if (pps->getDeblockingFilterControlPresentFlag())
+    {
+      if(pps->getDeblockingFilterOverrideEnabledFlag())
+      {
+        READ_FLAG ( uiCode, "deblocking_filter_override_flag" );        pcSlice->setDeblockingFilterOverrideFlag(uiCode ? true : false);
+      }
+      else
+      {
+        pcSlice->setDeblockingFilterOverrideFlag(0);
+      }
+      if(pcSlice->getDeblockingFilterOverrideFlag())
+      {
+        READ_FLAG ( uiCode, "slice_deblocking_filter_disabled_flag" );   pcSlice->setDeblockingFilterDisable(uiCode ? 1 : 0);
+        if(!pcSlice->getDeblockingFilterDisable())
+        {
+          READ_SVLC( iCode, "slice_beta_offset_div2" );                       pcSlice->setDeblockingFilterBetaOffsetDiv2(iCode);
+          assert(pcSlice->getDeblockingFilterBetaOffsetDiv2() >= -6 &&
+                 pcSlice->getDeblockingFilterBetaOffsetDiv2() <=  6);
+          READ_SVLC( iCode, "slice_tc_offset_div2" );                         pcSlice->setDeblockingFilterTcOffsetDiv2(iCode);
+          assert(pcSlice->getDeblockingFilterTcOffsetDiv2() >= -6 &&
+                 pcSlice->getDeblockingFilterTcOffsetDiv2() <=  6);
+        }
+      }
+      else
+      {
+        pcSlice->setDeblockingFilterDisable       ( pps->getPPSDeblockingFilterDisabledFlag() );
+        pcSlice->setDeblockingFilterBetaOffsetDiv2( pps->getDeblockingFilterBetaOffsetDiv2() );
+        pcSlice->setDeblockingFilterTcOffsetDiv2  ( pps->getDeblockingFilterTcOffsetDiv2() );
+      }
+    }
+    else
+    {
+      pcSlice->setDeblockingFilterDisable       ( false );
+      pcSlice->setDeblockingFilterBetaOffsetDiv2( 0 );
+      pcSlice->setDeblockingFilterTcOffsetDiv2  ( 0 );
+    }
