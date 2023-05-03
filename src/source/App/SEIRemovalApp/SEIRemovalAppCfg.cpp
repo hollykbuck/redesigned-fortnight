@@ -98,3 +98,30 @@ Bool SEIRemovalAppCfg::parseCfg( Int argc, TChar* argv[] )
 
 
   if (m_bitstreamFileNameIn.empty())
+  {
+    std::cerr << "No input file specified, aborting" << std::endl;
+    return false;
+  }
+  if (m_bitstreamFileNameOut.empty())
+  {
+    std::cerr << "No output file specified, aborting" << std::endl;
+    return false;
+  }
+
+
+  return true;
+}
+
+SEIRemovalAppCfg::SEIRemovalAppCfg()
+: m_bitstreamFileNameIn()
+, m_bitstreamFileNameOut()
+, m_discardPrefixSEIs( false )
+, m_discardSuffixSEIs( false )
+{
+}
+
+SEIRemovalAppCfg::~SEIRemovalAppCfg()
+{
+}
+
+//! \}
