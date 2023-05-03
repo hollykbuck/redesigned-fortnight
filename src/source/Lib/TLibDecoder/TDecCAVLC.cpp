@@ -1498,3 +1498,103 @@ Void TDecCavlc::parseSliceHeader (TComSlice* pcSlice, ParameterSetManager *param
       pcSlice->setDeblockingFilterBetaOffsetDiv2( 0 );
       pcSlice->setDeblockingFilterTcOffsetDiv2  ( 0 );
     }
+
+    Bool isSAOEnabled = sps->getUseSAO() && (pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_LUMA) || (bChroma && pcSlice->getSaoEnabledFlag(CHANNEL_TYPE_CHROMA)));
+    Bool isDBFEnabled = (!pcSlice->getDeblockingFilterDisable());
+
+    if(pps->getLoopFilterAcrossSlicesEnabledFlag() && ( isSAOEnabled || isDBFEnabled ))
+    {
+      READ_FLAG( uiCode, "slice_loop_filter_across_slices_enabled_flag");
+    }
+    else
+    {
+      uiCode = pps->getLoopFilterAcrossSlicesEnabledFlag()?1:0;
+    }
+    pcSlice->setLFCrossSliceBoundaryFlag( (uiCode==1)?true:false);
+
+  }
+
+  std::vector<UInt> entryPointOffset;
+  if( pps->getTilesEnabledFlag() || pps->getEntropyCodingSyncEnabledFlag() )
+  {
+    UInt numEntryPointOffsets;
+    UInt offsetLenMinus1;
+    READ_UVLC(numEntryPointOffsets, "num_entry_point_offsets");
+    if (numEntryPointOffsets>0)
+    {
+      READ_UVLC(offsetLenMinus1, "offset_len_minus1");
+      entryPointOffset.resize(numEntryPointOffsets);
+      for (UInt idx=0; idx<numEntryPointOffsets; idx++)
+      {
+        READ_CODE(offsetLenMinus1+1, uiCode, "entry_point_offset_minus1");
+        entryPointOffset[ idx ] = uiCode + 1;
+      }
+    }
+  }
+
+  if(pps->getSliceHeaderExtensionPresentFlag())
+  {
+    READ_UVLC(uiCode,"slice_segment_header_extension_length");
+    for(Int i=0; i<uiCode; i++)
+    {
+      UInt ignored;
+      READ_CODE(8,ignored,"slice_segment_header_extension_data_byte");
+    }
+  }
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatistics::IncrementStatisticEP(STATS__BYTE_ALIGNMENT_BITS,m_pcBitstream->readByteAlignment(),0);
+#else
+  m_pcBitstream->readByteAlignment();
+#endif
+
+  pcSlice->clearSubstreamSizes();
+
+  if( pps->getTilesEnabledFlag() || pps->getEntropyCodingSyncEnabledFlag() )
+  {
+    Int endOfSliceHeaderLocation = m_pcBitstream->getByteLocation();
+
+    // Adjust endOfSliceHeaderLocation to account for emulation prevention bytes in the slice segment header
+    for ( UInt curByteIdx  = 0; curByteIdx<m_pcBitstream->numEmulationPreventionBytesRead(); curByteIdx++ )
+    {
+      if ( m_pcBitstream->getEmulationPreventionByteLocation( curByteIdx ) < endOfSliceHeaderLocation )
+      {
+        endOfSliceHeaderLocation++;
+      }
+    }
+
+    Int  curEntryPointOffset     = 0;
+    Int  prevEntryPointOffset    = 0;
+    for (UInt idx=0; idx<entryPointOffset.size(); idx++)
+    {
+      curEntryPointOffset += entryPointOffset[ idx ];
+
+      Int emulationPreventionByteCount = 0;
+      for ( UInt curByteIdx  = 0; curByteIdx<m_pcBitstream->numEmulationPreventionBytesRead(); curByteIdx++ )
+      {
+        if ( m_pcBitstream->getEmulationPreventionByteLocation( curByteIdx ) >= ( prevEntryPointOffset + endOfSliceHeaderLocation ) &&
+             m_pcBitstream->getEmulationPreventionByteLocation( curByteIdx ) <  ( curEntryPointOffset  + endOfSliceHeaderLocation ) )
+        {
+          emulationPreventionByteCount++;
+        }
+      }
+
+      entryPointOffset[ idx ] -= emulationPreventionByteCount;
+      prevEntryPointOffset = curEntryPointOffset;
+      pcSlice->addSubstreamSize(entryPointOffset [ idx ] );
+    }
+  }
+
+  return;
+}
+
+Void TDecCavlc::parsePTL( TComPTL *rpcPTL, Bool profilePresentFlag, Int maxNumSubLayersMinus1 )
+{
+  UInt uiCode;
+  if(profilePresentFlag)
+  {
+    parseProfileTier(rpcPTL->getGeneralPTL(), false);
+  }
+  READ_CODE( 8, uiCode, "general_level_idc" );    rpcPTL->getGeneralPTL()->setLevelIdc(Level::Name(uiCode));
+
+  for (Int i = 0; i < maxNumSubLayersMinus1; i++)
+  {
