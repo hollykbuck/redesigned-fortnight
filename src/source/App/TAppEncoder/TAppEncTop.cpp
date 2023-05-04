@@ -98,3 +98,103 @@ Void TAppEncTop::xInitLibCfg()
   m_cTEncTop.setChromaFormatConstraintValue                       ( m_chromaFormatConstraint );
   m_cTEncTop.setIntraConstraintFlag                               ( m_intraConstraintFlag );
   m_cTEncTop.setOnePictureOnlyConstraintFlag                      ( m_onePictureOnlyConstraintFlag );
+  m_cTEncTop.setLowerBitRateConstraintFlag                        ( m_lowerBitRateConstraintFlag );
+
+  m_cTEncTop.setPrintMSEBasedSequencePSNR                         ( m_printMSEBasedSequencePSNR);
+  m_cTEncTop.setPrintHexPsnr                                      ( m_printHexPsnr);
+  m_cTEncTop.setPrintFrameMSE                                     ( m_printFrameMSE);
+  m_cTEncTop.setPrintSequenceMSE                                  ( m_printSequenceMSE);
+  m_cTEncTop.setPrintMSSSIM                                       ( m_printMSSSIM );
+
+  m_cTEncTop.setXPSNREnableFlag                                   ( m_bXPSNREnableFlag);
+  for (Int id = 0 ; id < MAX_NUM_COMPONENT; id++)
+  {
+    m_cTEncTop.setXPSNRWeight                                     ( m_dXPSNRWeight[id], ComponentID(id));
+  }
+
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  m_cTEncTop.setShutterFilterFlag                                 ( m_ShutterFilterEnable );
+#endif
+
+  m_cTEncTop.setCabacZeroWordPaddingEnabled                       ( m_cabacZeroWordPaddingEnabled );
+
+  m_cTEncTop.setFrameRate                                         ( m_iFrameRate );
+  m_cTEncTop.setFrameSkip                                         ( m_FrameSkip );
+  m_cTEncTop.setTemporalSubsampleRatio                            ( m_temporalSubsampleRatio );
+  m_cTEncTop.setSourceWidth                                       ( m_sourceWidth );
+  m_cTEncTop.setSourceHeight                                      ( m_sourceHeight );
+  m_cTEncTop.setConformanceWindow                                 ( m_confWinLeft, m_confWinRight, m_confWinTop, m_confWinBottom );
+  m_cTEncTop.setFramesToBeEncoded                                 ( m_framesToBeEncoded );
+
+  //====== Coding Structure ========
+  m_cTEncTop.setIntraPeriod                                       ( m_iIntraPeriod );
+  m_cTEncTop.setDecodingRefreshType                               ( m_iDecodingRefreshType );
+  m_cTEncTop.setGOPSize                                           ( m_iGOPSize );
+  m_cTEncTop.setReWriteParamSetsFlag                              ( m_bReWriteParamSetsFlag );
+  m_cTEncTop.setGopList                                           ( m_GOPList );
+  m_cTEncTop.setExtraRPSs                                         ( m_extraRPSs );
+  for(Int i = 0; i < MAX_TLAYER; i++)
+  {
+    m_cTEncTop.setNumReorderPics                                  ( m_numReorderPics[i], i );
+    m_cTEncTop.setMaxDecPicBuffering                              ( m_maxDecPicBuffering[i], i );
+  }
+  for( UInt uiLoop = 0; uiLoop < MAX_TLAYER; ++uiLoop )
+  {
+    m_cTEncTop.setLambdaModifier                                  ( uiLoop, m_adLambdaModifier[ uiLoop ] );
+  }
+  m_cTEncTop.setIntraLambdaModifier                               ( m_adIntraLambdaModifier );
+  m_cTEncTop.setIntraQpFactor                                     ( m_dIntraQpFactor );
+
+  m_cTEncTop.setQP                                                ( m_iQP );
+
+  m_cTEncTop.setIntraQPOffset                                     ( m_intraQPOffset );
+  m_cTEncTop.setLambdaFromQPEnable                                ( m_lambdaFromQPEnable );
+  m_cTEncTop.setSourcePadding                                     ( m_sourcePadding );
+
+  m_cTEncTop.setAccessUnitDelimiter                               ( m_AccessUnitDelimiter );
+
+  m_cTEncTop.setMaxTempLayer                                      ( m_maxTempLayer );
+  m_cTEncTop.setUseAMP( m_enableAMP );
+
+  //===== Slice ========
+
+  //====== Loop/Deblock Filter ========
+  m_cTEncTop.setLoopFilterDisable                                 ( m_bLoopFilterDisable       );
+  m_cTEncTop.setLoopFilterOffsetInPPS                             ( m_loopFilterOffsetInPPS );
+  m_cTEncTop.setLoopFilterBetaOffset                              ( m_loopFilterBetaOffsetDiv2  );
+  m_cTEncTop.setLoopFilterTcOffset                                ( m_loopFilterTcOffsetDiv2    );
+  m_cTEncTop.setDeblockingFilterMetric                            ( m_deblockingFilterMetric );
+
+  //====== Motion search ========
+  m_cTEncTop.setDisableIntraPUsInInterSlices                      ( m_bDisableIntraPUsInInterSlices );
+  m_cTEncTop.setMotionEstimationSearchMethod                      ( m_motionEstimationSearchMethod  );
+  m_cTEncTop.setSearchRange                                       ( m_iSearchRange );
+  m_cTEncTop.setBipredSearchRange                                 ( m_bipredSearchRange );
+  m_cTEncTop.setClipForBiPredMeEnabled                            ( m_bClipForBiPredMeEnabled );
+  m_cTEncTop.setFastMEAssumingSmootherMVEnabled                   ( m_bFastMEAssumingSmootherMVEnabled );
+  m_cTEncTop.setMinSearchWindow                                   ( m_minSearchWindow );
+  m_cTEncTop.setRestrictMESampling                                ( m_bRestrictMESampling );
+
+  //====== Quality control ========
+  m_cTEncTop.setMaxDeltaQP                                        ( m_iMaxDeltaQP  );
+  m_cTEncTop.setMaxCuDQPDepth                                     ( m_iMaxCuDQPDepth  );
+  m_cTEncTop.setDiffCuChromaQpOffsetDepth                         ( m_diffCuChromaQpOffsetDepth );
+  m_cTEncTop.setChromaCbQpOffset                                  ( m_cbQpOffset     );
+  m_cTEncTop.setChromaCrQpOffset                                  ( m_crQpOffset  );
+  m_cTEncTop.setWCGChromaQpControl                                ( m_wcgChromaQpControl );
+  m_cTEncTop.setSliceChromaOffsetQpIntraOrPeriodic                ( m_sliceChromaQpOffsetPeriodicity, m_sliceChromaQpOffsetIntraOrPeriodic );
+  m_cTEncTop.setChromaFormatIdc                                   ( m_chromaFormatIDC  );
+
+#if ADAPTIVE_QP_SELECTION
+  m_cTEncTop.setUseAdaptQpSelect                                  ( m_bUseAdaptQpSelect   );
+#endif
+#if  JVET_V0078
+  m_cTEncTop.setSmoothQPReductionEnable                           (m_bSmoothQPReductionEnable);
+  m_cTEncTop.setSmoothQPReductionThreshold                        (m_dSmoothQPReductionThreshold);
+  m_cTEncTop.setSmoothQPReductionModelScale                       (m_dSmoothQPReductionModelScale);
+  m_cTEncTop.setSmoothQPReductionModelOffset                      (m_dSmoothQPReductionModelOffset);
+  m_cTEncTop.setSmoothQPReductionLimit                            (m_iSmoothQPReductionLimit);
+  m_cTEncTop.setSmoothQPReductionPeriodicity                      (m_iSmoothQPReductionPeriodicity);
+#endif
+
+  m_cTEncTop.setUseAdaptiveQP                                     ( m_bUseAdaptiveQP  );
