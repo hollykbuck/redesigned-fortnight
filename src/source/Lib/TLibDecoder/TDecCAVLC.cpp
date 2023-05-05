@@ -1698,3 +1698,103 @@ Void TDecCavlc::parseProfileTier(ProfileTierLevel *ptl, const Bool /*bIsSubLayer
        ptl->getProfileCompatibilityFlag(Profile::HIGHTHROUGHPUTREXT) )
   {
     READ_FLAG(    uiCode, PTL_TRACE_TEXT("inbld_flag"                      )); assert(uiCode == 0);
+  }
+  else
+  {
+    READ_FLAG(    uiCode, PTL_TRACE_TEXT("reserved_zero_bit"               ));
+  }
+#undef PTL_TRACE_TEXT
+}
+
+Void TDecCavlc::parseTerminatingBit( UInt& ruiBit )
+{
+  ruiBit = false;
+  Int iBitsLeft = m_pcBitstream->getNumBitsLeft();
+  if(iBitsLeft <= 8)
+  {
+    UInt uiPeekValue = m_pcBitstream->peekBits(iBitsLeft);
+    if (uiPeekValue == (1<<(iBitsLeft-1)))
+    {
+      ruiBit = true;
+    }
+  }
+}
+
+Void TDecCavlc::parseRemainingBytes( Bool noTrailingBytesExpected )
+{
+  if (noTrailingBytesExpected)
+  {
+    const UInt numberOfRemainingSubstreamBytes=m_pcBitstream->getNumBitsLeft();
+    assert (numberOfRemainingSubstreamBytes == 0);
+  }
+  else
+  {
+    while (m_pcBitstream->getNumBitsLeft())
+    {
+      UInt trailingNullByte=m_pcBitstream->readByte();
+      if (trailingNullByte!=0)
+      {
+        printf("Trailing byte should be 0, but has value %02x\n", trailingNullByte);
+        assert(trailingNullByte==0);
+      }
+    }
+  }
+}
+
+Void TDecCavlc::parseSkipFlag( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseCUTransquantBypassFlag( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseMVPIdx( Int& /*riMVPIdx*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseSplitFlag     ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parsePartSize( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parsePredMode( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+/** Parse I_PCM information.
+* \param pcCU pointer to CU
+* \param uiAbsPartIdx CU index
+* \param uiDepth CU depth
+* \returns Void
+*
+* If I_PCM flag indicates that the CU is I_PCM, parse its PCM alignment bits and codes.
+*/
+Void TDecCavlc::parseIPCMInfo( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseIntraDirLumaAng  ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseIntraDirChroma( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseInterDir( TComDataCU* /*pcCU*/, UInt& /*ruiInterDir*/, UInt /*uiAbsPartIdx*/ )
+{
+  assert(0);
+}
