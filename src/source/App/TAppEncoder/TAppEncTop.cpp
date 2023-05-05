@@ -198,3 +198,103 @@ Void TAppEncTop::xInitLibCfg()
 #endif
 
   m_cTEncTop.setUseAdaptiveQP                                     ( m_bUseAdaptiveQP  );
+  m_cTEncTop.setQPAdaptationRange                                 ( m_iQPAdaptationRange );
+  m_cTEncTop.setExtendedPrecisionProcessingFlag                   ( m_extendedPrecisionProcessingFlag );
+  m_cTEncTop.setHighPrecisionOffsetsEnabledFlag                   ( m_highPrecisionOffsetsEnabledFlag );
+
+  m_cTEncTop.setWeightedPredictionMethod( m_weightedPredictionMethod );
+
+  //====== Tool list ========
+  m_cTEncTop.setLumaLevelToDeltaQPControls                        ( m_lumaLevelToDeltaQPMapping );
+  m_cTEncTop.setDeltaQpRD( (m_costMode==COST_LOSSLESS_CODING) ? 0 : m_uiDeltaQpRD );
+  m_cTEncTop.setFastDeltaQp                                       ( m_bFastDeltaQP  );
+  m_cTEncTop.setUseASR                                            ( m_bUseASR      );
+  m_cTEncTop.setUseHADME                                          ( m_bUseHADME    );
+  m_cTEncTop.setdQPs                                              ( m_aidQP        );
+  m_cTEncTop.setUseRDOQ                                           ( m_useRDOQ     );
+  m_cTEncTop.setUseRDOQTS                                         ( m_useRDOQTS   );
+  m_cTEncTop.setUseSelectiveRDOQ                                  ( m_useSelectiveRDOQ );
+  m_cTEncTop.setRDpenalty                                         ( m_rdPenalty );
+  m_cTEncTop.setMaxCUWidth                                        ( m_uiMaxCUWidth );
+  m_cTEncTop.setMaxCUHeight                                       ( m_uiMaxCUHeight );
+  m_cTEncTop.setMaxTotalCUDepth                                   ( m_uiMaxTotalCUDepth );
+  m_cTEncTop.setLog2DiffMaxMinCodingBlockSize                     ( m_uiLog2DiffMaxMinCodingBlockSize );
+  m_cTEncTop.setQuadtreeTULog2MaxSize                             ( m_uiQuadtreeTULog2MaxSize );
+  m_cTEncTop.setQuadtreeTULog2MinSize                             ( m_uiQuadtreeTULog2MinSize );
+  m_cTEncTop.setQuadtreeTUMaxDepthInter                           ( m_uiQuadtreeTUMaxDepthInter );
+  m_cTEncTop.setQuadtreeTUMaxDepthIntra                           ( m_uiQuadtreeTUMaxDepthIntra );
+  m_cTEncTop.setFastInterSearchMode                               ( m_fastInterSearchMode );
+  m_cTEncTop.setUseEarlyCU                                        ( m_bUseEarlyCU  );
+  m_cTEncTop.setUseFastDecisionForMerge                           ( m_useFastDecisionForMerge  );
+  m_cTEncTop.setUseCbfFastMode                                    ( m_bUseCbfFastMode  );
+  m_cTEncTop.setUseEarlySkipDetection                             ( m_useEarlySkipDetection );
+  m_cTEncTop.setCrossComponentPredictionEnabledFlag               ( m_crossComponentPredictionEnabledFlag );
+  m_cTEncTop.setUseReconBasedCrossCPredictionEstimate             ( m_reconBasedCrossCPredictionEstimate );
+  m_cTEncTop.setLog2SaoOffsetScale                                ( CHANNEL_TYPE_LUMA  , m_log2SaoOffsetScale[CHANNEL_TYPE_LUMA]   );
+  m_cTEncTop.setLog2SaoOffsetScale                                ( CHANNEL_TYPE_CHROMA, m_log2SaoOffsetScale[CHANNEL_TYPE_CHROMA] );
+  m_cTEncTop.setUseTransformSkip                                  ( m_useTransformSkip      );
+  m_cTEncTop.setUseTransformSkipFast                              ( m_useTransformSkipFast  );
+  m_cTEncTop.setTransformSkipRotationEnabledFlag                  ( m_transformSkipRotationEnabledFlag );
+  m_cTEncTop.setTransformSkipContextEnabledFlag                   ( m_transformSkipContextEnabledFlag   );
+  m_cTEncTop.setPersistentRiceAdaptationEnabledFlag               ( m_persistentRiceAdaptationEnabledFlag );
+  m_cTEncTop.setCabacBypassAlignmentEnabledFlag                   ( m_cabacBypassAlignmentEnabledFlag );
+  m_cTEncTop.setLog2MaxTransformSkipBlockSize                     ( m_log2MaxTransformSkipBlockSize  );
+  for (UInt signallingModeIndex = 0; signallingModeIndex < NUMBER_OF_RDPCM_SIGNALLING_MODES; signallingModeIndex++)
+  {
+    m_cTEncTop.setRdpcmEnabledFlag                                ( RDPCMSignallingMode(signallingModeIndex), m_rdpcmEnabledFlag[signallingModeIndex]);
+  }
+  m_cTEncTop.setUseConstrainedIntraPred                           ( m_bUseConstrainedIntraPred );
+  m_cTEncTop.setFastUDIUseMPMEnabled                              ( m_bFastUDIUseMPMEnabled );
+  m_cTEncTop.setFastMEForGenBLowDelayEnabled                      ( m_bFastMEForGenBLowDelayEnabled );
+  m_cTEncTop.setUseBLambdaForNonKeyLowDelayPictures               ( m_bUseBLambdaForNonKeyLowDelayPictures );
+  m_cTEncTop.setPCMLog2MinSize                                    ( m_uiPCMLog2MinSize);
+  m_cTEncTop.setUsePCM                                            ( m_usePCM );
+
+  // set internal bit-depth and constants
+  for (UInt channelType = 0; channelType < MAX_NUM_CHANNEL_TYPE; channelType++)
+  {
+    m_cTEncTop.setBitDepth((ChannelType)channelType, m_internalBitDepth[channelType]);
+    m_cTEncTop.setPCMBitDepth((ChannelType)channelType, m_bPCMInputBitDepthFlag ? m_MSBExtendedBitDepth[channelType] : m_internalBitDepth[channelType]);
+#if JVET_X0048_X0103_FILM_GRAIN
+    m_cTEncTop.setBitDepthInput((ChannelType)channelType, m_inputBitDepth[channelType]);
+#endif
+  }
+
+  m_cTEncTop.setPCMLog2MaxSize                                    ( m_pcmLog2MaxSize);
+  m_cTEncTop.setMaxNumMergeCand                                   ( m_maxNumMergeCand );
+
+
+  //====== Weighted Prediction ========
+  m_cTEncTop.setUseWP                                             ( m_useWeightedPred     );
+  m_cTEncTop.setWPBiPred                                          ( m_useWeightedBiPred   );
+
+  //====== Parallel Merge Estimation ========
+  m_cTEncTop.setLog2ParallelMergeLevelMinus2                      ( m_log2ParallelMergeLevel - 2 );
+
+  //====== Slice ========
+  m_cTEncTop.setSliceMode                                         ( m_sliceMode );
+  m_cTEncTop.setSliceArgument                                     ( m_sliceArgument );
+
+  //====== Dependent Slice ========
+  m_cTEncTop.setSliceSegmentMode                                  ( m_sliceSegmentMode );
+  m_cTEncTop.setSliceSegmentArgument                              ( m_sliceSegmentArgument );
+
+  if(m_sliceMode == NO_SLICES )
+  {
+    m_bLFCrossSliceBoundaryFlag = true;
+  }
+  m_cTEncTop.setLFCrossSliceBoundaryFlag                          ( m_bLFCrossSliceBoundaryFlag );
+  m_cTEncTop.setUseSAO                                            ( m_bUseSAO );
+  m_cTEncTop.setTestSAODisableAtPictureLevel                      ( m_bTestSAODisableAtPictureLevel );
+  m_cTEncTop.setSaoEncodingRate                                   ( m_saoEncodingRate );
+  m_cTEncTop.setSaoEncodingRateChroma                             ( m_saoEncodingRateChroma );
+  m_cTEncTop.setMaxNumOffsetsPerPic                               ( m_maxNumOffsetsPerPic);
+
+  m_cTEncTop.setSaoCtuBoundary                                    ( m_saoCtuBoundary);
+  m_cTEncTop.setResetEncoderStateAfterIRAP                        ( m_resetEncoderStateAfterIRAP );
+  m_cTEncTop.setPCMInputBitDepthFlag                              ( m_bPCMInputBitDepthFlag);
+  m_cTEncTop.setPCMFilterDisableFlag                              ( m_bPCMFilterDisableFlag);
+
+  m_cTEncTop.setIntraSmoothingDisabledFlag                        (!m_enableIntraReferenceSmoothing );
+  m_cTEncTop.setDecodedPictureHashSEIType                         ( m_decodedPictureHashSEIType );
+  m_cTEncTop.setRecoveryPointSEIEnabled                           ( m_recoveryPointSEIEnabled );
