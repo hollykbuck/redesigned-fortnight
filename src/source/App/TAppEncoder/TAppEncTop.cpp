@@ -298,3 +298,103 @@ Void TAppEncTop::xInitLibCfg()
   m_cTEncTop.setIntraSmoothingDisabledFlag                        (!m_enableIntraReferenceSmoothing );
   m_cTEncTop.setDecodedPictureHashSEIType                         ( m_decodedPictureHashSEIType );
   m_cTEncTop.setRecoveryPointSEIEnabled                           ( m_recoveryPointSEIEnabled );
+  m_cTEncTop.setBufferingPeriodSEIEnabled                         ( m_bufferingPeriodSEIEnabled );
+  m_cTEncTop.setPictureTimingSEIEnabled                           ( m_pictureTimingSEIEnabled );
+  m_cTEncTop.setToneMappingInfoSEIEnabled                         ( m_toneMappingInfoSEIEnabled );
+  m_cTEncTop.setTMISEIToneMapId                                   ( m_toneMapId );
+  m_cTEncTop.setTMISEIToneMapCancelFlag                           ( m_toneMapCancelFlag );
+  m_cTEncTop.setTMISEIToneMapPersistenceFlag                      ( m_toneMapPersistenceFlag );
+  m_cTEncTop.setTMISEICodedDataBitDepth                           ( m_toneMapCodedDataBitDepth );
+  m_cTEncTop.setTMISEITargetBitDepth                              ( m_toneMapTargetBitDepth );
+  m_cTEncTop.setTMISEIModelID                                     ( m_toneMapModelId );
+  m_cTEncTop.setTMISEIMinValue                                    ( m_toneMapMinValue );
+  m_cTEncTop.setTMISEIMaxValue                                    ( m_toneMapMaxValue );
+  m_cTEncTop.setTMISEISigmoidMidpoint                             ( m_sigmoidMidpoint );
+  m_cTEncTop.setTMISEISigmoidWidth                                ( m_sigmoidWidth );
+  m_cTEncTop.setTMISEIStartOfCodedInterva                         ( m_startOfCodedInterval );
+  m_cTEncTop.setTMISEINumPivots                                   ( m_numPivots );
+  m_cTEncTop.setTMISEICodedPivotValue                             ( m_codedPivotValue );
+  m_cTEncTop.setTMISEITargetPivotValue                            ( m_targetPivotValue );
+  m_cTEncTop.setTMISEICameraIsoSpeedIdc                           ( m_cameraIsoSpeedIdc );
+  m_cTEncTop.setTMISEICameraIsoSpeedValue                         ( m_cameraIsoSpeedValue );
+  m_cTEncTop.setTMISEIExposureIndexIdc                            ( m_exposureIndexIdc );
+  m_cTEncTop.setTMISEIExposureIndexValue                          ( m_exposureIndexValue );
+  m_cTEncTop.setTMISEIExposureCompensationValueSignFlag           ( m_exposureCompensationValueSignFlag );
+  m_cTEncTop.setTMISEIExposureCompensationValueNumerator          ( m_exposureCompensationValueNumerator );
+  m_cTEncTop.setTMISEIExposureCompensationValueDenomIdc           ( m_exposureCompensationValueDenomIdc );
+  m_cTEncTop.setTMISEIRefScreenLuminanceWhite                     ( m_refScreenLuminanceWhite );
+  m_cTEncTop.setTMISEIExtendedRangeWhiteLevel                     ( m_extendedRangeWhiteLevel );
+  m_cTEncTop.setTMISEINominalBlackLevelLumaCodeValue              ( m_nominalBlackLevelLumaCodeValue );
+  m_cTEncTop.setTMISEINominalWhiteLevelLumaCodeValue              ( m_nominalWhiteLevelLumaCodeValue );
+  m_cTEncTop.setTMISEIExtendedWhiteLevelLumaCodeValue             ( m_extendedWhiteLevelLumaCodeValue );
+  m_cTEncTop.setChromaResamplingFilterHintEnabled                 ( m_chromaResamplingFilterSEIenabled );
+  m_cTEncTop.setChromaResamplingHorFilterIdc                      ( m_chromaResamplingHorFilterIdc );
+  m_cTEncTop.setChromaResamplingVerFilterIdc                      ( m_chromaResamplingVerFilterIdc );
+  m_cTEncTop.setFramePackingArrangementSEIEnabled                 ( m_framePackingSEIEnabled );
+  m_cTEncTop.setFramePackingArrangementSEIType                    ( m_framePackingSEIType );
+  m_cTEncTop.setFramePackingArrangementSEIId                      ( m_framePackingSEIId );
+  m_cTEncTop.setFramePackingArrangementSEIQuincunx                ( m_framePackingSEIQuincunx );
+  m_cTEncTop.setFramePackingArrangementSEIInterpretation          ( m_framePackingSEIInterpretation );
+  m_cTEncTop.setSegmentedRectFramePackingArrangementSEIEnabled    ( m_segmentedRectFramePackingSEIEnabled );
+  m_cTEncTop.setSegmentedRectFramePackingArrangementSEICancel     ( m_segmentedRectFramePackingSEICancel );
+  m_cTEncTop.setSegmentedRectFramePackingArrangementSEIType       ( m_segmentedRectFramePackingSEIType );
+  m_cTEncTop.setSegmentedRectFramePackingArrangementSEIPersistence( m_segmentedRectFramePackingSEIPersistence );
+  m_cTEncTop.setDisplayOrientationSEIAngle                        ( m_displayOrientationSEIAngle );
+  m_cTEncTop.setTemporalLevel0IndexSEIEnabled                     ( m_temporalLevel0IndexSEIEnabled );
+  m_cTEncTop.setGradualDecodingRefreshInfoEnabled                 ( m_gradualDecodingRefreshInfoEnabled );
+  m_cTEncTop.setNoDisplaySEITLayer                                ( m_noDisplaySEITLayer );
+  m_cTEncTop.setDecodingUnitInfoSEIEnabled                        ( m_decodingUnitInfoSEIEnabled );
+  m_cTEncTop.setSOPDescriptionSEIEnabled                          ( m_SOPDescriptionSEIEnabled );
+  m_cTEncTop.setScalableNestingSEIEnabled                         ( m_scalableNestingSEIEnabled );
+  m_cTEncTop.setTMCTSSEIEnabled                                   ( m_tmctsSEIEnabled );
+#if MCTS_ENC_CHECK
+  m_cTEncTop.setTMCTSSEITileConstraint                            ( m_tmctsSEITileConstraint );
+#endif
+#if MCTS_EXTRACTION
+  m_cTEncTop.setTMCTSExtractionSEIEnabled                         ( m_tmctsExtractionSEIEnabled);
+#endif
+  m_cTEncTop.setTimeCodeSEIEnabled                                ( m_timeCodeSEIEnabled );
+  m_cTEncTop.setNumberOfTimeSets                                  ( m_timeCodeSEINumTs );
+  for(Int i = 0; i < m_timeCodeSEINumTs; i++)
+  {
+    m_cTEncTop.setTimeSet(m_timeSetArray[i], i);
+  }
+  m_cTEncTop.setKneeSEIEnabled                                    ( m_kneeSEIEnabled );
+  m_cTEncTop.setKneeFunctionInformationSEI                        ( m_kneeFunctionInformationSEI );
+  m_cTEncTop.setCcvSEIEnabled                                     (m_ccvSEIEnabled);
+  m_cTEncTop.setCcvSEICancelFlag                                  (m_ccvSEICancelFlag);
+  m_cTEncTop.setCcvSEIPersistenceFlag                             (m_ccvSEIPersistenceFlag);
+  
+  m_cTEncTop.setCcvSEIEnabled                                     (m_ccvSEIEnabled);
+  m_cTEncTop.setCcvSEICancelFlag                                  (m_ccvSEICancelFlag);
+  m_cTEncTop.setCcvSEIPersistenceFlag                             (m_ccvSEIPersistenceFlag);
+  m_cTEncTop.setCcvSEIPrimariesPresentFlag                        (m_ccvSEIPrimariesPresentFlag);
+  m_cTEncTop.setCcvSEIMinLuminanceValuePresentFlag                (m_ccvSEIMinLuminanceValuePresentFlag);
+  m_cTEncTop.setCcvSEIMaxLuminanceValuePresentFlag                (m_ccvSEIMaxLuminanceValuePresentFlag);
+  m_cTEncTop.setCcvSEIAvgLuminanceValuePresentFlag                (m_ccvSEIAvgLuminanceValuePresentFlag);
+  for(Int i = 0; i < MAX_NUM_COMPONENT; i++) {
+    m_cTEncTop.setCcvSEIPrimariesX                                (m_ccvSEIPrimariesX[i], i);
+    m_cTEncTop.setCcvSEIPrimariesY                                (m_ccvSEIPrimariesY[i], i);
+  }
+  m_cTEncTop.setCcvSEIMinLuminanceValue                           (m_ccvSEIMinLuminanceValue);
+  m_cTEncTop.setCcvSEIMaxLuminanceValue                           (m_ccvSEIMaxLuminanceValue);
+  m_cTEncTop.setCcvSEIAvgLuminanceValue                           (m_ccvSEIAvgLuminanceValue);
+  m_cTEncTop.setErpSEIEnabled                                     ( m_erpSEIEnabled );           
+  m_cTEncTop.setErpSEICancelFlag                                  ( m_erpSEICancelFlag );        
+  m_cTEncTop.setErpSEIPersistenceFlag                             ( m_erpSEIPersistenceFlag );   
+  m_cTEncTop.setErpSEIGuardBandFlag                               ( m_erpSEIGuardBandFlag );     
+  m_cTEncTop.setErpSEIGuardBandType                               ( m_erpSEIGuardBandType );     
+  m_cTEncTop.setErpSEILeftGuardBandWidth                          ( m_erpSEILeftGuardBandWidth );
+  m_cTEncTop.setErpSEIRightGuardBandWidth                         ( m_erpSEIRightGuardBandWidth );
+  m_cTEncTop.setSphereRotationSEIEnabled                          ( m_sphereRotationSEIEnabled );
+  m_cTEncTop.setSphereRotationSEICancelFlag                       ( m_sphereRotationSEICancelFlag );
+  m_cTEncTop.setSphereRotationSEIPersistenceFlag                  ( m_sphereRotationSEIPersistenceFlag );
+  m_cTEncTop.setSphereRotationSEIYaw                              ( m_sphereRotationSEIYaw );
+  m_cTEncTop.setSphereRotationSEIPitch                            ( m_sphereRotationSEIPitch );
+  m_cTEncTop.setSphereRotationSEIRoll                             ( m_sphereRotationSEIRoll );
+  m_cTEncTop.setOmniViewportSEIEnabled                            ( m_omniViewportSEIEnabled );          
+  m_cTEncTop.setOmniViewportSEIId                                 ( m_omniViewportSEIId );               
+  m_cTEncTop.setOmniViewportSEICancelFlag                         ( m_omniViewportSEICancelFlag );       
+  m_cTEncTop.setOmniViewportSEIPersistenceFlag                    ( m_omniViewportSEIPersistenceFlag );  
+  m_cTEncTop.setOmniViewportSEICntMinus1                          ( m_omniViewportSEICntMinus1 );        
+  m_cTEncTop.setOmniViewportSEIAzimuthCentre                      ( m_omniViewportSEIAzimuthCentre );    
