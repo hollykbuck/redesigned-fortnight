@@ -1798,3 +1798,103 @@ Void TDecCavlc::parseInterDir( TComDataCU* /*pcCU*/, UInt& /*ruiInterDir*/, UInt
 {
   assert(0);
 }
+
+Void TDecCavlc::parseRefFrmIdx( TComDataCU* /*pcCU*/, Int& /*riRefFrmIdx*/, RefPicList /*eRefList*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseMvd( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiPartIdx*/, UInt /*uiDepth*/, RefPicList /*eRefList*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseCrossComponentPrediction( class TComTU& /*rTu*/, ComponentID /*compID*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseDeltaQP( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseChromaQpAdjustment( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseCoeffNxN( TComTU &/*rTu*/, ComponentID /*compID*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseTransformSubdivFlag( UInt& /*ruiSubdivFlag*/, UInt /*uiLog2TransformBlockSize*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseQtCbf( TComTU &/*rTu*/, const ComponentID /*compID*/, const Bool /*lowestLevel*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseQtRootCbf( UInt /*uiAbsPartIdx*/, UInt& /*uiQtRootCbf*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseTransformSkipFlags (TComTU &/*rTu*/, ComponentID /*component*/)
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseMergeFlag ( TComDataCU* /*pcCU*/, UInt /*uiAbsPartIdx*/, UInt /*uiDepth*/, UInt /*uiPUIdx*/ )
+{
+  assert(0);
+}
+
+Void TDecCavlc::parseMergeIndex ( TComDataCU* /*pcCU*/, UInt& /*ruiMergeIndex*/ )
+{
+  assert(0);
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+//! parse explicit wp tables
+Void TDecCavlc::xParsePredWeightTable( TComSlice* pcSlice, const TComSPS *sps )
+{
+        WPScalingParam *wp;
+  const ChromaFormat    chFmt        = sps->getChromaFormatIdc();
+  const Int             numValidComp = Int(getNumberValidComponents(chFmt));
+  const Bool            bChroma      = (chFmt!=CHROMA_400);
+  const SliceType       eSliceType   = pcSlice->getSliceType();
+  const Int             iNbRef       = (eSliceType == B_SLICE ) ? (2) : (1);
+        UInt            uiLog2WeightDenomLuma=0, uiLog2WeightDenomChroma=0;
+        UInt            uiTotalSignalledWeightFlags = 0;
+
+  Int iDeltaDenom;
+  // decode delta_luma_log2_weight_denom :
+  READ_UVLC( uiLog2WeightDenomLuma, "luma_log2_weight_denom" );
+  assert( uiLog2WeightDenomLuma <= 7 );
+  if( bChroma )
+  {
+    READ_SVLC( iDeltaDenom, "delta_chroma_log2_weight_denom" );
+    assert((iDeltaDenom + (Int)uiLog2WeightDenomLuma)>=0);
+    assert((iDeltaDenom + (Int)uiLog2WeightDenomLuma)<=7);
+    uiLog2WeightDenomChroma = (UInt)(iDeltaDenom + uiLog2WeightDenomLuma);
+  }
+
+  for ( Int iNumRef=0 ; iNumRef<iNbRef ; iNumRef++ ) // loop over l0 and l1 syntax elements
+  {
+    RefPicList  eRefPicList = ( iNumRef ? REF_PIC_LIST_1 : REF_PIC_LIST_0 );
+    for ( Int iRefIdx=0 ; iRefIdx<pcSlice->getNumRefIdx(eRefPicList) ; iRefIdx++ )
+    {
+      pcSlice->getWpScaling(eRefPicList, iRefIdx, wp);
+
+      wp[COMPONENT_Y].uiLog2WeightDenom = uiLog2WeightDenomLuma;
+      for(Int j=1; j<numValidComp; j++)
+      {
+        wp[j].uiLog2WeightDenom = uiLog2WeightDenomChroma;
