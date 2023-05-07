@@ -498,3 +498,103 @@ Void TAppEncTop::xInitLibCfg()
   m_cTEncTop.setSEIPreferredTransferCharacteristics               ( UChar(m_preferredTransferCharacteristics) );
   m_cTEncTop.setSEIGreenMetadataInfoSEIEnable                     ( m_greenMetadataType > 0 );
   m_cTEncTop.setSEIGreenMetadataType                              ( UChar(m_greenMetadataType) );
+  m_cTEncTop.setSEIXSDMetricType                                  ( UChar(m_xsdMetricType) );
+  m_cTEncTop.setRegionalNestingSEIFileRoot                        ( m_regionalNestingSEIFileRoot );
+  m_cTEncTop.setAnnotatedRegionSEIFileRoot                        (m_arSEIFileRoot);
+  m_cTEncTop.setTileUniformSpacingFlag                            ( m_tileUniformSpacingFlag );
+  m_cTEncTop.setNumColumnsMinus1                                  ( m_numTileColumnsMinus1 );
+  m_cTEncTop.setNumRowsMinus1                                     ( m_numTileRowsMinus1 );
+  if(!m_tileUniformSpacingFlag)
+  {
+    m_cTEncTop.setColumnWidth                                     ( m_tileColumnWidth );
+    m_cTEncTop.setRowHeight                                       ( m_tileRowHeight );
+  }
+  m_cTEncTop.xCheckGSParameters();
+  Int uiTilesCount = (m_numTileRowsMinus1+1) * (m_numTileColumnsMinus1+1);
+  if(uiTilesCount == 1)
+  {
+    m_bLFCrossTileBoundaryFlag = true;
+  }
+  m_cTEncTop.setLFCrossTileBoundaryFlag                           ( m_bLFCrossTileBoundaryFlag );
+  m_cTEncTop.setEntropyCodingSyncEnabledFlag                      ( m_entropyCodingSyncEnabledFlag );
+  m_cTEncTop.setTMVPModeId                                        ( m_TMVPModeId );
+  m_cTEncTop.setUseScalingListId                                  ( m_useScalingListId  );
+  m_cTEncTop.setScalingListFileName                               ( m_scalingListFileName );
+  m_cTEncTop.setSignDataHidingEnabledFlag                         ( m_signDataHidingEnabledFlag);
+  m_cTEncTop.setUseRateCtrl                                       ( m_RCEnableRateControl );
+  m_cTEncTop.setTargetBitrate                                     ( m_RCTargetBitrate );
+  m_cTEncTop.setKeepHierBit                                       ( m_RCKeepHierarchicalBit );
+  m_cTEncTop.setLCULevelRC                                        ( m_RCLCULevelRC );
+  m_cTEncTop.setUseLCUSeparateModel                               ( m_RCUseLCUSeparateModel );
+  m_cTEncTop.setInitialQP                                         ( m_RCInitialQP );
+  m_cTEncTop.setForceIntraQP                                      ( m_RCForceIntraQP );
+  m_cTEncTop.setCpbSaturationEnabled                              ( m_RCCpbSaturationEnabled );
+  m_cTEncTop.setCpbSize                                           ( m_RCCpbSize );
+  m_cTEncTop.setInitialCpbFullness                                ( m_RCInitialCpbFullness );
+  m_cTEncTop.setTransquantBypassEnabledFlag                       ( m_TransquantBypassEnabledFlag );
+  m_cTEncTop.setCUTransquantBypassFlagForceValue                  ( m_CUTransquantBypassFlagForce );
+  m_cTEncTop.setCostMode                                          ( m_costMode );
+  m_cTEncTop.setUseRecalculateQPAccordingToLambda                 ( m_recalculateQPAccordingToLambda );
+  m_cTEncTop.setUseStrongIntraSmoothing                           ( m_useStrongIntraSmoothing );
+  m_cTEncTop.setActiveParameterSetsSEIEnabled                     ( m_activeParameterSetsSEIEnabled );
+  m_cTEncTop.setVuiParametersPresentFlag                          ( m_vuiParametersPresentFlag );
+  m_cTEncTop.setAspectRatioInfoPresentFlag                        ( m_aspectRatioInfoPresentFlag);
+  m_cTEncTop.setAspectRatioIdc                                    ( m_aspectRatioIdc );
+  m_cTEncTop.setSarWidth                                          ( m_sarWidth );
+  m_cTEncTop.setSarHeight                                         ( m_sarHeight );
+  m_cTEncTop.setOverscanInfoPresentFlag                           ( m_overscanInfoPresentFlag );
+  m_cTEncTop.setOverscanAppropriateFlag                           ( m_overscanAppropriateFlag );
+  m_cTEncTop.setVideoSignalTypePresentFlag                        ( m_videoSignalTypePresentFlag );
+  m_cTEncTop.setVideoFormat                                       ( m_videoFormat );
+  m_cTEncTop.setVideoFullRangeFlag                                ( m_videoFullRangeFlag );
+  m_cTEncTop.setColourDescriptionPresentFlag                      ( m_colourDescriptionPresentFlag );
+  m_cTEncTop.setColourPrimaries                                   ( m_colourPrimaries );
+  m_cTEncTop.setTransferCharacteristics                           ( m_transferCharacteristics );
+  m_cTEncTop.setMatrixCoefficients                                ( m_matrixCoefficients );
+  m_cTEncTop.setChromaLocInfoPresentFlag                          ( m_chromaLocInfoPresentFlag );
+  m_cTEncTop.setChromaSampleLocTypeTopField                       ( m_chromaSampleLocTypeTopField );
+  m_cTEncTop.setChromaSampleLocTypeBottomField                    ( m_chromaSampleLocTypeBottomField );
+  m_cTEncTop.setNeutralChromaIndicationFlag                       ( m_neutralChromaIndicationFlag );
+  m_cTEncTop.setDefaultDisplayWindow                              ( m_defDispWinLeftOffset, m_defDispWinRightOffset, m_defDispWinTopOffset, m_defDispWinBottomOffset );
+  m_cTEncTop.setFrameFieldInfoPresentFlag                         ( m_frameFieldInfoPresentFlag );
+  m_cTEncTop.setPocProportionalToTimingFlag                       ( m_pocProportionalToTimingFlag );
+  m_cTEncTop.setNumTicksPocDiffOneMinus1                          ( m_numTicksPocDiffOneMinus1    );
+  m_cTEncTop.setBitstreamRestrictionFlag                          ( m_bitstreamRestrictionFlag );
+  m_cTEncTop.setTilesFixedStructureFlag                           ( m_tilesFixedStructureFlag );
+  m_cTEncTop.setMotionVectorsOverPicBoundariesFlag                ( m_motionVectorsOverPicBoundariesFlag );
+  m_cTEncTop.setMinSpatialSegmentationIdc                         ( m_minSpatialSegmentationIdc );
+  m_cTEncTop.setMaxBytesPerPicDenom                               ( m_maxBytesPerPicDenom );
+  m_cTEncTop.setMaxBitsPerMinCuDenom                              ( m_maxBitsPerMinCuDenom );
+  m_cTEncTop.setLog2MaxMvLengthHorizontal                         ( m_log2MaxMvLengthHorizontal );
+  m_cTEncTop.setLog2MaxMvLengthVertical                           ( m_log2MaxMvLengthVertical );
+  m_cTEncTop.setEfficientFieldIRAPEnabled                         ( m_bEfficientFieldIRAPEnabled );
+  m_cTEncTop.setHarmonizeGopFirstFieldCoupleEnabled               ( m_bHarmonizeGopFirstFieldCoupleEnabled );
+
+  m_cTEncTop.setSummaryOutFilename                                ( m_summaryOutFilename );
+  m_cTEncTop.setSummaryPicFilenameBase                            ( m_summaryPicFilenameBase );
+  m_cTEncTop.setSummaryVerboseness                                ( m_summaryVerboseness );
+
+#if JCTVC_AD0021_SEI_MANIFEST
+  m_cTEncTop.setSEIManifestSEIEnabled(m_SEIManifestSEIEnabled);
+#endif
+#if JCTVC_AD0021_SEI_PREFIX_INDICATION
+  m_cTEncTop.setSEIPrefixIndicationSEIEnabled(m_SEIPrefixIndicationSEIEnabled);
+#endif
+}
+
+Void TAppEncTop::xCreateLib()
+{
+  // Video I/O
+  m_cTVideoIOYuvInputFile.open( m_inputFileName,     false, m_inputBitDepth, m_MSBExtendedBitDepth, m_internalBitDepth );  // read  mode
+  m_cTVideoIOYuvInputFile.skipFrames(m_FrameSkip, m_inputFileWidth, m_inputFileHeight, m_InputChromaFormatIDC);
+
+  if (!m_reconFileName.empty())
+  {
+    m_cTVideoIOYuvReconFile.open(m_reconFileName, true, m_outputBitDepth, m_outputBitDepth, m_internalBitDepth);  // write mode
+  }
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  if (m_ShutterFilterEnable && !m_shutterIntervalPreFileName.empty())
+  {
+    m_cTVideoIOYuvSIIPreFile.open(m_shutterIntervalPreFileName, true, m_outputBitDepth, m_outputBitDepth, m_internalBitDepth);  // write mode
+  }
+#endif
