@@ -1998,3 +1998,103 @@ Void TDecCavlc::parseScalingList(TComScalingList* scalingList)
       if ((sizeId==SCALING_LIST_32x32) && (listId%(SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES) != 0))
       {
         Int *src = scalingList->getScalingListAddress(sizeId, listId);
+        const Int size = min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]);
+        const Int *srcNextSmallerSize = scalingList->getScalingListAddress(sizeId-1, listId);
+        for(Int i=0; i<size; i++)
+        {
+          src[i] = srcNextSmallerSize[i];
+        }
+        scalingList->setScalingListDC(sizeId,listId,(sizeId > SCALING_LIST_8x8) ? scalingList->getScalingListDC(sizeId-1, listId) : src[0]);
+      }
+      else
+      {
+        READ_FLAG( code, "scaling_list_pred_mode_flag");
+        scalingListPredModeFlag = (code) ? true : false;
+        scalingList->setScalingListPredModeFlag(sizeId, listId, scalingListPredModeFlag);
+        if(!scalingListPredModeFlag) //Copy Mode
+        {
+          READ_UVLC( code, "scaling_list_pred_matrix_id_delta");
+
+          if (sizeId==SCALING_LIST_32x32)
+          {
+            code*=(SCALING_LIST_NUM/NUMBER_OF_PREDICTION_MODES); // Adjust the decoded code for this size, to cope with the missing 32x32 chroma entries.
+          }
+
+          scalingList->setRefMatrixId (sizeId,listId,(UInt)((Int)(listId)-(code)));
+          if( sizeId > SCALING_LIST_8x8 )
+          {
+            scalingList->setScalingListDC(sizeId,listId,((listId == scalingList->getRefMatrixId (sizeId,listId))? 16 :scalingList->getScalingListDC(sizeId, scalingList->getRefMatrixId (sizeId,listId))));
+          }
+          scalingList->processRefMatrix( sizeId, listId, scalingList->getRefMatrixId (sizeId,listId));
+
+        }
+        else //DPCM Mode
+        {
+          xDecodeScalingList(scalingList, sizeId, listId);
+        }
+      }
+    }
+  }
+
+  return;
+}
+/** decode DPCM
+* \param scalingList  quantization matrix information
+* \param sizeId size index
+* \param listId list index
+*/
+Void TDecCavlc::xDecodeScalingList(TComScalingList *scalingList, UInt sizeId, UInt listId)
+{
+  Int i,coefNum = min(MAX_MATRIX_COEF_NUM,(Int)g_scalingListSize[sizeId]);
+  Int data;
+  Int scalingListDcCoefMinus8 = 0;
+  Int nextCoef = SCALING_LIST_START_VALUE;
+  UInt* scan  = g_scanOrder[SCAN_UNGROUPED][SCAN_DIAG][sizeId==0 ? 2 : 3][sizeId==0 ? 2 : 3];
+  Int *dst = scalingList->getScalingListAddress(sizeId, listId);
+
+  if( sizeId > SCALING_LIST_8x8 )
+  {
+    READ_SVLC( scalingListDcCoefMinus8, "scaling_list_dc_coef_minus8");
+    scalingList->setScalingListDC(sizeId,listId,scalingListDcCoefMinus8 + 8);
+    nextCoef = scalingList->getScalingListDC(sizeId,listId);
+  }
+
+  for(i = 0; i < coefNum; i++)
+  {
+    READ_SVLC( data, "scaling_list_delta_coef");
+    nextCoef = (nextCoef + data + 256 ) % 256;
+    dst[scan[i]] = nextCoef;
+  }
+}
+
+Bool TDecCavlc::xMoreRbspData()
+{
+  Int bitsLeft = m_pcBitstream->getNumBitsLeft();
+
+  // if there are more than 8 bits, it cannot be rbsp_trailing_bits
+  if (bitsLeft > 8)
+  {
+    return true;
+  }
+
+  UChar lastByte = m_pcBitstream->peekBits(bitsLeft);
+  Int cnt = bitsLeft;
+
+  // remove trailing bits equal to zero
+  while ((cnt>0) && ((lastByte & 1) == 0))
+  {
+    lastByte >>= 1;
+    cnt--;
+  }
+  // remove bit equal to one
+  cnt--;
+
+  // we should not have a negative number of bits
+  assert (cnt>=0);
+
+  // we have more data, if cnt is not zero
+  return (cnt>0);
+}
+
+Void TDecCavlc::parseExplicitRdpcmMode( TComTU& /*rTu*/, ComponentID /*compID*/ )
+{
