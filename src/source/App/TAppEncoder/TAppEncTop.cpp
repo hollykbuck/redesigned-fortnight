@@ -598,3 +598,103 @@ Void TAppEncTop::xCreateLib()
     m_cTVideoIOYuvSIIPreFile.open(m_shutterIntervalPreFileName, true, m_outputBitDepth, m_outputBitDepth, m_internalBitDepth);  // write mode
   }
 #endif
+
+  // Neo Decoder
+  m_cTEncTop.create();
+}
+
+Void TAppEncTop::xDestroyLib()
+{
+  // Video I/O
+  m_cTVideoIOYuvInputFile.close();
+  m_cTVideoIOYuvReconFile.close();
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  if (m_ShutterFilterEnable && !m_shutterIntervalPreFileName.empty())
+  {
+    m_cTVideoIOYuvSIIPreFile.close();
+  }
+#endif
+
+  // Neo Decoder
+  m_cTEncTop.destroy();
+}
+
+Void TAppEncTop::xInitLib(Bool isFieldCoding)
+{
+  m_cTEncTop.init(isFieldCoding);
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+/**
+ - create internal class
+ - initialize internal variable
+ - until the end of input YUV file, call encoding function in TEncTop class
+ - delete allocated buffers
+ - destroy internal class
+ .
+ */
+Void TAppEncTop::encode()
+{
+  fstream bitstreamFile(m_bitstreamFileName.c_str(), fstream::binary | fstream::out);
+  if (!bitstreamFile)
+  {
+    fprintf(stderr, "\nfailed to open bitstream file `%s' for writing\n", m_bitstreamFileName.c_str());
+    exit(EXIT_FAILURE);
+  }
+
+  TComPicYuv*       pcPicYuvOrg = new TComPicYuv;
+  TComPicYuv*       pcPicYuvRec = NULL;
+
+#if JVET_X0048_X0103_FILM_GRAIN
+  TComPicYuv* m_filteredOrgPicForFG;
+  if (m_fgcSEIAnalysisEnabled && m_fgcSEIExternalDenoised.empty())
+  {
+    m_filteredOrgPicForFG = new TComPicYuv;
+    m_filteredOrgPicForFG->create(m_sourceWidth, m_sourceHeight, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true);
+  }
+  else
+  {
+    m_filteredOrgPicForFG = NULL;
+  }
+#endif
+
+  // initialize internal class & member variables
+  xInitLibCfg();
+  xCreateLib();
+  xInitLib(m_isField);
+
+  printChromaFormat();
+
+  // main encoder loop
+  Int   iNumEncoded = 0;
+  Bool  bEos = false;
+
+  const InputColourSpaceConversion ipCSC  =  m_inputColourSpaceConvert;
+  const InputColourSpaceConversion snrCSC = (!m_snrInternalColourSpace) ? m_inputColourSpaceConvert : IPCOLOURSPACE_UNCHANGED;
+
+  list<AccessUnit> outputAccessUnits; ///< list of access units to write out.  is populated by the encoding process
+
+  TComPicYuv cPicYuvTrueOrg;
+
+  // allocate original YUV buffer
+  if( m_isField )
+  {
+    pcPicYuvOrg->create  ( m_sourceWidth, m_sourceHeightOrg, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true );
+    cPicYuvTrueOrg.create(m_sourceWidth, m_sourceHeightOrg, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true);
+  }
+  else
+  {
+    pcPicYuvOrg->create  ( m_sourceWidth, m_sourceHeight, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true );
+    cPicYuvTrueOrg.create(m_sourceWidth, m_sourceHeight, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true );
+  }
+
+#if EXTENSION_360_VIDEO
+  TExt360AppEncTop           ext360(*this, m_cTEncTop.getGOPEncoder()->getExt360Data(), *(m_cTEncTop.getGOPEncoder()), *pcPicYuvOrg);
+#endif
+  TEncTemporalFilter temporalFilter;
+#if JVET_Y0077_BIM
+  if ( m_gopBasedTemporalFilterEnabled || m_bimEnabled )
+#else
