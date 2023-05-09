@@ -698,3 +698,103 @@ Void TAppEncTop::encode()
 #if JVET_Y0077_BIM
   if ( m_gopBasedTemporalFilterEnabled || m_bimEnabled )
 #else
+  if (m_gopBasedTemporalFilterEnabled)
+#endif
+  {
+    temporalFilter.init(m_FrameSkip, m_inputBitDepth, m_MSBExtendedBitDepth, m_internalBitDepth, m_sourceWidth, m_sourceHeight,
+      m_sourcePadding, m_framesToBeEncoded, m_bClipInputVideoToRec709Range, m_inputFileName, m_chromaFormatIDC,
+      m_inputColourSpaceConvert, m_iQP, m_iGOPSize, m_gopBasedTemporalFilterStrengths,
+      m_gopBasedTemporalFilterPastRefs, m_gopBasedTemporalFilterFutureRefs,
+#if !JVET_Y0077_BIM
+      m_firstValidFrame, m_lastValidFrame);
+#else
+      m_firstValidFrame, m_lastValidFrame,
+      m_gopBasedTemporalFilterEnabled, m_cTEncTop.getAdaptQPmap(), m_bimEnabled);
+#endif
+  }
+#if JVET_X0048_X0103_FILM_GRAIN
+  TEncTemporalFilter m_temporalFilterForFG;
+  if ( m_fgcSEIAnalysisEnabled && m_fgcSEIExternalDenoised.empty() )
+  {
+    int  filteredFrame                 = 0;
+    if ( m_iIntraPeriod < 1 )
+      filteredFrame = 2 * m_iFrameRate;
+    else
+      filteredFrame = m_iIntraPeriod;
+
+    map<int, double> filteredFramesAndStrengths = { { filteredFrame, 1.5 } };   // TODO: adjust MCTF and MCTF strenght
+
+    m_temporalFilterForFG.init(m_FrameSkip, m_inputBitDepth, m_MSBExtendedBitDepth, m_internalBitDepth, m_sourceWidth, m_sourceHeight,
+      m_sourcePadding, m_framesToBeEncoded, m_bClipInputVideoToRec709Range, m_inputFileName, m_chromaFormatIDC,
+      m_inputColourSpaceConvert, m_iQP, m_iGOPSize, filteredFramesAndStrengths,
+      m_gopBasedTemporalFilterPastRefs, m_gopBasedTemporalFilterFutureRefs,
+#if !JVET_Y0077_BIM
+      m_firstValidFrame, m_lastValidFrame);
+#else
+      m_firstValidFrame, m_lastValidFrame,
+      m_gopBasedTemporalFilterEnabled, m_cTEncTop.getAdaptQPmap(), m_bimEnabled);
+#endif
+  }
+#endif
+  while ( !bEos )
+  {
+    // get buffers
+    xGetBuffer(pcPicYuvRec);
+
+    // read input YUV file
+#if EXTENSION_360_VIDEO
+    if (ext360.isEnabled())
+    {
+      ext360.read(m_cTVideoIOYuvInputFile, *pcPicYuvOrg, cPicYuvTrueOrg, ipCSC);
+    }
+    else
+    {
+      m_cTVideoIOYuvInputFile.read( pcPicYuvOrg, &cPicYuvTrueOrg, ipCSC, m_sourcePadding, m_InputChromaFormatIDC, m_bClipInputVideoToRec709Range );
+    }
+#else
+    m_cTVideoIOYuvInputFile.read( pcPicYuvOrg, &cPicYuvTrueOrg, ipCSC, m_sourcePadding, m_InputChromaFormatIDC, m_bClipInputVideoToRec709Range );
+#endif
+
+#if JVET_X0048_X0103_FILM_GRAIN
+    if (m_fgcSEIAnalysisEnabled && m_fgcSEIExternalDenoised.empty())
+    {
+      pcPicYuvOrg->copyToPic(m_filteredOrgPicForFG);
+      m_temporalFilterForFG.filter(m_filteredOrgPicForFG, m_iFrameRcvd);
+    }
+#endif
+
+#if JVET_Y0077_BIM
+    if ( m_gopBasedTemporalFilterEnabled || m_bimEnabled )
+#else
+    if (m_gopBasedTemporalFilterEnabled)
+#endif
+    {
+      temporalFilter.filter(pcPicYuvOrg, m_iFrameRcvd);
+    }
+
+    // increase number of received frames
+    m_iFrameRcvd++;
+
+    bEos = (m_isField && (m_iFrameRcvd == (m_framesToBeEncoded >> 1) )) || ( !m_isField && (m_iFrameRcvd == m_framesToBeEncoded) );
+
+    Bool flush = 0;
+    // if end of file (which is only detected on a read failure) flush the encoder of any queued pictures
+    if (m_cTVideoIOYuvInputFile.isEof())
+    {
+      flush = true;
+      bEos = true;
+      m_iFrameRcvd--;
+      m_cTEncTop.setFramesToBeEncoded(m_iFrameRcvd);
+    }
+
+    // call encoding function for one frame
+    if ( m_isField )
+    {
+      m_cTEncTop.encode( bEos, flush ? 0 : pcPicYuvOrg, flush ? 0 : &cPicYuvTrueOrg, ipCSC, snrCSC, m_cListPicYuvRec, outputAccessUnits, iNumEncoded, m_isTopFieldFirst );
+    }
+    else
+    {
+#if JVET_X0048_X0103_FILM_GRAIN
+      m_cTEncTop.encode( bEos, flush ? 0 : pcPicYuvOrg, flush ? 0 : &cPicYuvTrueOrg, flush ? 0 : m_filteredOrgPicForFG, ipCSC, snrCSC, m_cListPicYuvRec, outputAccessUnits, iNumEncoded);
+#else
+      m_cTEncTop.encode( bEos, flush ? 0 : pcPicYuvOrg, flush ? 0 : &cPicYuvTrueOrg, ipCSC, snrCSC, m_cListPicYuvRec, outputAccessUnits, iNumEncoded );
