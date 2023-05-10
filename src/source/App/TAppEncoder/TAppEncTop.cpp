@@ -798,3 +798,103 @@ Void TAppEncTop::encode()
       m_cTEncTop.encode( bEos, flush ? 0 : pcPicYuvOrg, flush ? 0 : &cPicYuvTrueOrg, flush ? 0 : m_filteredOrgPicForFG, ipCSC, snrCSC, m_cListPicYuvRec, outputAccessUnits, iNumEncoded);
 #else
       m_cTEncTop.encode( bEos, flush ? 0 : pcPicYuvOrg, flush ? 0 : &cPicYuvTrueOrg, ipCSC, snrCSC, m_cListPicYuvRec, outputAccessUnits, iNumEncoded );
+#endif
+    }
+
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+    if (m_ShutterFilterEnable && !m_shutterIntervalPreFileName.empty())
+    {
+      m_cTVideoIOYuvSIIPreFile.write(pcPicYuvOrg, ipCSC, m_confWinLeft, m_confWinRight, m_confWinTop, m_confWinBottom,
+        NUM_CHROMA_FORMAT, m_bClipOutputVideoToRec709Range);
+    }
+#endif
+
+    // write bistream to file if necessary
+    if ( iNumEncoded > 0 )
+    {
+      xWriteOutput(bitstreamFile, iNumEncoded, outputAccessUnits);
+      outputAccessUnits.clear();
+    }
+    // temporally skip frames
+    if( m_temporalSubsampleRatio > 1 )
+    {
+      m_cTVideoIOYuvInputFile.skipFrames(m_temporalSubsampleRatio-1, m_inputFileWidth, m_inputFileHeight, m_InputChromaFormatIDC);
+    }
+  }
+
+  m_cTEncTop.printSummary(m_isField);
+
+  // delete original YUV buffer
+  pcPicYuvOrg->destroy();
+  delete pcPicYuvOrg;
+  pcPicYuvOrg = NULL;
+
+#if JVET_X0048_X0103_FILM_GRAIN
+  if (m_fgcSEIAnalysisEnabled && m_fgcSEIExternalDenoised.empty())
+  {
+    m_filteredOrgPicForFG->destroy();
+    delete m_filteredOrgPicForFG;
+    m_filteredOrgPicForFG = NULL;
+  }
+#endif
+
+  // delete used buffers in encoder class
+  m_cTEncTop.deletePicBuffer();
+  cPicYuvTrueOrg.destroy();
+
+  // delete buffers & classes
+  xDeleteBuffer();
+  xDestroyLib();
+
+  printRateSummary();
+
+  return;
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+/**
+ - application has picture buffer list with size of GOP
+ - picture buffer list acts as ring buffer
+ - end of the list has the latest picture
+ .
+ */
+Void TAppEncTop::xGetBuffer( TComPicYuv*& rpcPicYuvRec)
+{
+  assert( m_iGOPSize > 0 );
+
+  // org. buffer
+  if ( m_cListPicYuvRec.size() >= (UInt)m_iGOPSize ) // buffer will be 1 element longer when using field coding, to maintain first field whilst processing second.
+  {
+    rpcPicYuvRec = m_cListPicYuvRec.popFront();
+
+  }
+  else
+  {
+    rpcPicYuvRec = new TComPicYuv;
+
+    rpcPicYuvRec->create( m_sourceWidth, m_sourceHeight, m_chromaFormatIDC, m_uiMaxCUWidth, m_uiMaxCUHeight, m_uiMaxTotalCUDepth, true );
+
+  }
+  m_cListPicYuvRec.pushBack( rpcPicYuvRec );
+}
+
+Void TAppEncTop::xDeleteBuffer( )
+{
+  TComList<TComPicYuv*>::iterator iterPicYuvRec  = m_cListPicYuvRec.begin();
+
+  Int iSize = Int( m_cListPicYuvRec.size() );
+
+  for ( Int i = 0; i < iSize; i++ )
+  {
+    TComPicYuv*  pcPicYuvRec  = *(iterPicYuvRec++);
+    pcPicYuvRec->destroy();
+    delete pcPicYuvRec; pcPicYuvRec = NULL;
+  }
+
+}
+
+/** 
+  Write access units to output file.
