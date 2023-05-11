@@ -898,3 +898,103 @@ Void TAppEncTop::xDeleteBuffer( )
 
 /** 
   Write access units to output file.
+  \param bitstreamFile  target bitstream file
+  \param iNumEncoded    number of encoded frames
+  \param accessUnits    list of access units to be written
+ */
+Void TAppEncTop::xWriteOutput(std::ostream& bitstreamFile, Int iNumEncoded, const std::list<AccessUnit>& accessUnits)
+{
+  const InputColourSpaceConversion ipCSC = (!m_outputInternalColourSpace) ? m_inputColourSpaceConvert : IPCOLOURSPACE_UNCHANGED;
+
+  if (m_isField)
+  {
+    //Reinterlace fields
+    Int i;
+    TComList<TComPicYuv*>::iterator iterPicYuvRec = m_cListPicYuvRec.end();
+    list<AccessUnit>::const_iterator iterBitstream = accessUnits.begin();
+
+    for ( i = 0; i < iNumEncoded; i++ )
+    {
+      --iterPicYuvRec;
+    }
+
+    for ( i = 0; i < iNumEncoded/2; i++ )
+    {
+      TComPicYuv*  pcPicYuvRecTop  = *(iterPicYuvRec++);
+      TComPicYuv*  pcPicYuvRecBottom  = *(iterPicYuvRec++);
+
+      if (!m_reconFileName.empty())
+      {
+        m_cTVideoIOYuvReconFile.write( pcPicYuvRecTop, pcPicYuvRecBottom, ipCSC, m_confWinLeft, m_confWinRight, m_confWinTop, m_confWinBottom, NUM_CHROMA_FORMAT, m_isTopFieldFirst );
+      }
+
+      const AccessUnit& auTop = *(iterBitstream++);
+      const vector<UInt>& statsTop = writeAnnexB(bitstreamFile, auTop);
+      rateStatsAccum(auTop, statsTop);
+
+      const AccessUnit& auBottom = *(iterBitstream++);
+      const vector<UInt>& statsBottom = writeAnnexB(bitstreamFile, auBottom);
+      rateStatsAccum(auBottom, statsBottom);
+    }
+  }
+  else
+  {
+    Int i;
+
+    TComList<TComPicYuv*>::iterator iterPicYuvRec = m_cListPicYuvRec.end();
+    list<AccessUnit>::const_iterator iterBitstream = accessUnits.begin();
+
+    for ( i = 0; i < iNumEncoded; i++ )
+    {
+      --iterPicYuvRec;
+    }
+
+    for ( i = 0; i < iNumEncoded; i++ )
+    {
+      TComPicYuv*  pcPicYuvRec  = *(iterPicYuvRec++);
+      if (!m_reconFileName.empty())
+      {
+        m_cTVideoIOYuvReconFile.write( pcPicYuvRec, ipCSC, m_confWinLeft, m_confWinRight, m_confWinTop, m_confWinBottom,
+            NUM_CHROMA_FORMAT, m_bClipOutputVideoToRec709Range  );
+      }
+
+      const AccessUnit& au = *(iterBitstream++);
+      const vector<UInt>& stats = writeAnnexB(bitstreamFile, au);
+      rateStatsAccum(au, stats);
+    }
+  }
+}
+
+/**
+ *
+ */
+Void TAppEncTop::rateStatsAccum(const AccessUnit& au, const std::vector<UInt>& annexBsizes)
+{
+  AccessUnit::const_iterator it_au = au.begin();
+  vector<UInt>::const_iterator it_stats = annexBsizes.begin();
+
+  for (; it_au != au.end(); it_au++, it_stats++)
+  {
+    switch ((*it_au)->m_nalUnitType)
+    {
+    case NAL_UNIT_CODED_SLICE_TRAIL_R:
+    case NAL_UNIT_CODED_SLICE_TRAIL_N:
+    case NAL_UNIT_CODED_SLICE_TSA_R:
+    case NAL_UNIT_CODED_SLICE_TSA_N:
+    case NAL_UNIT_CODED_SLICE_STSA_R:
+    case NAL_UNIT_CODED_SLICE_STSA_N:
+    case NAL_UNIT_CODED_SLICE_BLA_W_LP:
+    case NAL_UNIT_CODED_SLICE_BLA_W_RADL:
+    case NAL_UNIT_CODED_SLICE_BLA_N_LP:
+    case NAL_UNIT_CODED_SLICE_IDR_W_RADL:
+    case NAL_UNIT_CODED_SLICE_IDR_N_LP:
+    case NAL_UNIT_CODED_SLICE_CRA:
+    case NAL_UNIT_CODED_SLICE_RADL_N:
+    case NAL_UNIT_CODED_SLICE_RADL_R:
+    case NAL_UNIT_CODED_SLICE_RASL_N:
+    case NAL_UNIT_CODED_SLICE_RASL_R:
+    case NAL_UNIT_VPS:
+    case NAL_UNIT_SPS:
+    case NAL_UNIT_PPS:
+      m_essentialBytes += *it_stats;
+      break;
