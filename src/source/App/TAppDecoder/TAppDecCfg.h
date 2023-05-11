@@ -98,3 +98,34 @@ public:
 #if JVET_X0048_X0103_FILM_GRAIN
   , m_SEIFGSFileName()
 #endif
+#if SHUTTER_INTERVAL_SEI_PROCESSING
+  , m_shutterIntervalPostFileName()
+#endif
+  , m_annotatedRegionsSEIFileName()
+  , m_targetDecLayerIdSet()
+  , m_respectDefDispWindow(0)
+#if O0043_BEST_EFFORT_DECODING
+  , m_forceDecodeBitDepth(0)
+#endif
+  , m_outputDecodedSEIMessagesFilename()
+  , m_bClipOutputVideoToRec709Range(false)
+#if MCTS_ENC_CHECK
+  , m_tmctsCheck(false)
+#endif
+  {
+    for (UInt channelTypeIndex = 0; channelTypeIndex < MAX_NUM_CHANNEL_TYPE; channelTypeIndex++)
+    {
+      m_outputBitDepth[channelTypeIndex] = 0;
+    }
+  }
+
+  virtual ~TAppDecCfg() {}
+
+  Bool  parseCfg        ( Int argc, TChar* argv[] );   ///< initialize option class from configuration
+};
+
+//! \}
+
+#endif
+
+
