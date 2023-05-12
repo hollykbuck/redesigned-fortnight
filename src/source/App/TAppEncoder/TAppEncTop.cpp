@@ -998,3 +998,51 @@ Void TAppEncTop::rateStatsAccum(const AccessUnit& au, const std::vector<UInt>& a
     case NAL_UNIT_PPS:
       m_essentialBytes += *it_stats;
       break;
+    default:
+      break;
+    }
+
+    m_totalBytes += *it_stats;
+  }
+}
+
+Void TAppEncTop::printRateSummary()
+{
+  Double time = (Double) m_iFrameRcvd / m_iFrameRate * m_temporalSubsampleRatio;
+  printf("Bytes written to file: %u (%.3f kbps)\n", m_totalBytes, 0.008 * m_totalBytes / time);
+  if (m_summaryVerboseness > 0)
+  {
+    printf("Bytes for SPS/PPS/Slice (Incl. Annex B): %u (%.3f kbps)\n", m_essentialBytes, 0.008 * m_essentialBytes / time);
+  }
+}
+
+Void TAppEncTop::printChromaFormat()
+{
+  std::cout << std::setw(43) << "Input ChromaFormatIDC = ";
+  switch (m_InputChromaFormatIDC)
+  {
+  case CHROMA_400:  std::cout << "  4:0:0"; break;
+  case CHROMA_420:  std::cout << "  4:2:0"; break;
+  case CHROMA_422:  std::cout << "  4:2:2"; break;
+  case CHROMA_444:  std::cout << "  4:4:4"; break;
+  default:
+    std::cerr << "Invalid";
+    exit(1);
+  }
+  std::cout << std::endl;
+
+  std::cout << std::setw(43) << "Output (internal) ChromaFormatIDC = ";
+  switch (m_cTEncTop.getChromaFormatIdc())
+  {
+  case CHROMA_400:  std::cout << "  4:0:0"; break;
+  case CHROMA_420:  std::cout << "  4:2:0"; break;
+  case CHROMA_422:  std::cout << "  4:2:2"; break;
+  case CHROMA_444:  std::cout << "  4:4:4"; break;
+  default:
+    std::cerr << "Invalid";
+    exit(1);
+  }
+  std::cout << "\n" << std::endl;
+}
+
+//! \}
