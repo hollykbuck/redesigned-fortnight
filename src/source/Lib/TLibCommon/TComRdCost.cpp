@@ -398,3 +398,103 @@ inline Int simdSADLine8n16b( const Pel * piOrg , const Pel * piCur , Int nWidth 
   __m128i zero =  _mm_setzero_si128();
   __m128i hi = _mm_unpackhi_epi16( sum , zero );
   __m128i lo = _mm_unpacklo_epi16( sum , zero );
+  sum = _mm_add_epi32( lo , hi );
+  sum = _mm_add_epi32( sum , _mm_shuffle_epi32( sum , _MM_SHUFFLE( 2 , 3 , 0 , 1 ) ) );
+  sum = _mm_add_epi32( sum , _mm_shuffle_epi32( sum , _MM_SHUFFLE( 1 , 0 , 3 , 2 ) ) );
+  return( _mm_cvtsi128_si32( sum ) );
+}
+
+inline Void simd8x8Transpose32b( __m128i * pBuffer )
+{
+  __m128 tmp[16];
+  for( Int n = 0 ; n < 16 ; n++ )
+  {
+    tmp[n] = _mm_castsi128_ps( pBuffer[n] );
+  }
+  _MM_TRANSPOSE4_PS( tmp[0] , tmp[2] , tmp[4] , tmp[6] );
+  _MM_TRANSPOSE4_PS( tmp[1] , tmp[3] , tmp[5] , tmp[7] );
+  _MM_TRANSPOSE4_PS( tmp[8] , tmp[10] , tmp[12] , tmp[14] );
+  _MM_TRANSPOSE4_PS( tmp[9] , tmp[11] , tmp[13] , tmp[15] );
+  for( Int n = 0 ; n < 8 ; n += 2 )
+  {
+    pBuffer[n] = _mm_castps_si128( tmp[n] );
+    pBuffer[n+1]  = _mm_castps_si128( tmp[n+8] );
+    pBuffer[n+8] = _mm_castps_si128( tmp[n+1] );
+    pBuffer[n+9]  = _mm_castps_si128( tmp[n+9] );
+  }
+}
+
+#ifdef __GNUC__
+#define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
+#if GCC_VERSION > 40600 && GCC_VERSION < 40700
+__attribute__((optimize("no-tree-vrp")))
+#endif
+#endif
+Void simd8x8HAD1D32b( __m128i * pInput , __m128i * pOutput )
+{
+  __m128i m1[8][2] , m2[8][2];
+
+  m2[0][0] = _mm_add_epi32( pInput[0] ,pInput[8 ] );  m2[0][1] = _mm_add_epi32( pInput[1] ,pInput[9 ] );
+  m2[1][0] = _mm_add_epi32( pInput[2] ,pInput[10] );  m2[1][1] = _mm_add_epi32( pInput[3] ,pInput[11] );
+  m2[2][0] = _mm_add_epi32( pInput[4] ,pInput[12] );  m2[2][1] = _mm_add_epi32( pInput[5] ,pInput[13] );
+  m2[3][0] = _mm_add_epi32( pInput[6] ,pInput[14] );  m2[3][1] = _mm_add_epi32( pInput[7] ,pInput[15] );
+  m2[4][0] = _mm_sub_epi32( pInput[0] ,pInput[8 ] );  m2[4][1] = _mm_sub_epi32( pInput[1] ,pInput[9 ] );
+  m2[5][0] = _mm_sub_epi32( pInput[2] ,pInput[10] );  m2[5][1] = _mm_sub_epi32( pInput[3] ,pInput[11] );
+  m2[6][0] = _mm_sub_epi32( pInput[4] ,pInput[12] );  m2[6][1] = _mm_sub_epi32( pInput[5] ,pInput[13] );
+  m2[7][0] = _mm_sub_epi32( pInput[6] ,pInput[14] );  m2[7][1] = _mm_sub_epi32( pInput[7] ,pInput[15] );
+
+  m1[0][0] = _mm_add_epi32( m2[0][0] , m2[2][0] );  m1[0][1] = _mm_add_epi32( m2[0][1] , m2[2][1] );
+  m1[1][0] = _mm_add_epi32( m2[1][0] , m2[3][0] );  m1[1][1] = _mm_add_epi32( m2[1][1] , m2[3][1] );
+  m1[2][0] = _mm_sub_epi32( m2[0][0] , m2[2][0] );  m1[2][1] = _mm_sub_epi32( m2[0][1] , m2[2][1] );
+  m1[3][0] = _mm_sub_epi32( m2[1][0] , m2[3][0] );  m1[3][1] = _mm_sub_epi32( m2[1][1] , m2[3][1] );
+  m1[4][0] = _mm_add_epi32( m2[4][0] , m2[6][0] );  m1[4][1] = _mm_add_epi32( m2[4][1] , m2[6][1] );
+  m1[5][0] = _mm_add_epi32( m2[5][0] , m2[7][0] );  m1[5][1] = _mm_add_epi32( m2[5][1] , m2[7][1] );
+  m1[6][0] = _mm_sub_epi32( m2[4][0] , m2[6][0] );  m1[6][1] = _mm_sub_epi32( m2[4][1] , m2[6][1] );
+  m1[7][0] = _mm_sub_epi32( m2[5][0] , m2[7][0] );  m1[7][1] = _mm_sub_epi32( m2[5][1] , m2[7][1] );
+
+  pInput[0 ] = _mm_add_epi32( m1[0][0] , m1[1][0] );  pInput[1 ] = _mm_add_epi32( m1[0][1] , m1[1][1] );
+  pInput[2 ] = _mm_sub_epi32( m1[0][0] , m1[1][0] );  pInput[3 ] = _mm_sub_epi32( m1[0][1] , m1[1][1] );
+  pInput[4 ] = _mm_add_epi32( m1[2][0] , m1[3][0] );  pInput[5 ] = _mm_add_epi32( m1[2][1] , m1[3][1] );
+  pInput[6 ] = _mm_sub_epi32( m1[2][0] , m1[3][0] );  pInput[7 ] = _mm_sub_epi32( m1[2][1] , m1[3][1] );
+  pInput[8 ] = _mm_add_epi32( m1[4][0] , m1[5][0] );  pInput[9 ] = _mm_add_epi32( m1[4][1] , m1[5][1] );
+  pInput[10] = _mm_sub_epi32( m1[4][0] , m1[5][0] );  pInput[11] = _mm_sub_epi32( m1[4][1] , m1[5][1] );
+  pInput[12] = _mm_add_epi32( m1[6][0] , m1[7][0] );  pInput[13] = _mm_add_epi32( m1[6][1] , m1[7][1] );
+  pInput[14] = _mm_sub_epi32( m1[6][0] , m1[7][0] );  pInput[15] = _mm_sub_epi32( m1[6][1] , m1[7][1] );
+}
+
+inline __m128i simdAbs32b( __m128i m )
+{
+  const __m128i zero = _mm_setzero_si128();
+  __m128i tmp = _mm_sub_epi32( zero , m );
+  __m128i mask = _mm_cmpgt_epi32( m , tmp );
+  return( _mm_or_si128( _mm_and_si128( mask , m ) , _mm_andnot_si128( mask , tmp ) ) );
+}
+
+UInt simdHADs8x8( const Pel * piOrg, const Pel * piCur, Int iStrideOrg, Int iStrideCur )
+{
+  __m128i mmDiff[8][2];
+  __m128i mmZero = _mm_setzero_si128();
+  for( Int n = 0 ; n < 8 ; n++ , piOrg += iStrideOrg , piCur += iStrideCur )
+  {
+    __m128i diff = _mm_sub_epi16( _mm_loadu_si128( ( __m128i* )piOrg ) , _mm_loadu_si128( ( __m128i* )piCur ) );
+    // sign extension
+    __m128i mask = _mm_cmplt_epi16( diff , mmZero );
+    mmDiff[n][0] = _mm_unpacklo_epi16( diff , mask );
+    mmDiff[n][1] = _mm_unpackhi_epi16( diff , mask );
+  }
+
+  // transpose
+  simd8x8Transpose32b( &mmDiff[0][0] );
+
+  // horizontal
+  simd8x8HAD1D32b( &mmDiff[0][0] , &mmDiff[0][0] );
+
+  // transpose
+  simd8x8Transpose32b( &mmDiff[0][0] );
+
+  // vertical
+  simd8x8HAD1D32b( &mmDiff[0][0] , &mmDiff[0][0] );
+
+  __m128i mmSum = _mm_setzero_si128();
+  for( Int n = 0 ; n < 8 ; n++ )
+  {
