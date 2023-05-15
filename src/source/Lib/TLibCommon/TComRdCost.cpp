@@ -298,3 +298,103 @@ Distortion TComRdCost::calcHAD( Int bitDepth, const Pel* pi0, Int iStride0, cons
 {
   Distortion uiSum = 0;
   Int x, y;
+
+  if ( ( (iWidth % 8) == 0 ) && ( (iHeight % 8) == 0 ) )
+  {
+    for ( y=0; y<iHeight; y+= 8 )
+    {
+      for ( x=0; x<iWidth; x+= 8 )
+      {
+        uiSum += xCalcHADs8x8( &pi0[x], &pi1[x], iStride0, iStride1, 1
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+          , bitDepth
+#endif
+          );
+      }
+      pi0 += iStride0*8;
+      pi1 += iStride1*8;
+    }
+  }
+  else
+  {
+    assert ( ( (iWidth % 4) == 0 ) && ( (iHeight % 4) == 0 ) );
+
+    for ( y=0; y<iHeight; y+= 4 )
+    {
+      for ( x=0; x<iWidth; x+= 4 )
+      {
+        uiSum += xCalcHADs4x4( &pi0[x], &pi1[x], iStride0, iStride1, 1 );
+      }
+      pi0 += iStride0*4;
+      pi1 += iStride1*4;
+    }
+  }
+
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(bitDepth-8) );
+}
+
+Distortion TComRdCost::getDistPart( Int bitDepth, const Pel* piCur, Int iCurStride,  const Pel* piOrg, Int iOrgStride, UInt uiBlkWidth, UInt uiBlkHeight, const ComponentID compID, DFunc eDFunc )
+{
+  DistParam cDtParam;
+  setDistParam( uiBlkWidth, uiBlkHeight, eDFunc, cDtParam );
+  cDtParam.pOrg       = piOrg;
+  cDtParam.pCur       = piCur;
+  cDtParam.iStrideOrg = iOrgStride;
+  cDtParam.iStrideCur = iCurStride;
+  cDtParam.iStep      = 1;
+
+  cDtParam.bApplyWeight = false;
+  cDtParam.compIdx      = MAX_NUM_COMPONENT; // just for assert: to be sure it was set before use
+  cDtParam.bitDepth     = bitDepth;
+
+  if (isChroma(compID))
+  {
+    return ((Distortion) (m_distortionWeight[compID] * cDtParam.DistFunc( &cDtParam )));
+  }
+  else
+  {
+    return cDtParam.DistFunc( &cDtParam );
+  }
+}
+
+// ====================================================================================================================
+// Distortion functions
+// ====================================================================================================================
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+inline Int simdSADLine4n16b( const Pel * piOrg , const Pel * piCur , Int nWidth )
+{
+  // internal bit-depth must be 12-bit or lower
+  assert( !( nWidth & 0x03 ) );
+  __m128i org , cur , abs , sum;
+  sum = _mm_setzero_si128();
+  for( Int n = 0 ; n < nWidth ; n += 4 )
+  {
+    org = _mm_loadl_epi64( ( __m128i* )( piOrg + n ) );
+    cur = _mm_loadl_epi64( ( __m128i* )( piCur + n ) );
+    abs = _mm_subs_epi16( _mm_max_epi16( org , cur )  , _mm_min_epi16( org , cur ) );
+    sum = _mm_adds_epu16( abs , sum );
+  }
+  __m128i zero =  _mm_setzero_si128();
+  sum = _mm_unpacklo_epi16( sum , zero );
+  sum = _mm_add_epi32( sum , _mm_shuffle_epi32( sum , _MM_SHUFFLE( 2 , 3 , 0 , 1 ) ) );
+  sum = _mm_add_epi32( sum , _mm_shuffle_epi32( sum , _MM_SHUFFLE( 1 , 0 , 3 , 2 ) ) );
+  return( _mm_cvtsi128_si32( sum ) );
+}
+
+inline Int simdSADLine8n16b( const Pel * piOrg , const Pel * piCur , Int nWidth )
+{
+  // internal bit-depth must be 12-bit or lower
+  assert( !( nWidth & 0x07 ) );
+  __m128i org , cur , abs , sum;
+  sum = _mm_setzero_si128();
+  for( Int n = 0 ; n < nWidth ; n += 8 )
+  {
+    org = _mm_loadu_si128( ( __m128i* )( piOrg + n ) );
+    cur = _mm_loadu_si128( ( __m128i* )( piCur + n ) );
+    abs = _mm_subs_epi16( _mm_max_epi16( org , cur )  , _mm_min_epi16( org , cur ) );
+    sum = _mm_adds_epu16( abs , sum );
+  }
+  __m128i zero =  _mm_setzero_si128();
+  __m128i hi = _mm_unpackhi_epi16( sum , zero );
+  __m128i lo = _mm_unpacklo_epi16( sum , zero );
