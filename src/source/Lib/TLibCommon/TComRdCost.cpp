@@ -598,3 +598,103 @@ Distortion TComRdCost::xGetSAD4( DistParam* pcDtParam )
     {
       uiSum += simdSADLine4n16b( piOrg , piCur , 4 );
       piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+  else
+  {
+#endif
+  for( ; iRows != 0; iRows-=iSubStep )
+  {
+    uiSum += abs( piOrg[0] - piCur[0] );
+    uiSum += abs( piOrg[1] - piCur[1] );
+    uiSum += abs( piOrg[2] - piCur[2] );
+    uiSum += abs( piOrg[3] - piCur[3] );
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
+#endif
+
+  uiSum <<= iSubShift;
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8) );
+}
+
+Distortion TComRdCost::xGetSAD8( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSADw( pcDtParam );
+  }
+  const Pel* piOrg      = pcDtParam->pOrg;
+  const Pel* piCur      = pcDtParam->pCur;
+  Int  iRows      = pcDtParam->iRows;
+  Int  iSubShift  = pcDtParam->iSubShift;
+  Int  iSubStep   = ( 1 << iSubShift );
+  Int  iStrideCur = pcDtParam->iStrideCur*iSubStep;
+  Int  iStrideOrg = pcDtParam->iStrideOrg*iSubStep;
+
+  Distortion uiSum = 0;
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( pcDtParam->bitDepth <= 10 )
+  {
+    for( ; iRows != 0; iRows-=iSubStep )
+    {
+      uiSum += simdSADLine8n16b( piOrg , piCur , 8 );
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+  else
+  {
+#endif
+  for( ; iRows != 0; iRows-=iSubStep )
+  {
+    uiSum += abs( piOrg[0] - piCur[0] );
+    uiSum += abs( piOrg[1] - piCur[1] );
+    uiSum += abs( piOrg[2] - piCur[2] );
+    uiSum += abs( piOrg[3] - piCur[3] );
+    uiSum += abs( piOrg[4] - piCur[4] );
+    uiSum += abs( piOrg[5] - piCur[5] );
+    uiSum += abs( piOrg[6] - piCur[6] );
+    uiSum += abs( piOrg[7] - piCur[7] );
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
+#endif
+
+  uiSum <<= iSubShift;
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8) );
+}
+
+Distortion TComRdCost::xGetSAD16( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSADw( pcDtParam );
+  }
+  const Pel* piOrg   = pcDtParam->pOrg;
+  const Pel* piCur   = pcDtParam->pCur;
+  Int  iRows   = pcDtParam->iRows;
+  Int  iSubShift  = pcDtParam->iSubShift;
+  Int  iSubStep   = ( 1 << iSubShift );
+  Int  iStrideCur = pcDtParam->iStrideCur*iSubStep;
+  Int  iStrideOrg = pcDtParam->iStrideOrg*iSubStep;
+
+  Distortion uiSum = 0;
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( pcDtParam->bitDepth <= 10 )
+  {
+    for( ; iRows != 0; iRows-=iSubStep )
+    {
+      uiSum += simdSADLine8n16b( piOrg , piCur , 16 );
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
