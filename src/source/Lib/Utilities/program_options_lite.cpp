@@ -198,3 +198,103 @@ namespace df
           /* no help text: output option, skip further processing */
           cout << line.str() << endl;
           continue;
+        }
+        size_t currlength = size_t(line.tellp());
+        if (currlength > opt_width)
+        {
+          /* if option text is too long (and would collide with the
+           * help text, split onto next line */
+          line << endl;
+          currlength = 0;
+        }
+        /* split up the help text, taking into account new lines,
+         *   (add opt_width of padding to each new line) */
+        for (size_t newline_pos = 0, cur_pos = 0; cur_pos != string::npos; currlength = 0)
+        {
+          /* print any required padding space for vertical alignment */
+          line << &(spaces[40 - opt_width + currlength]);
+          newline_pos = opt_desc.find_first_of('\n', newline_pos);
+          if (newline_pos != string::npos)
+          {
+            /* newline found, print substring (newline needn't be stripped) */
+            newline_pos++;
+            line << opt_desc.substr(cur_pos, newline_pos - cur_pos);
+            cur_pos = newline_pos;
+            continue;
+          }
+          if (cur_pos + desc_width > opt_desc.size())
+          {
+            /* no need to wrap text, remainder is less than avaliable width */
+            line << opt_desc.substr(cur_pos);
+            break;
+          }
+          /* find a suitable point to split text (avoid spliting in middle of word) */
+          size_t split_pos = opt_desc.find_last_of(' ', cur_pos + desc_width);
+          if (split_pos != string::npos)
+          {
+            /* eat up multiple space characters */
+            split_pos = opt_desc.find_last_not_of(' ', split_pos) + 1;
+          }
+
+          /* bad split if no suitable space to split at.  fall back to width */
+          bool bad_split = split_pos == string::npos || split_pos <= cur_pos;
+          if (bad_split)
+          {
+            split_pos = cur_pos + desc_width;
+          }
+          line << opt_desc.substr(cur_pos, split_pos - cur_pos);
+
+          /* eat up any space for the start of the next line */
+          if (!bad_split)
+          {
+            split_pos = opt_desc.find_first_not_of(' ', split_pos);
+          }
+          cur_pos = newline_pos = split_pos;
+
+          if (cur_pos >= opt_desc.size())
+          {
+            break;
+          }
+          line << endl;
+        }
+
+        cout << line.str() << endl;
+      }
+    }
+
+    struct OptionWriter
+    {
+      OptionWriter(Options& rOpts, ErrorReporter& err)
+      : opts(rOpts), error_reporter(err)
+      {}
+      virtual ~OptionWriter() {}
+
+      virtual const string where() = 0;
+
+      bool storePair(bool allow_long, bool allow_short, const string& name, const string& value);
+      bool storePair(const string& name, const string& value)
+      {
+        return storePair(true, true, name, value);
+      }
+
+      Options& opts;
+      ErrorReporter& error_reporter;
+    };
+
+    bool OptionWriter::storePair(bool allow_long, bool allow_short, const string& name, const string& value)
+    {
+      bool found = false;
+      std::string val = value;
+      Options::NamesMap::iterator opt_it;
+      if (allow_long)
+      {
+        opt_it = opts.opt_long_map.find(name);
+        if (opt_it != opts.opt_long_map.end())
+        {
+          found = true;
+        }
+      }
+
+      /* check for the short list */
+      if (allow_short && !(found && allow_long))
+      {
