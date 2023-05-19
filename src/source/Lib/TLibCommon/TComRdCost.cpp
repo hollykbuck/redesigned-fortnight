@@ -798,3 +798,103 @@ Distortion TComRdCost::xGetSAD16N( DistParam* pcDtParam )
   {
 #endif
   for( ; iRows != 0; iRows-=iSubStep )
+  {
+    for (Int n = 0; n < iCols; n+=16 )
+    {
+      uiSum += abs( piOrg[n+ 0] - piCur[n+ 0] );
+      uiSum += abs( piOrg[n+ 1] - piCur[n+ 1] );
+      uiSum += abs( piOrg[n+ 2] - piCur[n+ 2] );
+      uiSum += abs( piOrg[n+ 3] - piCur[n+ 3] );
+      uiSum += abs( piOrg[n+ 4] - piCur[n+ 4] );
+      uiSum += abs( piOrg[n+ 5] - piCur[n+ 5] );
+      uiSum += abs( piOrg[n+ 6] - piCur[n+ 6] );
+      uiSum += abs( piOrg[n+ 7] - piCur[n+ 7] );
+      uiSum += abs( piOrg[n+ 8] - piCur[n+ 8] );
+      uiSum += abs( piOrg[n+ 9] - piCur[n+ 9] );
+      uiSum += abs( piOrg[n+10] - piCur[n+10] );
+      uiSum += abs( piOrg[n+11] - piCur[n+11] );
+      uiSum += abs( piOrg[n+12] - piCur[n+12] );
+      uiSum += abs( piOrg[n+13] - piCur[n+13] );
+      uiSum += abs( piOrg[n+14] - piCur[n+14] );
+      uiSum += abs( piOrg[n+15] - piCur[n+15] );
+    }
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
+#endif
+
+  uiSum <<= iSubShift;
+  return ( uiSum >> DISTORTION_PRECISION_ADJUSTMENT(pcDtParam->bitDepth-8) );
+}
+
+Distortion TComRdCost::xGetSAD32( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetSADw( pcDtParam );
+  }
+  const Pel* piOrg   = pcDtParam->pOrg;
+  const Pel* piCur   = pcDtParam->pCur;
+  Int  iRows   = pcDtParam->iRows;
+  Int  iSubShift  = pcDtParam->iSubShift;
+  Int  iSubStep   = ( 1 << iSubShift );
+  Int  iStrideCur = pcDtParam->iStrideCur*iSubStep;
+  Int  iStrideOrg = pcDtParam->iStrideOrg*iSubStep;
+
+  Distortion uiSum = 0;
+
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  if( pcDtParam->bitDepth <= 10 )
+  {
+    for( ; iRows != 0; iRows-=iSubStep )
+    {
+      uiSum += simdSADLine8n16b( piOrg , piCur , 32 );
+      piOrg += iStrideOrg;
+      piCur += iStrideCur;
+    }
+  }
+  else
+  {
+#endif
+  for( ; iRows != 0; iRows-=iSubStep )
+  {
+    uiSum += abs( piOrg[0] - piCur[0] );
+    uiSum += abs( piOrg[1] - piCur[1] );
+    uiSum += abs( piOrg[2] - piCur[2] );
+    uiSum += abs( piOrg[3] - piCur[3] );
+    uiSum += abs( piOrg[4] - piCur[4] );
+    uiSum += abs( piOrg[5] - piCur[5] );
+    uiSum += abs( piOrg[6] - piCur[6] );
+    uiSum += abs( piOrg[7] - piCur[7] );
+    uiSum += abs( piOrg[8] - piCur[8] );
+    uiSum += abs( piOrg[9] - piCur[9] );
+    uiSum += abs( piOrg[10] - piCur[10] );
+    uiSum += abs( piOrg[11] - piCur[11] );
+    uiSum += abs( piOrg[12] - piCur[12] );
+    uiSum += abs( piOrg[13] - piCur[13] );
+    uiSum += abs( piOrg[14] - piCur[14] );
+    uiSum += abs( piOrg[15] - piCur[15] );
+    uiSum += abs( piOrg[16] - piCur[16] );
+    uiSum += abs( piOrg[17] - piCur[17] );
+    uiSum += abs( piOrg[18] - piCur[18] );
+    uiSum += abs( piOrg[19] - piCur[19] );
+    uiSum += abs( piOrg[20] - piCur[20] );
+    uiSum += abs( piOrg[21] - piCur[21] );
+    uiSum += abs( piOrg[22] - piCur[22] );
+    uiSum += abs( piOrg[23] - piCur[23] );
+    uiSum += abs( piOrg[24] - piCur[24] );
+    uiSum += abs( piOrg[25] - piCur[25] );
+    uiSum += abs( piOrg[26] - piCur[26] );
+    uiSum += abs( piOrg[27] - piCur[27] );
+    uiSum += abs( piOrg[28] - piCur[28] );
+    uiSum += abs( piOrg[29] - piCur[29] );
+    uiSum += abs( piOrg[30] - piCur[30] );
+    uiSum += abs( piOrg[31] - piCur[31] );
+
+    piOrg += iStrideOrg;
+    piCur += iStrideCur;
+  }
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+  }
