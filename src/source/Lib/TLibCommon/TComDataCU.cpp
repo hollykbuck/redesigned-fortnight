@@ -1,0 +1,100 @@
+/* The copyright in this software is being made available under the BSD
+ * License, included below. This software may be subject to other third party
+ * and contributor rights, including patent rights, and no such rights are
+ * granted under this license.
+ *
+ * Copyright (c) 2010-2022, ITU/ISO/IEC
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *  * Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *  * Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *  * Neither the name of the ITU/ISO/IEC nor the names of its contributors may
+ *    be used to endorse or promote products derived from this software without
+ *    specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ * THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/** \file     TComDataCU.cpp
+    \brief    CU data structure
+    \todo     not all entities are documented
+*/
+
+#include "TComDataCU.h"
+#include "TComTU.h"
+#include "TComPic.h"
+
+//! \ingroup TLibCommon
+//! \{
+
+// ====================================================================================================================
+// Constructor / destructor / create / destroy
+// ====================================================================================================================
+
+TComDataCU::TComDataCU()
+{
+  m_pcPic              = NULL;
+  m_pcSlice            = NULL;
+  m_puhDepth           = NULL;
+
+  m_skipFlag           = NULL;
+
+  m_pePartSize         = NULL;
+  m_pePredMode         = NULL;
+  m_CUTransquantBypass = NULL;
+  m_puhWidth           = NULL;
+  m_puhHeight          = NULL;
+  m_phQP               = NULL;
+  m_ChromaQpAdj        = NULL;
+  m_pbMergeFlag        = NULL;
+  m_puhMergeIndex      = NULL;
+  for(UInt i=0; i<MAX_NUM_CHANNEL_TYPE; i++)
+  {
+    m_puhIntraDir[i]     = NULL;
+  }
+  m_puhInterDir        = NULL;
+  m_puhTrIdx           = NULL;
+
+  for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    m_puhCbf[comp]                        = NULL;
+    m_crossComponentPredictionAlpha[comp] = NULL;
+    m_puhTransformSkip[comp]              = NULL;
+    m_pcTrCoeff[comp]                     = NULL;
+#if ADAPTIVE_QP_SELECTION
+    m_pcArlCoeff[comp]                    = NULL;
+#endif
+    m_pcIPCMSample[comp]                  = NULL;
+    m_explicitRdpcmMode[comp]             = NULL;
+  }
+#if ADAPTIVE_QP_SELECTION
+  m_ArlCoeffIsAliasedAllocation = false;
+#endif
+  m_pbIPCMFlag         = NULL;
+
+  m_pCtuAboveLeft      = NULL;
+  m_pCtuAboveRight     = NULL;
+  m_pCtuAbove          = NULL;
+  m_pCtuLeft           = NULL;
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_apiMVPIdx[i]       = NULL;
+    m_apiMVPNum[i]       = NULL;
+  }
