@@ -98,3 +98,103 @@ TComDataCU::TComDataCU()
     m_apiMVPIdx[i]       = NULL;
     m_apiMVPNum[i]       = NULL;
   }
+
+  m_bDecSubCu          = false;
+}
+
+TComDataCU::~TComDataCU()
+{
+}
+
+Void TComDataCU::create( ChromaFormat chromaFormatIDC, UInt uiNumPartition, UInt uiWidth, UInt uiHeight, Bool bDecSubCu, Int unitSize
+#if ADAPTIVE_QP_SELECTION
+                        , TCoeff *pParentARLBuffer
+#endif
+                        )
+{
+  m_bDecSubCu = bDecSubCu;
+
+  m_pcPic              = NULL;
+  m_pcSlice            = NULL;
+  m_uiNumPartition     = uiNumPartition;
+  m_unitSize = unitSize;
+
+  if ( !bDecSubCu )
+  {
+    m_phQP               = (SChar*    )xMalloc(SChar,    uiNumPartition);
+    m_puhDepth           = (UChar*    )xMalloc(UChar,    uiNumPartition);
+    m_puhWidth           = (UChar*    )xMalloc(UChar,    uiNumPartition);
+    m_puhHeight          = (UChar*    )xMalloc(UChar,    uiNumPartition);
+
+    m_ChromaQpAdj        = new UChar[ uiNumPartition ];
+    m_skipFlag           = new Bool[ uiNumPartition ];
+    m_pePartSize         = new SChar[ uiNumPartition ];
+    memset( m_pePartSize, NUMBER_OF_PART_SIZES,uiNumPartition * sizeof( *m_pePartSize ) );
+    m_pePredMode         = new SChar[ uiNumPartition ];
+    m_CUTransquantBypass = new Bool[ uiNumPartition ];
+
+    m_pbMergeFlag        = (Bool*  )xMalloc(Bool,   uiNumPartition);
+    m_puhMergeIndex      = (UChar* )xMalloc(UChar,  uiNumPartition);
+
+    for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+    {
+      m_puhIntraDir[ch] = (UChar* )xMalloc(UChar,  uiNumPartition);
+    }
+    m_puhInterDir        = (UChar* )xMalloc(UChar,  uiNumPartition);
+
+    m_puhTrIdx           = (UChar* )xMalloc(UChar,  uiNumPartition);
+
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      const RefPicList rpl=RefPicList(i);
+      m_apiMVPIdx[rpl]       = new SChar[ uiNumPartition ];
+      m_apiMVPNum[rpl]       = new SChar[ uiNumPartition ];
+      memset( m_apiMVPIdx[rpl], -1,uiNumPartition * sizeof( SChar ) );
+    }
+
+    for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+    {
+      const ComponentID compID = ComponentID(comp);
+      const UInt chromaShift = getComponentScaleX(compID, chromaFormatIDC) + getComponentScaleY(compID, chromaFormatIDC);
+      const UInt totalSize   = (uiWidth * uiHeight) >> chromaShift;
+
+      m_crossComponentPredictionAlpha[compID] = (SChar* )xMalloc(SChar,  uiNumPartition);
+      m_puhTransformSkip[compID]              = (UChar* )xMalloc(UChar,  uiNumPartition);
+      m_explicitRdpcmMode[compID]             = (UChar* )xMalloc(UChar,  uiNumPartition);
+      m_puhCbf[compID]                        = (UChar* )xMalloc(UChar,  uiNumPartition);
+      m_pcTrCoeff[compID]                     = (TCoeff*)xMalloc(TCoeff, totalSize);
+      memset( m_pcTrCoeff[compID], 0, (totalSize * sizeof( TCoeff )) );
+
+#if ADAPTIVE_QP_SELECTION
+      if( pParentARLBuffer != 0 )
+      {
+        m_pcArlCoeff[compID] = pParentARLBuffer;
+        m_ArlCoeffIsAliasedAllocation = true;
+        pParentARLBuffer += totalSize;
+      }
+      else
+      {
+        m_pcArlCoeff[compID] = (TCoeff*)xMalloc(TCoeff, totalSize);
+        m_ArlCoeffIsAliasedAllocation = false;
+      }
+#endif
+      m_pcIPCMSample[compID] = (Pel*   )xMalloc(Pel , totalSize);
+    }
+
+    m_pbIPCMFlag         = (Bool*  )xMalloc(Bool, uiNumPartition);
+
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      m_acCUMvField[i].create( uiNumPartition );
+    }
+
+  }
+  else
+  {
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      m_acCUMvField[i].setNumPartition(uiNumPartition );
+    }
+  }
+
+  // create motion vector fields
