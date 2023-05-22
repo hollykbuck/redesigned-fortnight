@@ -198,3 +198,103 @@ Void TComDataCU::create( ChromaFormat chromaFormatIDC, UInt uiNumPartition, UInt
   }
 
   // create motion vector fields
+
+  m_pCtuAboveLeft      = NULL;
+  m_pCtuAboveRight     = NULL;
+  m_pCtuAbove          = NULL;
+  m_pCtuLeft           = NULL;
+}
+
+Void TComDataCU::destroy()
+{
+  // encoder-side buffer free
+  if ( !m_bDecSubCu )
+  {
+    if ( m_phQP )
+    {
+      xFree(m_phQP);
+      m_phQP = NULL;
+    }
+    if ( m_puhDepth )
+    {
+      xFree(m_puhDepth);
+      m_puhDepth = NULL;
+    }
+    if ( m_puhWidth )
+    {
+      xFree(m_puhWidth);
+      m_puhWidth = NULL;
+    }
+    if ( m_puhHeight )
+    {
+      xFree(m_puhHeight);
+      m_puhHeight = NULL;
+    }
+
+    if ( m_skipFlag )
+    {
+      delete[] m_skipFlag;
+      m_skipFlag = NULL;
+    }
+
+    if ( m_pePartSize )
+    {
+      delete[] m_pePartSize;
+      m_pePartSize = NULL;
+    }
+    if ( m_pePredMode )
+    {
+      delete[] m_pePredMode;
+      m_pePredMode = NULL;
+    }
+    if ( m_ChromaQpAdj )
+    {
+      delete[] m_ChromaQpAdj;
+      m_ChromaQpAdj = NULL;
+    }
+    if ( m_CUTransquantBypass )
+    {
+      delete[] m_CUTransquantBypass;
+      m_CUTransquantBypass = NULL;
+    }
+    if ( m_puhInterDir )
+    {
+      xFree(m_puhInterDir);
+      m_puhInterDir = NULL;
+    }
+    if ( m_pbMergeFlag )
+    {
+      xFree(m_pbMergeFlag);
+      m_pbMergeFlag = NULL;
+    }
+    if ( m_puhMergeIndex )
+    {
+      xFree(m_puhMergeIndex);
+      m_puhMergeIndex  = NULL;
+    }
+
+    for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+    {
+      xFree(m_puhIntraDir[ch]);
+      m_puhIntraDir[ch] = NULL;
+    }
+
+    if ( m_puhTrIdx )
+    {
+      xFree(m_puhTrIdx);
+      m_puhTrIdx = NULL;
+    }
+
+    for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+    {
+      if ( m_crossComponentPredictionAlpha[comp] )
+      {
+        xFree(m_crossComponentPredictionAlpha[comp]);
+        m_crossComponentPredictionAlpha[comp] = NULL;
+      }
+      if ( m_puhTransformSkip[comp] )
+      {
+        xFree(m_puhTransformSkip[comp]);
+        m_puhTransformSkip[comp] = NULL;
+      }
+      if ( m_puhCbf[comp] )
