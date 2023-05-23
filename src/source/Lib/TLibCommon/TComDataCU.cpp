@@ -398,3 +398,103 @@ Bool TComDataCU::isLastSubCUOfCtu(const UInt absPartIdx) const
   const UInt picHeight = sps.getPicHeightInLumaSamples();
   const UInt granularityWidth = sps.getMaxCUWidth();
 
+  const UInt cuPosX = getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[absPartIdx] ];
+  const UInt cuPosY = getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[absPartIdx] ];
+
+  return (((cuPosX+getWidth( absPartIdx))%granularityWidth==0||(cuPosX+getWidth( absPartIdx)==picWidth ))
+       && ((cuPosY+getHeight(absPartIdx))%granularityWidth==0||(cuPosY+getHeight(absPartIdx)==picHeight)));
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+// --------------------------------------------------------------------------------------------------------------------
+// Initialization
+// --------------------------------------------------------------------------------------------------------------------
+
+/**
+ Initialize top-level CU: create internal buffers and set initial values before encoding the CTU.
+ 
+ \param  pcPic       picture (TComPic) class pointer
+ \param  ctuRsAddr   CTU address in raster scan order
+ */
+Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
+{
+
+  const UInt maxCUWidth = pcPic->getPicSym()->getSPS().getMaxCUWidth();
+  const UInt maxCUHeight= pcPic->getPicSym()->getSPS().getMaxCUHeight();
+  m_pcPic              = pcPic;
+  m_pcSlice            = pcPic->getSlice(pcPic->getCurrSliceIdx());
+  m_ctuRsAddr          = ctuRsAddr;
+  m_uiCUPelX           = ( ctuRsAddr % pcPic->getFrameWidthInCtus() ) * maxCUWidth;
+  m_uiCUPelY           = ( ctuRsAddr / pcPic->getFrameWidthInCtus() ) * maxCUHeight;
+  m_absZIdxInCtu       = 0;
+  m_dTotalCost         = MAX_DOUBLE;
+  m_uiTotalDistortion  = 0;
+  m_uiTotalBits        = 0;
+  m_uiTotalBins        = 0;
+  m_uiNumPartition     = pcPic->getNumPartitionsInCtu();
+
+  memset( m_skipFlag          , false,                      m_uiNumPartition * sizeof( *m_skipFlag ) );
+
+  memset( m_pePartSize        , NUMBER_OF_PART_SIZES,       m_uiNumPartition * sizeof( *m_pePartSize ) );
+  memset( m_pePredMode        , NUMBER_OF_PREDICTION_MODES, m_uiNumPartition * sizeof( *m_pePredMode ) );
+  memset( m_CUTransquantBypass, false,                      m_uiNumPartition * sizeof( *m_CUTransquantBypass) );
+  memset( m_puhDepth          , 0,                          m_uiNumPartition * sizeof( *m_puhDepth ) );
+  memset( m_puhTrIdx          , 0,                          m_uiNumPartition * sizeof( *m_puhTrIdx ) );
+  memset( m_puhWidth          , maxCUWidth,                 m_uiNumPartition * sizeof( *m_puhWidth ) );
+  memset( m_puhHeight         , maxCUHeight,                m_uiNumPartition * sizeof( *m_puhHeight ) );
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    const RefPicList rpl=RefPicList(i);
+    memset( m_apiMVPIdx[rpl]  , -1,                         m_uiNumPartition * sizeof( *m_apiMVPIdx[rpl] ) );
+    memset( m_apiMVPNum[rpl]  , -1,                         m_uiNumPartition * sizeof( *m_apiMVPNum[rpl] ) );
+  }
+  memset( m_phQP              , getSlice()->getSliceQp(),   m_uiNumPartition * sizeof( *m_phQP ) );
+  memset( m_ChromaQpAdj       , 0,                          m_uiNumPartition * sizeof( *m_ChromaQpAdj ) );
+  for(UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    memset( m_crossComponentPredictionAlpha[comp] , 0,                     m_uiNumPartition * sizeof( *m_crossComponentPredictionAlpha[comp] ) );
+    memset( m_puhTransformSkip[comp]              , 0,                     m_uiNumPartition * sizeof( *m_puhTransformSkip[comp]) );
+    memset( m_puhCbf[comp]                        , 0,                     m_uiNumPartition * sizeof( *m_puhCbf[comp] ) );
+    memset( m_explicitRdpcmMode[comp]             , NUMBER_OF_RDPCM_MODES, m_uiNumPartition * sizeof( *m_explicitRdpcmMode[comp] ) );
+  }
+  memset( m_pbMergeFlag       , false,                    m_uiNumPartition * sizeof( *m_pbMergeFlag ) );
+  memset( m_puhMergeIndex     , 0,                        m_uiNumPartition * sizeof( *m_puhMergeIndex ) );
+  for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    memset( m_puhIntraDir[ch] , ((ch==0) ? DC_IDX : 0),   m_uiNumPartition * sizeof( *(m_puhIntraDir[ch]) ) );
+  }
+  memset( m_puhInterDir       , 0,                        m_uiNumPartition * sizeof( *m_puhInterDir ) );
+  memset( m_pbIPCMFlag        , false,                    m_uiNumPartition * sizeof( *m_pbIPCMFlag ) );
+
+  const UInt numCoeffY    = maxCUWidth*maxCUHeight;
+  for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    const UInt componentShift = m_pcPic->getComponentScaleX(ComponentID(comp)) + m_pcPic->getComponentScaleY(ComponentID(comp));
+    memset( m_pcTrCoeff[comp], 0, sizeof(TCoeff)* numCoeffY>>componentShift );
+#if ADAPTIVE_QP_SELECTION
+    memset( m_pcArlCoeff[comp], 0, sizeof(TCoeff)* numCoeffY>>componentShift );
+#endif
+  }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_acCUMvField[i].clearMvField();
+  }
+
+  // Setting neighbor CU
+  m_pCtuLeft        = NULL;
+  m_pCtuAbove       = NULL;
+  m_pCtuAboveLeft   = NULL;
+  m_pCtuAboveRight  = NULL;
+
+  UInt frameWidthInCtus = pcPic->getFrameWidthInCtus();
+  if ( m_ctuRsAddr % frameWidthInCtus )
+  {
+    m_pCtuLeft = pcPic->getCtu( m_ctuRsAddr - 1 );
+  }
+
+  if ( m_ctuRsAddr / frameWidthInCtus )
+  {
