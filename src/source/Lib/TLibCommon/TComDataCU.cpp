@@ -298,3 +298,103 @@ Void TComDataCU::destroy()
         m_puhTransformSkip[comp] = NULL;
       }
       if ( m_puhCbf[comp] )
+      {
+        xFree(m_puhCbf[comp]);
+        m_puhCbf[comp] = NULL;
+      }
+      if ( m_pcTrCoeff[comp] )
+      {
+        xFree(m_pcTrCoeff[comp]);
+        m_pcTrCoeff[comp] = NULL;
+      }
+      if ( m_explicitRdpcmMode[comp] )
+      {
+        xFree(m_explicitRdpcmMode[comp]);
+        m_explicitRdpcmMode[comp] = NULL;
+      }
+
+#if ADAPTIVE_QP_SELECTION
+      if (!m_ArlCoeffIsAliasedAllocation)
+      {
+        if ( m_pcArlCoeff[comp] )
+        {
+          xFree(m_pcArlCoeff[comp]);
+          m_pcArlCoeff[comp] = NULL;
+        }
+      }
+#endif
+
+      if ( m_pcIPCMSample[comp] )
+      {
+        xFree(m_pcIPCMSample[comp]);
+        m_pcIPCMSample[comp] = NULL;
+      }
+    }
+    if ( m_pbIPCMFlag )
+    {
+      xFree(m_pbIPCMFlag );
+      m_pbIPCMFlag = NULL;
+    }
+
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      const RefPicList rpl=RefPicList(i);
+      if ( m_apiMVPIdx[rpl] )
+      {
+        delete[] m_apiMVPIdx[rpl];
+        m_apiMVPIdx[rpl] = NULL;
+      }
+      if ( m_apiMVPNum[rpl] )
+      {
+        delete[] m_apiMVPNum[rpl];
+        m_apiMVPNum[rpl] = NULL;
+      }
+    }
+
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      const RefPicList rpl=RefPicList(i);
+      m_acCUMvField[rpl].destroy();
+    }
+  }
+
+  m_pcPic              = NULL;
+  m_pcSlice            = NULL;
+
+  m_pCtuAboveLeft      = NULL;
+  m_pCtuAboveRight     = NULL;
+  m_pCtuAbove          = NULL;
+  m_pCtuLeft           = NULL;
+
+}
+
+Bool TComDataCU::CUIsFromSameTile            ( const TComDataCU *pCU /* Can be NULL */) const
+{
+  return pCU!=NULL &&
+         pCU->getSlice() != NULL &&
+         m_pcPic->getPicSym()->getTileIdxMap( pCU->getCtuRsAddr() ) == m_pcPic->getPicSym()->getTileIdxMap(getCtuRsAddr());
+}
+
+Bool TComDataCU::CUIsFromSameSliceAndTile    ( const TComDataCU *pCU /* Can be NULL */) const
+{
+  return pCU!=NULL &&
+         pCU->getSlice() != NULL &&
+         pCU->getSlice()->getSliceCurStartCtuTsAddr() == getSlice()->getSliceCurStartCtuTsAddr() &&
+         m_pcPic->getPicSym()->getTileIdxMap( pCU->getCtuRsAddr() ) == m_pcPic->getPicSym()->getTileIdxMap(getCtuRsAddr())
+         ;
+}
+
+Bool TComDataCU::CUIsFromSameSliceTileAndWavefrontRow( const TComDataCU *pCU /* Can be NULL */) const
+{
+  return CUIsFromSameSliceAndTile(pCU)
+         && (!getSlice()->getPPS()->getEntropyCodingSyncEnabledFlag() || getPic()->getCtu(getCtuRsAddr())->getCUPelY() == getPic()->getCtu(pCU->getCtuRsAddr())->getCUPelY());
+}
+
+Bool TComDataCU::isLastSubCUOfCtu(const UInt absPartIdx) const
+{
+  const TComSPS &sps=*(getSlice()->getSPS());
+
+  const UInt picWidth = sps.getPicWidthInLumaSamples();
+  const UInt picHeight = sps.getPicHeightInLumaSamples();
+  const UInt granularityWidth = sps.getMaxCUWidth();
+
