@@ -498,3 +498,103 @@ Void TComDataCU::initCtu( TComPic* pcPic, UInt ctuRsAddr )
 
   if ( m_ctuRsAddr / frameWidthInCtus )
   {
+    m_pCtuAbove = pcPic->getCtu( m_ctuRsAddr - frameWidthInCtus );
+  }
+
+  if ( m_pCtuLeft && m_pCtuAbove )
+  {
+    m_pCtuAboveLeft = pcPic->getCtu( m_ctuRsAddr - frameWidthInCtus - 1 );
+  }
+
+  if ( m_pCtuAbove && ( (m_ctuRsAddr%frameWidthInCtus) < (frameWidthInCtus-1) )  )
+  {
+    m_pCtuAboveRight = pcPic->getCtu( m_ctuRsAddr - frameWidthInCtus + 1 );
+  }
+}
+
+
+/** Initialize prediction data with enabling sub-CTU-level delta QP.
+*   - set CU width and CU height according to depth
+*   - set qp value according to input qp
+*   - set last-coded qp value according to input last-coded qp
+*
+* \param  uiDepth            depth of the current CU
+* \param  qp                 qp for the current CU
+* \param  bTransquantBypass  true for transquant bypass
+*/
+Void TComDataCU::initEstData( const UInt uiDepth, const Int qp, const Bool bTransquantBypass )
+{
+  m_dTotalCost         = MAX_DOUBLE;
+  m_uiTotalDistortion  = 0;
+  m_uiTotalBits        = 0;
+  m_uiTotalBins        = 0;
+
+  const UChar uhWidth  = getSlice()->getSPS()->getMaxCUWidth()  >> uiDepth;
+  const UChar uhHeight = getSlice()->getSPS()->getMaxCUHeight() >> uiDepth;
+
+  for (UInt ui = 0; ui < m_uiNumPartition; ui++)
+  {
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      const RefPicList rpl=RefPicList(i);
+      m_apiMVPIdx[rpl][ui]  = -1;
+      m_apiMVPNum[rpl][ui]  = -1;
+    }
+    m_puhDepth  [ui]    = uiDepth;
+    m_puhWidth  [ui]    = uhWidth;
+    m_puhHeight [ui]    = uhHeight;
+    m_puhTrIdx  [ui]    = 0;
+    for(UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+    {
+      m_crossComponentPredictionAlpha[comp][ui] = 0;
+      m_puhTransformSkip             [comp][ui] = 0;
+      m_explicitRdpcmMode            [comp][ui] = NUMBER_OF_RDPCM_MODES;
+    }
+    m_skipFlag[ui]      = false;
+    m_pePartSize[ui]    = NUMBER_OF_PART_SIZES;
+    m_pePredMode[ui]    = NUMBER_OF_PREDICTION_MODES;
+    m_CUTransquantBypass[ui] = bTransquantBypass;
+    m_pbIPCMFlag[ui]    = 0;
+    m_phQP[ui]          = qp;
+    m_ChromaQpAdj[ui]   = 0;
+    m_pbMergeFlag[ui]   = 0;
+    m_puhMergeIndex[ui] = 0;
+
+    for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+    {
+      m_puhIntraDir[ch][ui] = ((ch==0) ? DC_IDX : 0);
+    }
+
+    m_puhInterDir[ui] = 0;
+    for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+    {
+      m_puhCbf[comp][ui] = 0;
+    }
+  }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_acCUMvField[i].clearMvField();
+  }
+
+  const UInt numCoeffY = uhWidth*uhHeight;
+
+  for (UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    const ComponentID component = ComponentID(comp);
+    const UInt numCoeff = numCoeffY >> (getPic()->getComponentScaleX(component) + getPic()->getComponentScaleY(component));
+    memset( m_pcTrCoeff[comp],    0, numCoeff * sizeof( TCoeff ) );
+#if ADAPTIVE_QP_SELECTION
+    memset( m_pcArlCoeff[comp],   0, numCoeff * sizeof( TCoeff ) );
+#endif
+    memset( m_pcIPCMSample[comp], 0, numCoeff * sizeof( Pel) );
+  }
+}
+
+
+// initialize Sub partition
+Void TComDataCU::initSubCU( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, Int qp )
+{
+  assert( uiPartUnitIdx<4 );
+
+  UInt uiPartOffset = ( pcCU->getTotalNumPart()>>2 )*uiPartUnitIdx;
