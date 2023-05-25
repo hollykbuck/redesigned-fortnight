@@ -598,3 +598,103 @@ Void TComDataCU::initSubCU( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDepth, 
   assert( uiPartUnitIdx<4 );
 
   UInt uiPartOffset = ( pcCU->getTotalNumPart()>>2 )*uiPartUnitIdx;
+
+  m_pcPic              = pcCU->getPic();
+  m_pcSlice            = pcCU->getSlice();
+  m_ctuRsAddr          = pcCU->getCtuRsAddr();
+  m_absZIdxInCtu       = pcCU->getZorderIdxInCtu() + uiPartOffset;
+
+  const UChar uhWidth  = getSlice()->getSPS()->getMaxCUWidth()  >> uiDepth;
+  const UChar uhHeight = getSlice()->getSPS()->getMaxCUHeight() >> uiDepth;
+
+  m_uiCUPelX           = pcCU->getCUPelX() + ( uhWidth )*( uiPartUnitIdx &  1 );
+  m_uiCUPelY           = pcCU->getCUPelY() + ( uhHeight)*( uiPartUnitIdx >> 1 );
+
+  m_dTotalCost         = MAX_DOUBLE;
+  m_uiTotalDistortion  = 0;
+  m_uiTotalBits        = 0;
+  m_uiTotalBins        = 0;
+  m_uiNumPartition     = pcCU->getTotalNumPart() >> 2;
+
+  Int iSizeInUchar = sizeof( UChar  ) * m_uiNumPartition;
+  Int iSizeInBool  = sizeof( Bool   ) * m_uiNumPartition;
+  Int sizeInChar = sizeof( SChar  ) * m_uiNumPartition;
+
+  memset( m_phQP,              qp,  sizeInChar );
+  memset( m_pbMergeFlag,        0, iSizeInBool  );
+  memset( m_puhMergeIndex,      0, iSizeInUchar );
+  for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    memset( m_puhIntraDir[ch],  ((ch==0) ? DC_IDX : 0), iSizeInUchar );
+  }
+
+  memset( m_puhInterDir,        0, iSizeInUchar );
+  memset( m_puhTrIdx,           0, iSizeInUchar );
+
+  for(UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    memset( m_crossComponentPredictionAlpha[comp], 0, iSizeInUchar );
+    memset( m_puhTransformSkip[comp],              0, iSizeInUchar );
+    memset( m_puhCbf[comp],                        0, iSizeInUchar );
+    memset( m_explicitRdpcmMode[comp],             NUMBER_OF_RDPCM_MODES, iSizeInUchar );
+  }
+
+  memset( m_puhDepth,     uiDepth, iSizeInUchar );
+  memset( m_puhWidth,          uhWidth,  iSizeInUchar );
+  memset( m_puhHeight,         uhHeight, iSizeInUchar );
+  memset( m_pbIPCMFlag,        0, iSizeInBool  );
+  for (UInt ui = 0; ui < m_uiNumPartition; ui++)
+  {
+    m_skipFlag[ui]   = false;
+    m_pePartSize[ui] = NUMBER_OF_PART_SIZES;
+    m_pePredMode[ui] = NUMBER_OF_PREDICTION_MODES;
+    m_CUTransquantBypass[ui] = false;
+    m_ChromaQpAdj[ui] = 0;
+
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      const RefPicList rpl=RefPicList(i);
+      m_apiMVPIdx[rpl][ui] = -1;
+      m_apiMVPNum[rpl][ui] = -1;
+    }
+  }
+
+  const UInt numCoeffY    = uhWidth*uhHeight;
+  for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+  {
+    const UInt componentShift = m_pcPic->getComponentScaleX(ComponentID(ch)) + m_pcPic->getComponentScaleY(ComponentID(ch));
+    memset( m_pcTrCoeff[ch],  0, sizeof(TCoeff)*(numCoeffY>>componentShift) );
+#if ADAPTIVE_QP_SELECTION
+    memset( m_pcArlCoeff[ch], 0, sizeof(TCoeff)*(numCoeffY>>componentShift) );
+#endif
+    memset( m_pcIPCMSample[ch], 0, sizeof(Pel)* (numCoeffY>>componentShift) );
+  }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    m_acCUMvField[i].clearMvField();
+  }
+
+  m_pCtuLeft        = pcCU->getCtuLeft();
+  m_pCtuAbove       = pcCU->getCtuAbove();
+  m_pCtuAboveLeft   = pcCU->getCtuAboveLeft();
+  m_pCtuAboveRight  = pcCU->getCtuAboveRight();
+}
+
+Void TComDataCU::setOutsideCUPart( UInt uiAbsPartIdx, UInt uiDepth )
+{
+  const UInt     uiNumPartition = m_uiNumPartition >> (uiDepth << 1);
+  const UInt     uiSizeInUchar  = sizeof( UChar  ) * uiNumPartition;
+  const TComSPS &sps            = *(getSlice()->getSPS());
+  const UChar    uhWidth        = sps.getMaxCUWidth()  >> uiDepth;
+  const UChar    uhHeight       = sps.getMaxCUHeight() >> uiDepth;
+  memset( m_puhDepth    + uiAbsPartIdx,     uiDepth,  uiSizeInUchar );
+  memset( m_puhWidth    + uiAbsPartIdx,     uhWidth,  uiSizeInUchar );
+  memset( m_puhHeight   + uiAbsPartIdx,     uhHeight, uiSizeInUchar );
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Copy
+// --------------------------------------------------------------------------------------------------------------------
+
+Void TComDataCU::copySubCU( TComDataCU* pcCU, UInt uiAbsPartIdx )
