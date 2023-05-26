@@ -698,3 +698,103 @@ Void TComDataCU::setOutsideCUPart( UInt uiAbsPartIdx, UInt uiDepth )
 // --------------------------------------------------------------------------------------------------------------------
 
 Void TComDataCU::copySubCU( TComDataCU* pcCU, UInt uiAbsPartIdx )
+{
+  UInt uiPart = uiAbsPartIdx;
+
+  m_pcPic              = pcCU->getPic();
+  m_pcSlice            = pcCU->getSlice();
+  m_ctuRsAddr          = pcCU->getCtuRsAddr();
+  m_absZIdxInCtu       = uiAbsPartIdx;
+
+  m_uiCUPelX           = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  m_uiCUPelY           = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ];
+
+  m_skipFlag=pcCU->getSkipFlag()          + uiPart;
+
+  m_phQP=pcCU->getQP()                    + uiPart;
+  m_ChromaQpAdj = pcCU->getChromaQpAdj()  + uiPart;
+  m_pePartSize = pcCU->getPartitionSize() + uiPart;
+  m_pePredMode=pcCU->getPredictionMode()  + uiPart;
+  m_CUTransquantBypass  = pcCU->getCUTransquantBypass()+uiPart;
+
+  m_pbMergeFlag         = pcCU->getMergeFlag()        + uiPart;
+  m_puhMergeIndex       = pcCU->getMergeIndex()       + uiPart;
+
+  for (UInt ch=0; ch<MAX_NUM_CHANNEL_TYPE; ch++)
+  {
+    m_puhIntraDir[ch]   = pcCU->getIntraDir(ChannelType(ch)) + uiPart;
+  }
+
+  m_puhInterDir         = pcCU->getInterDir()         + uiPart;
+  m_puhTrIdx            = pcCU->getTransformIdx()     + uiPart;
+
+  for(UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    m_crossComponentPredictionAlpha[comp] = pcCU->getCrossComponentPredictionAlpha(ComponentID(comp)) + uiPart;
+    m_puhTransformSkip[comp]              = pcCU->getTransformSkip(ComponentID(comp))                 + uiPart;
+    m_puhCbf[comp]                        = pcCU->getCbf(ComponentID(comp))                           + uiPart;
+    m_explicitRdpcmMode[comp]             = pcCU->getExplicitRdpcmMode(ComponentID(comp))             + uiPart;
+  }
+
+  m_puhDepth=pcCU->getDepth()                     + uiPart;
+  m_puhWidth=pcCU->getWidth()                     + uiPart;
+  m_puhHeight=pcCU->getHeight()                   + uiPart;
+
+  m_pbIPCMFlag         = pcCU->getIPCMFlag()        + uiPart;
+
+  m_pCtuAboveLeft      = pcCU->getCtuAboveLeft();
+  m_pCtuAboveRight     = pcCU->getCtuAboveRight();
+  m_pCtuAbove          = pcCU->getCtuAbove();
+  m_pCtuLeft           = pcCU->getCtuLeft();
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    const RefPicList rpl=RefPicList(i);
+    m_apiMVPIdx[rpl]=pcCU->getMVPIdx(rpl)  + uiPart;
+    m_apiMVPNum[rpl]=pcCU->getMVPNum(rpl)  + uiPart;
+  }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    const RefPicList rpl=RefPicList(i);
+    m_acCUMvField[rpl].linkToWithOffset( pcCU->getCUMvField(rpl), uiPart );
+  }
+
+  UInt uiMaxCuWidth=pcCU->getSlice()->getSPS()->getMaxCUWidth();
+  UInt uiMaxCuHeight=pcCU->getSlice()->getSPS()->getMaxCUHeight();
+
+  UInt uiCoffOffset = uiMaxCuWidth*uiMaxCuHeight*uiAbsPartIdx/pcCU->getPic()->getNumPartitionsInCtu();
+
+  for (UInt ch=0; ch<MAX_NUM_COMPONENT; ch++)
+  {
+    const ComponentID component = ComponentID(ch);
+    const UInt componentShift   = m_pcPic->getComponentScaleX(component) + m_pcPic->getComponentScaleY(component);
+    const UInt offset           = uiCoffOffset >> componentShift;
+    m_pcTrCoeff[ch] = pcCU->getCoeff(component) + offset;
+#if ADAPTIVE_QP_SELECTION
+    m_pcArlCoeff[ch] = pcCU->getArlCoeff(component) + offset;
+#endif
+    m_pcIPCMSample[ch] = pcCU->getPCMSample(component) + offset;
+  }
+}
+
+// Copy inter prediction info from the biggest CU
+Void TComDataCU::copyInterPredInfoFrom    ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefPicList )
+{
+  m_pcPic              = pcCU->getPic();
+  m_pcSlice            = pcCU->getSlice();
+  m_ctuRsAddr          = pcCU->getCtuRsAddr();
+  m_absZIdxInCtu       = uiAbsPartIdx;
+
+  Int iRastPartIdx     = g_auiZscanToRaster[uiAbsPartIdx];
+  m_uiCUPelX           = pcCU->getCUPelX() + m_pcPic->getMinCUWidth ()*( iRastPartIdx % m_pcPic->getNumPartInCtuWidth() );
+  m_uiCUPelY           = pcCU->getCUPelY() + m_pcPic->getMinCUHeight()*( iRastPartIdx / m_pcPic->getNumPartInCtuWidth() );
+
+  m_pCtuAboveLeft      = pcCU->getCtuAboveLeft();
+  m_pCtuAboveRight     = pcCU->getCtuAboveRight();
+  m_pCtuAbove          = pcCU->getCtuAbove();
+  m_pCtuLeft           = pcCU->getCtuLeft();
+
+  m_skipFlag           = pcCU->getSkipFlag ()             + uiAbsPartIdx;
+
+  m_pePartSize         = pcCU->getPartitionSize ()        + uiAbsPartIdx;
