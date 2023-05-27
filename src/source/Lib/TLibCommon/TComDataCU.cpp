@@ -898,3 +898,103 @@ Void TComDataCU::copyPartFrom( TComDataCU* pcCU, UInt uiPartUnitIdx, UInt uiDept
     memcpy( m_pcIPCMSample[ch] + offset, pcCU->getPCMSample(component), sizeof(Pel)*(numCoeffY>>componentShift) );
   }
 
+  m_uiTotalBins += pcCU->getTotalBins();
+}
+
+// Copy current predicted part to a CU in picture.
+// It is used to predict for next part
+Void TComDataCU::copyToPic( UChar uhDepth )
+{
+  TComDataCU* pCtu = m_pcPic->getCtu( m_ctuRsAddr );
+  const UInt numValidComp=pCtu->getPic()->getNumberValidComponents();
+  const UInt numValidChan=pCtu->getPic()->getChromaFormat()==CHROMA_400 ? 1:2;
+
+  pCtu->getTotalCost()       = m_dTotalCost;
+  pCtu->getTotalDistortion() = m_uiTotalDistortion;
+  pCtu->getTotalBits()       = m_uiTotalBits;
+
+  Int iSizeInUchar  = sizeof( UChar ) * m_uiNumPartition;
+  Int iSizeInBool   = sizeof( Bool  ) * m_uiNumPartition;
+  Int sizeInChar  = sizeof( SChar ) * m_uiNumPartition;
+
+  memcpy( pCtu->getSkipFlag() + m_absZIdxInCtu, m_skipFlag, sizeof( *m_skipFlag ) * m_uiNumPartition );
+
+  memcpy( pCtu->getQP() + m_absZIdxInCtu, m_phQP, sizeInChar  );
+
+  memcpy( pCtu->getPartitionSize()  + m_absZIdxInCtu, m_pePartSize, sizeof( *m_pePartSize ) * m_uiNumPartition );
+  memcpy( pCtu->getPredictionMode() + m_absZIdxInCtu, m_pePredMode, sizeof( *m_pePredMode ) * m_uiNumPartition );
+  memcpy( pCtu->getChromaQpAdj() + m_absZIdxInCtu, m_ChromaQpAdj, sizeof( *m_ChromaQpAdj ) * m_uiNumPartition );
+  memcpy( pCtu->getCUTransquantBypass()+ m_absZIdxInCtu, m_CUTransquantBypass, sizeof( *m_CUTransquantBypass ) * m_uiNumPartition );
+  memcpy( pCtu->getMergeFlag()         + m_absZIdxInCtu, m_pbMergeFlag,         iSizeInBool  );
+  memcpy( pCtu->getMergeIndex()        + m_absZIdxInCtu, m_puhMergeIndex,       iSizeInUchar );
+  for (UInt ch=0; ch<numValidChan; ch++)
+  {
+    memcpy( pCtu->getIntraDir(ChannelType(ch)) + m_absZIdxInCtu, m_puhIntraDir[ch], iSizeInUchar);
+  }
+
+  memcpy( pCtu->getInterDir()          + m_absZIdxInCtu, m_puhInterDir,         iSizeInUchar );
+  memcpy( pCtu->getTransformIdx()      + m_absZIdxInCtu, m_puhTrIdx,            iSizeInUchar );
+
+  for(UInt comp=0; comp<numValidComp; comp++)
+  {
+    memcpy( pCtu->getCrossComponentPredictionAlpha(ComponentID(comp)) + m_absZIdxInCtu, m_crossComponentPredictionAlpha[comp], iSizeInUchar );
+    memcpy( pCtu->getTransformSkip(ComponentID(comp))                 + m_absZIdxInCtu, m_puhTransformSkip[comp],              iSizeInUchar );
+    memcpy( pCtu->getCbf(ComponentID(comp))                           + m_absZIdxInCtu, m_puhCbf[comp],                        iSizeInUchar );
+    memcpy( pCtu->getExplicitRdpcmMode(ComponentID(comp))             + m_absZIdxInCtu, m_explicitRdpcmMode[comp],             iSizeInUchar );
+  }
+
+  memcpy( pCtu->getDepth()  + m_absZIdxInCtu, m_puhDepth,  iSizeInUchar );
+  memcpy( pCtu->getWidth()  + m_absZIdxInCtu, m_puhWidth,  iSizeInUchar );
+  memcpy( pCtu->getHeight() + m_absZIdxInCtu, m_puhHeight, iSizeInUchar );
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    const RefPicList rpl=RefPicList(i);
+    memcpy( pCtu->getMVPIdx(rpl) + m_absZIdxInCtu, m_apiMVPIdx[rpl], iSizeInUchar );
+    memcpy( pCtu->getMVPNum(rpl) + m_absZIdxInCtu, m_apiMVPNum[rpl], iSizeInUchar );
+  }
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    const RefPicList rpl=RefPicList(i);
+    m_acCUMvField[rpl].copyTo( pCtu->getCUMvField( rpl ), m_absZIdxInCtu );
+  }
+
+  memcpy( pCtu->getIPCMFlag() + m_absZIdxInCtu, m_pbIPCMFlag,         iSizeInBool  );
+
+  const UInt numCoeffY    = (pCtu->getSlice()->getSPS()->getMaxCUWidth()*pCtu->getSlice()->getSPS()->getMaxCUHeight())>>(uhDepth<<1);
+  const UInt offsetY      = m_absZIdxInCtu*m_pcPic->getMinCUWidth()*m_pcPic->getMinCUHeight();
+  for (UInt comp=0; comp<numValidComp; comp++)
+  {
+    const ComponentID component = ComponentID(comp);
+    const UInt componentShift   = m_pcPic->getComponentScaleX(component) + m_pcPic->getComponentScaleY(component);
+    memcpy( pCtu->getCoeff(component)   + (offsetY>>componentShift), m_pcTrCoeff[component], sizeof(TCoeff)*(numCoeffY>>componentShift) );
+#if ADAPTIVE_QP_SELECTION
+    memcpy( pCtu->getArlCoeff(component) + (offsetY>>componentShift), m_pcArlCoeff[component], sizeof(TCoeff)*(numCoeffY>>componentShift) );
+#endif
+    memcpy( pCtu->getPCMSample(component) + (offsetY>>componentShift), m_pcIPCMSample[component], sizeof(Pel)*(numCoeffY>>componentShift) );
+  }
+
+  pCtu->getTotalBins() = m_uiTotalBins;
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Other public functions
+// --------------------------------------------------------------------------------------------------------------------
+
+const TComDataCU* TComDataCU::getPULeft( UInt& uiLPartUnitIdx,
+                                         UInt uiCurrPartUnitIdx,
+                                         Bool bEnforceSliceRestriction,
+                                         Bool bEnforceTileRestriction ) const
+{
+  UInt uiAbsPartIdx       = g_auiZscanToRaster[uiCurrPartUnitIdx];
+  UInt uiAbsZorderCUIdx   = g_auiZscanToRaster[m_absZIdxInCtu];
+  const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
+
+  if ( !RasterAddress::isZeroCol( uiAbsPartIdx, numPartInCtuWidth ) )
+  {
+    uiLPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx - 1 ];
+    if ( RasterAddress::isEqualCol( uiAbsPartIdx, uiAbsZorderCUIdx, numPartInCtuWidth ) )
+    {
+      return m_pcPic->getCtu( getCtuRsAddr() );
+    }
