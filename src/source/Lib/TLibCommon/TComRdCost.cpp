@@ -1698,3 +1698,103 @@ Distortion TComRdCost::xCalcHADs8x8( const Pel *piOrg, const Pel *piCur, Int iSt
     m2[j][0] = m1[j][0] + m1[j][1];
     m2[j][1] = m1[j][0] - m1[j][1];
     m2[j][2] = m1[j][2] + m1[j][3];
+    m2[j][3] = m1[j][2] - m1[j][3];
+    m2[j][4] = m1[j][4] + m1[j][5];
+    m2[j][5] = m1[j][4] - m1[j][5];
+    m2[j][6] = m1[j][6] + m1[j][7];
+    m2[j][7] = m1[j][6] - m1[j][7];
+  }
+
+  //vertical
+  for (i=0; i < 8; i++)
+  {
+    m3[0][i] = m2[0][i] + m2[4][i];
+    m3[1][i] = m2[1][i] + m2[5][i];
+    m3[2][i] = m2[2][i] + m2[6][i];
+    m3[3][i] = m2[3][i] + m2[7][i];
+    m3[4][i] = m2[0][i] - m2[4][i];
+    m3[5][i] = m2[1][i] - m2[5][i];
+    m3[6][i] = m2[2][i] - m2[6][i];
+    m3[7][i] = m2[3][i] - m2[7][i];
+
+    m1[0][i] = m3[0][i] + m3[2][i];
+    m1[1][i] = m3[1][i] + m3[3][i];
+    m1[2][i] = m3[0][i] - m3[2][i];
+    m1[3][i] = m3[1][i] - m3[3][i];
+    m1[4][i] = m3[4][i] + m3[6][i];
+    m1[5][i] = m3[5][i] + m3[7][i];
+    m1[6][i] = m3[4][i] - m3[6][i];
+    m1[7][i] = m3[5][i] - m3[7][i];
+
+    m2[0][i] = m1[0][i] + m1[1][i];
+    m2[1][i] = m1[0][i] - m1[1][i];
+    m2[2][i] = m1[2][i] + m1[3][i];
+    m2[3][i] = m1[2][i] - m1[3][i];
+    m2[4][i] = m1[4][i] + m1[5][i];
+    m2[5][i] = m1[4][i] - m1[5][i];
+    m2[6][i] = m1[6][i] + m1[7][i];
+    m2[7][i] = m1[6][i] - m1[7][i];
+  }
+
+  for (i = 0; i < 8; i++)
+  {
+    for (j = 0; j < 8; j++)
+    {
+      sad += abs(m2[i][j]);
+    }
+  }
+
+  sad=((sad+2)>>2);
+
+  return sad;
+}
+
+
+Distortion TComRdCost::xGetHADs( DistParam* pcDtParam )
+{
+  if ( pcDtParam->bApplyWeight )
+  {
+    return TComRdCostWeightPrediction::xGetHADsw( pcDtParam );
+  }
+  const Pel* piOrg      = pcDtParam->pOrg;
+  const Pel* piCur      = pcDtParam->pCur;
+  const Int  iRows      = pcDtParam->iRows;
+  const Int  iCols      = pcDtParam->iCols;
+  const Int  iStrideCur = pcDtParam->iStrideCur;
+  const Int  iStrideOrg = pcDtParam->iStrideOrg;
+  const Int  iStep      = pcDtParam->iStep;
+
+  Int  x, y;
+
+  Distortion uiSum = 0;
+
+  if( ( iRows % 8 == 0) && (iCols % 8 == 0) )
+  {
+    Int  iOffsetOrg = iStrideOrg<<3;
+    Int  iOffsetCur = iStrideCur<<3;
+    for ( y=0; y<iRows; y+= 8 )
+    {
+      for ( x=0; x<iCols; x+= 8 )
+      {
+        uiSum += xCalcHADs8x8( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep
+#if VECTOR_CODING__DISTORTION_CALCULATIONS && (RExt__HIGH_BIT_DEPTH_SUPPORT==0)
+          , pcDtParam->bitDepth
+#endif
+                            );
+      }
+      piOrg += iOffsetOrg;
+      piCur += iOffsetCur;
+    }
+  }
+  else if( ( iRows % 4 == 0) && (iCols % 4 == 0) )
+  {
+    Int  iOffsetOrg = iStrideOrg<<2;
+    Int  iOffsetCur = iStrideCur<<2;
+
+    for ( y=0; y<iRows; y+= 4 )
+    {
+      for ( x=0; x<iCols; x+= 4 )
+      {
+        uiSum += xCalcHADs4x4( &piOrg[x], &piCur[x*iStep], iStrideOrg, iStrideCur, iStep );
+      }
+      piOrg += iOffsetOrg;
