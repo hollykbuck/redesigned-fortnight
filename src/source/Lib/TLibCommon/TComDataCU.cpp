@@ -998,3 +998,103 @@ const TComDataCU* TComDataCU::getPULeft( UInt& uiLPartUnitIdx,
     {
       return m_pcPic->getCtu( getCtuRsAddr() );
     }
+    else
+    {
+      uiLPartUnitIdx -= m_absZIdxInCtu;
+      return this;
+    }
+  }
+
+  uiLPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx + numPartInCtuWidth - 1 ];
+  if ( (bEnforceSliceRestriction && !CUIsFromSameSlice(m_pCtuLeft)) || (bEnforceTileRestriction && !CUIsFromSameTile(m_pCtuLeft)) )
+  {
+    return NULL;
+  }
+  return m_pCtuLeft;
+}
+
+
+const TComDataCU* TComDataCU::getPUAbove( UInt& uiAPartUnitIdx,
+                                          UInt uiCurrPartUnitIdx,
+                                          Bool bEnforceSliceRestriction,
+                                          Bool planarAtCtuBoundary,
+                                          Bool bEnforceTileRestriction ) const
+{
+  UInt uiAbsPartIdx       = g_auiZscanToRaster[uiCurrPartUnitIdx];
+  UInt uiAbsZorderCUIdx   = g_auiZscanToRaster[m_absZIdxInCtu];
+  const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
+
+  if ( !RasterAddress::isZeroRow( uiAbsPartIdx, numPartInCtuWidth ) )
+  {
+    uiAPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx - numPartInCtuWidth ];
+    if ( RasterAddress::isEqualRow( uiAbsPartIdx, uiAbsZorderCUIdx, numPartInCtuWidth ) )
+    {
+      return m_pcPic->getCtu( getCtuRsAddr() );
+    }
+    else
+    {
+      uiAPartUnitIdx -= m_absZIdxInCtu;
+      return this;
+    }
+  }
+
+  if(planarAtCtuBoundary)
+  {
+    return NULL;
+  }
+
+  uiAPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx + m_pcPic->getNumPartitionsInCtu() - numPartInCtuWidth ];
+
+  if ( (bEnforceSliceRestriction && !CUIsFromSameSlice(m_pCtuAbove)) || (bEnforceTileRestriction && !CUIsFromSameTile(m_pCtuAbove)) )
+  {
+    return NULL;
+  }
+  return m_pCtuAbove;
+}
+
+const TComDataCU* TComDataCU::getPUAboveLeft( UInt& uiALPartUnitIdx, UInt uiCurrPartUnitIdx, Bool bEnforceSliceRestriction ) const
+{
+  UInt uiAbsPartIdx       = g_auiZscanToRaster[uiCurrPartUnitIdx];
+  UInt uiAbsZorderCUIdx   = g_auiZscanToRaster[m_absZIdxInCtu];
+  const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
+
+  if ( !RasterAddress::isZeroCol( uiAbsPartIdx, numPartInCtuWidth ) )
+  {
+    if ( !RasterAddress::isZeroRow( uiAbsPartIdx, numPartInCtuWidth ) )
+    {
+      uiALPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx - numPartInCtuWidth - 1 ];
+      if ( RasterAddress::isEqualRowOrCol( uiAbsPartIdx, uiAbsZorderCUIdx, numPartInCtuWidth ) )
+      {
+        return m_pcPic->getCtu( getCtuRsAddr() );
+      }
+      else
+      {
+        uiALPartUnitIdx -= m_absZIdxInCtu;
+        return this;
+      }
+    }
+    uiALPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx + getPic()->getNumPartitionsInCtu() - numPartInCtuWidth - 1 ];
+    if ( bEnforceSliceRestriction && !CUIsFromSameSliceAndTile(m_pCtuAbove) )
+    {
+      return NULL;
+    }
+    return m_pCtuAbove;
+  }
+
+  if ( !RasterAddress::isZeroRow( uiAbsPartIdx, numPartInCtuWidth ) )
+  {
+    uiALPartUnitIdx = g_auiRasterToZscan[ uiAbsPartIdx - 1 ];
+    if ( bEnforceSliceRestriction && !CUIsFromSameSliceAndTile(m_pCtuLeft) )
+    {
+      return NULL;
+    }
+    return m_pCtuLeft;
+  }
+
+  uiALPartUnitIdx = g_auiRasterToZscan[ m_pcPic->getNumPartitionsInCtu() - 1 ];
+  if ( bEnforceSliceRestriction && !CUIsFromSameSliceAndTile(m_pCtuAboveLeft) )
+  {
+    return NULL;
+  }
+  return m_pCtuAboveLeft;
+}
