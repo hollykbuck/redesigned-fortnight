@@ -98,3 +98,49 @@ private:
   TEncSbac                m_lastSliceSegmentEndContextState;    ///< context storage for state at the end of the previous slice-segment (used for dependent slices only).
   TEncSbac                m_entropyCodingSyncContextState;      ///< context storate for state of contexts at the wavefront/WPP/entropy-coding-sync second CTU of tile-row
   SliceType               m_encCABACTableIdx;
+  Int                     m_gopID;
+
+  Double   calculateLambda( const TComSlice* pSlice, const Int GOPid, const Int depth, const Double refQP, const Double dQP, Int &iQP );
+  Void     setUpLambda(TComSlice* slice, const Double dLambda, Int iQP);
+  Void     calculateBoundingCtuTsAddrForSlice(UInt &startCtuTSAddrSlice, UInt &boundingCtuTSAddrSlice, Bool &haveReachedTileBoundary, TComPic* pcPic, const Int sliceMode, const Int sliceArgument);
+
+public:
+  TEncSlice();
+  virtual ~TEncSlice();
+
+  Void    create              ( Int iWidth, Int iHeight, ChromaFormat chromaFormat, UInt iMaxCUWidth, UInt iMaxCUHeight, UChar uhTotalDepth );
+  Void    destroy             ();
+  Void    init                ( TEncTop* pcEncTop );
+  Void    resetEncoderDecisions() { m_encCABACTableIdx = I_SLICE; }
+
+  /// preparation of slice encoding (reference marking, QP and lambda)
+  Void    initEncSlice        ( TComPic*  pcPic, const Int pocLast, const Int pocCurr,
+                                const Int iGOPid,   TComSlice*& rpcSlice, const Bool isField );
+  Void    resetQP             ( TComPic* pic, Int sliceQP, Double lambda );
+  Void    setGopID( Int iGopID )      { m_gopID = iGopID; }
+  Int     getGopID() const            { return m_gopID;   }
+  Void    updateLambda(TComSlice* pSlice, Double dQP);
+
+  // compress and encode slice
+  Void    precompressSlice    ( TComPic* pcPic                                     );      ///< precompress slice for multi-loop slice-level QP opt.
+  Void    compressSlice       ( TComPic* pcPic, const Bool bCompressEntireSlice, const Bool bFastDeltaQP );      ///< analysis stage of slice
+  Void    calCostSliceI       ( TComPic* pcPic );
+  Void    encodeSlice         ( TComPic* pcPic, TComOutputBitstream* pcSubstreams, UInt &numBinsCoded );
+
+  // misc. functions
+  Void    setSearchRange      ( TComSlice* pcSlice  );                                  ///< set ME range adaptively
+
+  TEncCu*        getCUEncoder() { return m_pcCuEncoder; }                        ///< CU encoder
+  Void    xDetermineStartAndBoundingCtuTsAddr  ( UInt& startCtuTsAddr, UInt& boundingCtuTsAddr, TComPic* pcPic );
+  UInt    getSliceIdx()         { return m_uiSliceIdx;                    }
+  Void    setSliceIdx(UInt i)   { m_uiSliceIdx = i;                       }
+
+  SliceType getEncCABACTableIdx() const           { return m_encCABACTableIdx;        }
+
+private:
+  Double  xGetQPValueAccordingToLambda ( Double lambda );
+};
+
+//! \}
+
+#endif // __TENCSLICE__
