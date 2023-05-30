@@ -1198,3 +1198,103 @@ const TComDataCU* TComDataCU::getPUAboveRight(UInt&  uiARPartUnitIdx, UInt uiCur
   return m_pCtuAboveRight;
 }
 
+/** Get left QpMinCu
+*\param   uiLPartUnitIdx
+*\param   uiCurrAbsIdxInCtu
+*\returns TComDataCU*   point of TComDataCU of left QpMinCu
+*/
+const TComDataCU* TComDataCU::getQpMinCuLeft( UInt& uiLPartUnitIdx, UInt uiCurrAbsIdxInCtu ) const
+{
+  const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
+  const UInt maxCUDepth        = getSlice()->getSPS()->getMaxTotalCUDepth();
+  const UInt maxCuDQPDepth     = getSlice()->getPPS()->getMaxCuDQPDepth();
+  const UInt doubleDepthDifference = ((maxCUDepth - maxCuDQPDepth)<<1);
+  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>doubleDepthDifference)<<doubleDepthDifference;
+  UInt absRorderQpMinCUIdx = g_auiZscanToRaster[absZorderQpMinCUIdx];
+
+  // check for left CTU boundary
+  if ( RasterAddress::isZeroCol(absRorderQpMinCUIdx, numPartInCtuWidth) )
+  {
+    return NULL;
+  }
+
+  // get index of left-CU relative to top-left corner of current quantization group
+  uiLPartUnitIdx = g_auiRasterToZscan[absRorderQpMinCUIdx - 1];
+
+  // return pointer to current CTU
+  return m_pcPic->getCtu( getCtuRsAddr() );
+}
+
+/** Get Above QpMinCu
+*\param   uiAPartUnitIdx
+*\param   uiCurrAbsIdxInCtu
+*\returns TComDataCU*   point of TComDataCU of above QpMinCu
+*/
+const TComDataCU* TComDataCU::getQpMinCuAbove( UInt& uiAPartUnitIdx, UInt uiCurrAbsIdxInCtu ) const
+{
+  const UInt numPartInCtuWidth = m_pcPic->getNumPartInCtuWidth();
+  const UInt maxCUDepth        = getSlice()->getSPS()->getMaxTotalCUDepth();
+  const UInt maxCuDQPDepth     = getSlice()->getPPS()->getMaxCuDQPDepth();
+  const UInt doubleDepthDifference = ((maxCUDepth - maxCuDQPDepth)<<1);
+  UInt absZorderQpMinCUIdx = (uiCurrAbsIdxInCtu>>doubleDepthDifference)<<doubleDepthDifference;
+  UInt absRorderQpMinCUIdx = g_auiZscanToRaster[absZorderQpMinCUIdx];
+
+  // check for top CTU boundary
+  if ( RasterAddress::isZeroRow( absRorderQpMinCUIdx, numPartInCtuWidth) )
+  {
+    return NULL;
+  }
+
+  // get index of top-CU relative to top-left corner of current quantization group
+  uiAPartUnitIdx = g_auiRasterToZscan[absRorderQpMinCUIdx - numPartInCtuWidth];
+
+  // return pointer to current CTU
+  return m_pcPic->getCtu( getCtuRsAddr() );
+}
+
+
+
+/** Get reference QP from left QpMinCu or latest coded QP
+*\param   uiCurrAbsIdxInCtu
+*\returns SChar   reference QP value
+*/
+SChar TComDataCU::getRefQP( UInt uiCurrAbsIdxInCtu ) const
+{
+  UInt lPartIdx = MAX_UINT;
+  UInt aPartIdx = MAX_UINT;
+  const TComDataCU* cULeft  = getQpMinCuLeft ( lPartIdx, m_absZIdxInCtu + uiCurrAbsIdxInCtu );
+  const TComDataCU* cUAbove = getQpMinCuAbove( aPartIdx, m_absZIdxInCtu + uiCurrAbsIdxInCtu );
+  return (((cULeft? cULeft->getQP( lPartIdx ): getLastCodedQP( uiCurrAbsIdxInCtu )) + (cUAbove? cUAbove->getQP( aPartIdx ): getLastCodedQP( uiCurrAbsIdxInCtu )) + 1) >> 1);
+}
+
+Int TComDataCU::getLastValidPartIdx( Int iAbsPartIdx ) const
+{
+  Int iLastValidPartIdx = iAbsPartIdx-1;
+  while ( iLastValidPartIdx >= 0
+       && getPredictionMode( iLastValidPartIdx ) == NUMBER_OF_PREDICTION_MODES )
+  {
+    UInt uiDepth = getDepth( iLastValidPartIdx );
+    iLastValidPartIdx -= m_uiNumPartition>>(uiDepth<<1);
+  }
+  return iLastValidPartIdx;
+}
+
+SChar TComDataCU::getLastCodedQP( UInt uiAbsPartIdx ) const
+{
+  UInt uiQUPartIdxMask = ~((1<<((getSlice()->getSPS()->getMaxTotalCUDepth() - getSlice()->getPPS()->getMaxCuDQPDepth())<<1))-1);
+  Int iLastValidPartIdx = getLastValidPartIdx( uiAbsPartIdx&uiQUPartIdxMask ); // A idx will be invalid if it is off the right or bottom edge of the picture.
+  // If this CU is in the first CTU of the slice and there is no valid part before this one, use slice QP
+  if ( getPic()->getPicSym()->getCtuTsToRsAddrMap(getSlice()->getSliceCurStartCtuTsAddr()) == getCtuRsAddr() && Int(getZorderIdxInCtu())+iLastValidPartIdx<0)
+  {
+    return getSlice()->getSliceQp();
+  }
+  else if ( iLastValidPartIdx >= 0 )
+  {
+    // If there is a valid part within the current Sub-CU, use it
+    return getQP( iLastValidPartIdx );
+  }
+  else
+  {
+    if ( getZorderIdxInCtu() > 0 )
+    {
+      // If this wasn't the first sub-cu within the Ctu, explore the CTU itself.
