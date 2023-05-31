@@ -1298,3 +1298,103 @@ SChar TComDataCU::getLastCodedQP( UInt uiAbsPartIdx ) const
     if ( getZorderIdxInCtu() > 0 )
     {
       // If this wasn't the first sub-cu within the Ctu, explore the CTU itself.
+      return getPic()->getCtu( getCtuRsAddr() )->getLastCodedQP( getZorderIdxInCtu() ); // TODO - remove this recursion
+    }
+    else if ( getPic()->getPicSym()->getCtuRsToTsAddrMap(getCtuRsAddr()) > 0
+      && CUIsFromSameSliceTileAndWavefrontRow(getPic()->getCtu(getPic()->getPicSym()->getCtuTsToRsAddrMap(getPic()->getPicSym()->getCtuRsToTsAddrMap(getCtuRsAddr())-1))) )
+    {
+      // If this isn't the first Ctu (how can it be due to the first 'if'?), and the previous Ctu is from the same tile, examine the previous Ctu.
+      return getPic()->getCtu( getPic()->getPicSym()->getCtuTsToRsAddrMap(getPic()->getPicSym()->getCtuRsToTsAddrMap(getCtuRsAddr())-1) )->getLastCodedQP( getPic()->getNumPartitionsInCtu() );  // TODO - remove this recursion
+    }
+    else
+    {
+      // No other options available - use the slice-level QP.
+      return getSlice()->getSliceQp();
+    }
+  }
+}
+
+
+/** Check whether the CU is coded in lossless coding mode.
+ * \param   absPartIdx
+ * \returns true if the CU is coded in lossless coding mode; false if otherwise
+ */
+Bool TComDataCU::isLosslessCoded(UInt absPartIdx) const
+{
+  return (getSlice()->getPPS()->getTransquantBypassEnabledFlag() && getCUTransquantBypass (absPartIdx));
+}
+
+
+/** Get allowed chroma intra modes
+*   - fills uiModeList with chroma intra modes
+*
+*\param   [in]  uiAbsPartIdx
+*\param   [out] uiModeList pointer to chroma intra modes array
+*/
+Void TComDataCU::getAllowedChromaDir( UInt uiAbsPartIdx, UInt uiModeList[NUM_CHROMA_MODE] ) const
+{
+  uiModeList[0] = PLANAR_IDX;
+  uiModeList[1] = VER_IDX;
+  uiModeList[2] = HOR_IDX;
+  uiModeList[3] = DC_IDX;
+  uiModeList[4] = DM_CHROMA_IDX;
+  assert(4<NUM_CHROMA_MODE);
+
+  UInt uiLumaMode = getIntraDir( CHANNEL_TYPE_LUMA, uiAbsPartIdx );
+
+  for( Int i = 0; i < NUM_CHROMA_MODE - 1; i++ )
+  {
+    if( uiLumaMode == uiModeList[i] )
+    {
+      uiModeList[i] = 34; // VER+8 mode
+      break;
+    }
+  }
+}
+
+/** Get most probable intra modes
+*\param   uiAbsPartIdx    partition index
+*\param   uiIntraDirPred  pointer to the array for MPM storage
+*\param   compID          colour component ID
+*\param   piMode          it is set with MPM mode in case both MPM are equal. It is used to restrict RD search at encode side.
+*\returns Number of MPM
+*/
+Void TComDataCU::getIntraDirPredictor( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM_MOST_PROBABLE_MODES], const ComponentID compID, Int* piMode ) const
+{
+  UInt        LeftPartIdx  = MAX_UINT;
+  UInt        AbovePartIdx = MAX_UINT;
+  Int         iLeftIntraDir, iAboveIntraDir;
+  const TComSPS *sps=getSlice()->getSPS();
+  const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+
+  const ChannelType chType = toChannelType(compID);
+  const ChromaFormat chForm = getPic()->getChromaFormat();
+  // Get intra direction of left PU
+  const TComDataCU *pcCULeft = getPULeft( LeftPartIdx, m_absZIdxInCtu + uiAbsPartIdx );
+
+  if (isChroma(compID))
+  {
+    LeftPartIdx = getChromasCorrespondingPULumaIdx(LeftPartIdx, chForm, partsPerMinCU);
+  }
+  iLeftIntraDir  = pcCULeft ? ( pcCULeft->isIntra( LeftPartIdx ) ? pcCULeft->getIntraDir( chType, LeftPartIdx ) : DC_IDX ) : DC_IDX;
+
+  // Get intra direction of above PU
+  const TComDataCU *pcCUAbove = getPUAbove( AbovePartIdx, m_absZIdxInCtu + uiAbsPartIdx, true, true );
+
+  if (isChroma(compID))
+  {
+    AbovePartIdx = getChromasCorrespondingPULumaIdx(AbovePartIdx, chForm, partsPerMinCU);
+  }
+  iAboveIntraDir = pcCUAbove ? ( pcCUAbove->isIntra( AbovePartIdx ) ? pcCUAbove->getIntraDir( chType, AbovePartIdx ) : DC_IDX ) : DC_IDX;
+
+  if (isChroma(chType))
+  {
+    if (iLeftIntraDir  == DM_CHROMA_IDX)
+    {
+      iLeftIntraDir  = pcCULeft-> getIntraDir( CHANNEL_TYPE_LUMA, LeftPartIdx  );
+    }
+    if (iAboveIntraDir == DM_CHROMA_IDX)
+    {
+      iAboveIntraDir = pcCUAbove->getIntraDir( CHANNEL_TYPE_LUMA, AbovePartIdx );
+    }
+  }
