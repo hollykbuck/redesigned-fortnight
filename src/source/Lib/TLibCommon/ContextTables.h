@@ -198,3 +198,103 @@ INIT_MERGE_FLAG_EXT[NUMBER_OF_SLICE_TYPES][NUM_MERGE_FLAG_EXT_CTX] =
 {
   { 154, },
   { 110, },
+  { CNU, },
+};
+
+static const UChar
+INIT_MERGE_IDX_EXT[NUMBER_OF_SLICE_TYPES][NUM_MERGE_IDX_EXT_CTX] =
+{
+  { 137, },
+  { 122, },
+  { CNU, },
+};
+
+static const UChar
+INIT_PART_SIZE[NUMBER_OF_SLICE_TYPES][NUM_PART_SIZE_CTX] =
+{
+  { 154,  139,  154, 154 },
+  { 154,  139,  154, 154 },
+  { 184,  CNU,  CNU, CNU },
+};
+
+static const UChar
+INIT_PRED_MODE[NUMBER_OF_SLICE_TYPES][NUM_PRED_MODE_CTX] =
+{
+  { 134, },
+  { 149, },
+  { CNU, },
+};
+
+static const UChar
+INIT_INTRA_PRED_MODE[NUMBER_OF_SLICE_TYPES][NUM_INTRA_PREDICT_CTX] =
+{
+  { 183, },
+  { 154, },
+  { 184, },
+};
+
+static const UChar
+INIT_CHROMA_PRED_MODE[NUMBER_OF_SLICE_TYPES][NUM_CHROMA_PRED_CTX] =
+{
+  { 152,  139, },
+  { 152,  139, },
+  {  63,  139, },
+};
+
+static const UChar
+INIT_INTER_DIR[NUMBER_OF_SLICE_TYPES][NUM_INTER_DIR_CTX] =
+{
+  {  95,   79,   63,   31,  31, },
+  {  95,   79,   63,   31,  31, },
+  { CNU,  CNU,  CNU,  CNU, CNU, },
+};
+
+static const UChar
+INIT_MVD[NUMBER_OF_SLICE_TYPES][NUM_MV_RES_CTX] =
+{
+  { 169,  198, },
+  { 140,  198, },
+  { CNU,  CNU, },
+};
+
+static const UChar
+INIT_REF_PIC[NUMBER_OF_SLICE_TYPES][NUM_REF_NO_CTX] =
+{
+  { 153,  153 },
+  { 153,  153 },
+  { CNU,  CNU },
+};
+
+static const UChar
+INIT_DQP[NUMBER_OF_SLICE_TYPES][NUM_DELTA_QP_CTX] =
+{
+  { 154,  154,  154, },
+  { 154,  154,  154, },
+  { 154,  154,  154, },
+};
+
+static const UChar
+INIT_CHROMA_QP_ADJ_FLAG[NUMBER_OF_SLICE_TYPES][NUM_CHROMA_QP_ADJ_FLAG_CTX] =
+{
+  { 154, },
+  { 154, },
+  { 154, },
+};
+
+static const UChar
+INIT_CHROMA_QP_ADJ_IDC[NUMBER_OF_SLICE_TYPES][NUM_CHROMA_QP_ADJ_IDC_CTX] =
+{
+  { 154, },
+  { 154, },
+  { 154, },
+};
+
+//--------------------------------------------------------------------------------------------------
+
+//Initialisation for CBF
+
+//                                 |---------Luminance---------|
+#define BSLICE_LUMA_CBF_CONTEXT     153,  111,  CNU,  CNU,  CNU
+#define PSLICE_LUMA_CBF_CONTEXT     153,  111,  CNU,  CNU,  CNU
+#define ISLICE_LUMA_CBF_CONTEXT     111,  141,  CNU,  CNU,  CNU
+//                                 |--------Chrominance--------|
