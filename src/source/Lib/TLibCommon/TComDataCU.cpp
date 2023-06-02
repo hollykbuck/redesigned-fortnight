@@ -1398,3 +1398,103 @@ Void TComDataCU::getIntraDirPredictor( UInt uiAbsPartIdx, Int uiIntraDirPred[NUM
       iAboveIntraDir = pcCUAbove->getIntraDir( CHANNEL_TYPE_LUMA, AbovePartIdx );
     }
   }
+
+  assert (2<NUM_MOST_PROBABLE_MODES);
+  if(iLeftIntraDir == iAboveIntraDir)
+  {
+    if( piMode )
+    {
+      *piMode = 1;
+    }
+
+    if (iLeftIntraDir > 1) // angular modes
+    {
+      uiIntraDirPred[0] = iLeftIntraDir;
+      uiIntraDirPred[1] = ((iLeftIntraDir + 29) % 32) + 2;
+      uiIntraDirPred[2] = ((iLeftIntraDir - 1 ) % 32) + 2;
+    }
+    else //non-angular
+    {
+      uiIntraDirPred[0] = PLANAR_IDX;
+      uiIntraDirPred[1] = DC_IDX;
+      uiIntraDirPred[2] = VER_IDX;
+    }
+  }
+  else
+  {
+    if( piMode )
+    {
+      *piMode = 2;
+    }
+    uiIntraDirPred[0] = iLeftIntraDir;
+    uiIntraDirPred[1] = iAboveIntraDir;
+
+    if (iLeftIntraDir && iAboveIntraDir ) //both modes are non-planar
+    {
+      uiIntraDirPred[2] = PLANAR_IDX;
+    }
+    else
+    {
+      uiIntraDirPred[2] =  (iLeftIntraDir+iAboveIntraDir)<2? VER_IDX : DC_IDX;
+    }
+  }
+  for (UInt i=0; i<NUM_MOST_PROBABLE_MODES; i++)
+  {
+    assert(uiIntraDirPred[i] < 35);
+  }
+}
+
+UInt TComDataCU::getCtxSplitFlag( UInt uiAbsPartIdx, UInt uiDepth ) const
+{
+  const TComDataCU* pcTempCU;
+  UInt              uiTempPartIdx;
+  UInt              uiCtx;
+  // Get left split flag
+  pcTempCU = getPULeft( uiTempPartIdx, m_absZIdxInCtu + uiAbsPartIdx );
+  uiCtx  = ( pcTempCU ) ? ( ( pcTempCU->getDepth( uiTempPartIdx ) > uiDepth ) ? 1 : 0 ) : 0;
+
+  // Get above split flag
+  pcTempCU = getPUAbove( uiTempPartIdx, m_absZIdxInCtu + uiAbsPartIdx );
+  uiCtx += ( pcTempCU ) ? ( ( pcTempCU->getDepth( uiTempPartIdx ) > uiDepth ) ? 1 : 0 ) : 0;
+
+  return uiCtx;
+}
+
+UInt TComDataCU::getCtxQtCbf( TComTU &rTu, const ChannelType chType ) const
+{
+  const UInt transformDepth = rTu.GetTransformDepthRel();
+
+  if (isChroma(chType))
+  {
+    return transformDepth;
+  }
+  else
+  {
+    const UInt uiCtx = ( transformDepth == 0 ? 1 : 0 );
+    return uiCtx;
+  }
+}
+
+UInt TComDataCU::getQuadtreeTULog2MinSizeInCU( UInt absPartIdx ) const
+{
+  UInt log2CbSize = g_aucConvertToBit[getWidth( absPartIdx )] + 2;
+  PartSize  partSize  = getPartitionSize( absPartIdx );
+  UInt quadtreeTUMaxDepth = isIntra( absPartIdx ) ? m_pcSlice->getSPS()->getQuadtreeTUMaxDepthIntra() : m_pcSlice->getSPS()->getQuadtreeTUMaxDepthInter();
+  Int intraSplitFlag = ( isIntra( absPartIdx ) && partSize == SIZE_NxN ) ? 1 : 0;
+  Int interSplitFlag = ((quadtreeTUMaxDepth == 1) && isInter( absPartIdx ) && (partSize != SIZE_2Nx2N) );
+
+  UInt log2MinTUSizeInCU = 0;
+  if (log2CbSize < (m_pcSlice->getSPS()->getQuadtreeTULog2MinSize() + quadtreeTUMaxDepth - 1 + interSplitFlag + intraSplitFlag) )
+  {
+    // when fully making use of signaled TUMaxDepth + inter/intraSplitFlag, resulting luma TB size is < QuadtreeTULog2MinSize
+    log2MinTUSizeInCU = m_pcSlice->getSPS()->getQuadtreeTULog2MinSize();
+  }
+  else
+  {
+    // when fully making use of signaled TUMaxDepth + inter/intraSplitFlag, resulting luma TB size is still >= QuadtreeTULog2MinSize
+    log2MinTUSizeInCU = log2CbSize - ( quadtreeTUMaxDepth - 1 + interSplitFlag + intraSplitFlag); // stop when trafoDepth == hierarchy_depth = splitFlag
+    if ( log2MinTUSizeInCU > m_pcSlice->getSPS()->getQuadtreeTULog2MaxSize())
+    {
+      // when fully making use of signaled TUMaxDepth + inter/intraSplitFlag, resulting luma TB size is still > QuadtreeTULog2MaxSize
+      log2MinTUSizeInCU = m_pcSlice->getSPS()->getQuadtreeTULog2MaxSize();
+    }
