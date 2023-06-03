@@ -1598,3 +1598,103 @@ Void TComDataCU::setCUTransquantBypassSubParts( Bool flag, UInt uiAbsPartIdx, UI
   memset( m_CUTransquantBypass + uiAbsPartIdx, flag, m_pcPic->getNumPartitionsInCtu() >> ( 2 * uiDepth ) );
 }
 
+Void TComDataCU::setSkipFlagSubParts( Bool skip, UInt absPartIdx, UInt depth )
+{
+  assert( sizeof( *m_skipFlag) == 1 );
+  memset( m_skipFlag + absPartIdx, skip, m_pcPic->getNumPartitionsInCtu() >> ( 2 * depth ) );
+}
+
+Void TComDataCU::setPredModeSubParts( PredMode eMode, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  assert( sizeof( *m_pePredMode) == 1 );
+  memset( m_pePredMode + uiAbsPartIdx, eMode, m_pcPic->getNumPartitionsInCtu() >> ( 2 * uiDepth ) );
+}
+
+Void TComDataCU::setChromaQpAdjSubParts( UChar val, Int absPartIdx, Int depth )
+{
+  assert( sizeof(*m_ChromaQpAdj) == 1 );
+  memset( m_ChromaQpAdj + absPartIdx, val, m_pcPic->getNumPartitionsInCtu() >> ( 2 * depth ) );
+}
+
+Void TComDataCU::setQPSubCUs( Int qp, UInt absPartIdx, UInt depth, Bool &foundNonZeroCbf )
+{
+  UInt currPartNumb = m_pcPic->getNumPartitionsInCtu() >> (depth << 1);
+  UInt currPartNumQ = currPartNumb >> 2;
+  const UInt numValidComp = m_pcPic->getNumberValidComponents();
+
+  if(!foundNonZeroCbf)
+  {
+    if(getDepth(absPartIdx) > depth)
+    {
+      for ( UInt partUnitIdx = 0; partUnitIdx < 4; partUnitIdx++ )
+      {
+        setQPSubCUs( qp, absPartIdx+partUnitIdx*currPartNumQ, depth+1, foundNonZeroCbf );
+      }
+    }
+    else
+    {
+      if(getCbf( absPartIdx, COMPONENT_Y ) || (numValidComp>COMPONENT_Cb && getCbf( absPartIdx, COMPONENT_Cb )) || (numValidComp>COMPONENT_Cr && getCbf( absPartIdx, COMPONENT_Cr) ) )
+      {
+        foundNonZeroCbf = true;
+      }
+      else
+      {
+        setQPSubParts(qp, absPartIdx, depth);
+      }
+    }
+  }
+}
+
+Void TComDataCU::setQPSubParts( Int qp, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  const UInt numPart = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+  memset(m_phQP+uiAbsPartIdx, qp, numPart);
+}
+
+Void TComDataCU::setIntraDirSubParts( const ChannelType channelType, const UInt dir, const UInt absPartIdx, const UInt depth )
+{
+  UInt numPart = m_pcPic->getNumPartitionsInCtu() >> (depth << 1);
+  memset( m_puhIntraDir[channelType] + absPartIdx, dir,sizeof(UChar)*numPart );
+}
+
+template<typename T>
+Void TComDataCU::setSubPart( T uiParameter, T* puhBaseCtu, UInt uiCUAddr, UInt uiCUDepth, UInt uiPUIdx )
+{
+  assert( sizeof(T) == 1 ); // Using memset() works only for types of size 1
+
+  UInt uiCurrPartNumQ = (m_pcPic->getNumPartitionsInCtu() >> (2 * uiCUDepth)) >> 2;
+  switch ( m_pePartSize[ uiCUAddr ] )
+  {
+    case SIZE_2Nx2N:
+      memset( puhBaseCtu + uiCUAddr, uiParameter, 4 * uiCurrPartNumQ );
+      break;
+    case SIZE_2NxN:
+      memset( puhBaseCtu + uiCUAddr, uiParameter, 2 * uiCurrPartNumQ );
+      break;
+    case SIZE_Nx2N:
+      memset( puhBaseCtu + uiCUAddr, uiParameter, uiCurrPartNumQ );
+      memset( puhBaseCtu + uiCUAddr + 2 * uiCurrPartNumQ, uiParameter, uiCurrPartNumQ );
+      break;
+    case SIZE_NxN:
+      memset( puhBaseCtu + uiCUAddr, uiParameter, uiCurrPartNumQ );
+      break;
+    case SIZE_2NxnU:
+      if ( uiPUIdx == 0 )
+      {
+        memset( puhBaseCtu + uiCUAddr, uiParameter, (uiCurrPartNumQ >> 1) );
+        memset( puhBaseCtu + uiCUAddr + uiCurrPartNumQ, uiParameter, (uiCurrPartNumQ >> 1) );
+      }
+      else if ( uiPUIdx == 1 )
+      {
+        memset( puhBaseCtu + uiCUAddr, uiParameter, (uiCurrPartNumQ >> 1) );
+        memset( puhBaseCtu + uiCUAddr + uiCurrPartNumQ, uiParameter, ((uiCurrPartNumQ >> 1) + (uiCurrPartNumQ << 1)) );
+      }
+      else
+      {
+        assert(0);
+      }
+      break;
+    case SIZE_2NxnD:
+      if ( uiPUIdx == 0 )
+      {
+        memset( puhBaseCtu + uiCUAddr, uiParameter, ((uiCurrPartNumQ << 1) + (uiCurrPartNumQ >> 1)) );
