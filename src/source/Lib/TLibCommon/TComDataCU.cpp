@@ -1498,3 +1498,103 @@ UInt TComDataCU::getQuadtreeTULog2MinSizeInCU( UInt absPartIdx ) const
       // when fully making use of signaled TUMaxDepth + inter/intraSplitFlag, resulting luma TB size is still > QuadtreeTULog2MaxSize
       log2MinTUSizeInCU = m_pcSlice->getSPS()->getQuadtreeTULog2MaxSize();
     }
+  }
+  return log2MinTUSizeInCU;
+}
+
+UInt TComDataCU::getCtxSkipFlag( UInt uiAbsPartIdx ) const
+{
+  const TComDataCU* pcTempCU;
+  UInt              uiTempPartIdx;
+  UInt              uiCtx = 0;
+
+  // Get BCBP of left PU
+  pcTempCU = getPULeft( uiTempPartIdx, m_absZIdxInCtu + uiAbsPartIdx );
+  uiCtx    = ( pcTempCU ) ? pcTempCU->isSkipped( uiTempPartIdx ) : 0;
+
+  // Get BCBP of above PU
+  pcTempCU = getPUAbove( uiTempPartIdx, m_absZIdxInCtu + uiAbsPartIdx );
+  uiCtx   += ( pcTempCU ) ? pcTempCU->isSkipped( uiTempPartIdx ) : 0;
+
+  return uiCtx;
+}
+
+UInt TComDataCU::getCtxInterDir( UInt uiAbsPartIdx ) const
+{
+  return getDepth( uiAbsPartIdx );
+}
+
+
+UChar TComDataCU::getQtRootCbf( UInt uiIdx ) const
+{
+  const UInt numberValidComponents = getPic()->getNumberValidComponents();
+  return getCbf( uiIdx, COMPONENT_Y, 0 )
+          || ((numberValidComponents > COMPONENT_Cb) && getCbf( uiIdx, COMPONENT_Cb, 0 ))
+          || ((numberValidComponents > COMPONENT_Cr) && getCbf( uiIdx, COMPONENT_Cr, 0 ));
+}
+
+Void TComDataCU::setCbfSubParts( const UInt uiCbf[MAX_NUM_COMPONENT], UInt uiAbsPartIdx, UInt uiDepth )
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+  for(UInt comp=0; comp<MAX_NUM_COMPONENT; comp++)
+  {
+    memset( m_puhCbf[comp] + uiAbsPartIdx, uiCbf[comp], sizeof( UChar ) * uiCurrPartNumb );
+  }
+}
+
+Void TComDataCU::setCbfSubParts( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+  memset( m_puhCbf[compID] + uiAbsPartIdx, uiCbf, sizeof( UChar ) * uiCurrPartNumb );
+}
+
+/** Sets a coded block flag for all sub-partitions of a partition
+ * \param uiCbf          The value of the coded block flag to be set
+ * \param compID
+ * \param uiAbsPartIdx
+ * \param uiPartIdx
+ * \param uiDepth
+ */
+Void TComDataCU::setCbfSubParts ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiPartIdx, UInt uiDepth )
+{
+  setSubPart<UChar>( uiCbf, m_puhCbf[compID], uiAbsPartIdx, uiDepth, uiPartIdx );
+}
+
+Void TComDataCU::setCbfPartRange ( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes )
+{
+  memset((m_puhCbf[compID] + uiAbsPartIdx), uiCbf, (sizeof(UChar) * uiCoveredPartIdxes));
+}
+
+Void TComDataCU::bitwiseOrCbfPartRange( UInt uiCbf, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes )
+{
+  const UInt stopAbsPartIdx = uiAbsPartIdx + uiCoveredPartIdxes;
+
+  for (UInt subPartIdx = uiAbsPartIdx; subPartIdx < stopAbsPartIdx; subPartIdx++)
+  {
+    m_puhCbf[compID][subPartIdx] |= uiCbf;
+  }
+}
+
+Void TComDataCU::setDepthSubParts( UInt uiDepth, UInt uiAbsPartIdx )
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+  memset( m_puhDepth + uiAbsPartIdx, uiDepth, sizeof(UChar)*uiCurrPartNumb );
+}
+
+Bool TComDataCU::isFirstAbsZorderIdxInDepth (UInt uiAbsPartIdx, UInt uiDepth) const
+{
+  UInt uiPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+  return (((m_absZIdxInCtu + uiAbsPartIdx)% uiPartNumb) == 0);
+}
+
+Void TComDataCU::setPartSizeSubParts( PartSize eMode, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  assert( sizeof( *m_pePartSize) == 1 );
+  memset( m_pePartSize + uiAbsPartIdx, eMode, m_pcPic->getNumPartitionsInCtu() >> ( 2 * uiDepth ) );
+}
+
+Void TComDataCU::setCUTransquantBypassSubParts( Bool flag, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  memset( m_CUTransquantBypass + uiAbsPartIdx, flag, m_pcPic->getNumPartitionsInCtu() >> ( 2 * uiDepth ) );
+}
+
