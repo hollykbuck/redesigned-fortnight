@@ -398,3 +398,103 @@ INIT_SIG_FLAG[NUMBER_OF_SLICE_TYPES][NUM_SIG_FLAG_CTX] =
 #define PSLICE_LUMA_ONE_CONTEXT     154, 196, 196, 167,  154, 152, 167, 182,  182, 134, 149, 136,  153, 121, 136, 137
 #define ISLICE_LUMA_ONE_CONTEXT     140,  92, 137, 138,  140, 152, 138, 139,  153,  74, 149,  92,  139, 107, 122, 152
 
+#define BSLICE_LUMA_ABS_CONTEXT     107,                 167,                  91,                 107
+#define PSLICE_LUMA_ABS_CONTEXT     107,                 167,                  91,                 122
+#define ISLICE_LUMA_ABS_CONTEXT     138,                 153,                 136,                 167
+
+//                                 |------Set 4-------| |------Set 5-------|
+#define BSLICE_CHROMA_ONE_CONTEXT   169, 208, 166, 167,  154, 152, 167, 182
+#define PSLICE_CHROMA_ONE_CONTEXT   169, 194, 166, 167,  154, 167, 137, 182
+#define ISLICE_CHROMA_ONE_CONTEXT   140, 179, 166, 182,  140, 227, 122, 197
+
+#define BSLICE_CHROMA_ABS_CONTEXT   107,                 167
+#define PSLICE_CHROMA_ABS_CONTEXT   107,                 167
+#define ISLICE_CHROMA_ABS_CONTEXT   152,                 152
+
+
+//------------------------------------------------
+
+static const UChar
+INIT_ONE_FLAG[NUMBER_OF_SLICE_TYPES][NUM_ONE_FLAG_CTX] =
+{
+  { BSLICE_LUMA_ONE_CONTEXT, BSLICE_CHROMA_ONE_CONTEXT },
+  { PSLICE_LUMA_ONE_CONTEXT, PSLICE_CHROMA_ONE_CONTEXT },
+  { ISLICE_LUMA_ONE_CONTEXT, ISLICE_CHROMA_ONE_CONTEXT },
+};
+
+static const UChar
+INIT_ABS_FLAG[NUMBER_OF_SLICE_TYPES][NUM_ABS_FLAG_CTX] =
+{
+  { BSLICE_LUMA_ABS_CONTEXT, BSLICE_CHROMA_ABS_CONTEXT },
+  { PSLICE_LUMA_ABS_CONTEXT, PSLICE_CHROMA_ABS_CONTEXT },
+  { ISLICE_LUMA_ABS_CONTEXT, ISLICE_CHROMA_ABS_CONTEXT },
+};
+
+
+//--------------------------------------------------------------------------------------------------
+
+static const UChar
+INIT_MVP_IDX[NUMBER_OF_SLICE_TYPES][NUM_MVP_IDX_CTX] =
+{
+  { 168, },
+  { 168, },
+  { CNU, },
+};
+
+static const UChar
+INIT_SAO_MERGE_FLAG[NUMBER_OF_SLICE_TYPES][NUM_SAO_MERGE_FLAG_CTX] =
+{
+  { 153,  },
+  { 153,  },
+  { 153,  },
+};
+
+static const UChar
+INIT_SAO_TYPE_IDX[NUMBER_OF_SLICE_TYPES][NUM_SAO_TYPE_IDX_CTX] =
+{
+  { 160, },
+  { 185, },
+  { 200, },
+};
+
+static const UChar
+INIT_TRANS_SUBDIV_FLAG[NUMBER_OF_SLICE_TYPES][NUM_TRANS_SUBDIV_FLAG_CTX] =
+{
+  { 224,  167,  122, },
+  { 124,  138,   94, },
+  { 153,  138,  138, },
+};
+
+static const UChar
+INIT_TRANSFORMSKIP_FLAG[NUMBER_OF_SLICE_TYPES][2*NUM_TRANSFORMSKIP_FLAG_CTX] =
+{
+  { 139,  139},
+  { 139,  139},
+  { 139,  139},
+};
+
+static const UChar
+INIT_EXPLICIT_RDPCM_FLAG[NUMBER_OF_SLICE_TYPES][2*NUM_EXPLICIT_RDPCM_FLAG_CTX] =
+{
+  {139, 139},
+  {139, 139},
+  {CNU, CNU}
+};
+
+static const UChar
+INIT_EXPLICIT_RDPCM_DIR[NUMBER_OF_SLICE_TYPES][2*NUM_EXPLICIT_RDPCM_DIR_CTX] =
+{
+  {139, 139},
+  {139, 139},
+  {CNU, CNU}
+};
+
+static const UChar
+INIT_CROSS_COMPONENT_PREDICTION[NUMBER_OF_SLICE_TYPES][NUM_CROSS_COMPONENT_PREDICTION_CTX] =
+{
+  { 154, 154, 154, 154, 154, 154, 154, 154, 154, 154 },
+  { 154, 154, 154, 154, 154, 154, 154, 154, 154, 154 },
+  { 154, 154, 154, 154, 154, 154, 154, 154, 154, 154 },
+};
+
+//! \}
