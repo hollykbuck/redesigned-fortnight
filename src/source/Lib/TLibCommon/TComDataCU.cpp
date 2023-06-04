@@ -1798,3 +1798,103 @@ Void TComDataCU::setTransformSkipSubParts( const UInt useTransformSkip[MAX_NUM_C
     memset( m_puhTransformSkip[i] + uiAbsPartIdx, useTransformSkip[i], sizeof( UChar ) * uiCurrPartNumb );
   }
 }
+
+Void TComDataCU::setTransformSkipSubParts( UInt useTransformSkip, ComponentID compID, UInt uiAbsPartIdx, UInt uiDepth)
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+
+  memset( m_puhTransformSkip[compID] + uiAbsPartIdx, useTransformSkip, sizeof( UChar ) * uiCurrPartNumb );
+}
+
+Void TComDataCU::setTransformSkipPartRange ( UInt useTransformSkip, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes )
+{
+  memset((m_puhTransformSkip[compID] + uiAbsPartIdx), useTransformSkip, (sizeof(UChar) * uiCoveredPartIdxes));
+}
+
+Void TComDataCU::setCrossComponentPredictionAlphaPartRange( SChar alphaValue, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes )
+{
+  memset((m_crossComponentPredictionAlpha[compID] + uiAbsPartIdx), alphaValue, (sizeof(SChar) * uiCoveredPartIdxes));
+}
+
+Void TComDataCU::setExplicitRdpcmModePartRange ( UInt rdpcmMode, ComponentID compID, UInt uiAbsPartIdx, UInt uiCoveredPartIdxes )
+{
+  memset((m_explicitRdpcmMode[compID] + uiAbsPartIdx), rdpcmMode, (sizeof(UChar) * uiCoveredPartIdxes));
+}
+
+Void TComDataCU::setSizeSubParts( UInt uiWidth, UInt uiHeight, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+
+  memset( m_puhWidth  + uiAbsPartIdx, uiWidth,  sizeof(UChar)*uiCurrPartNumb );
+  memset( m_puhHeight + uiAbsPartIdx, uiHeight, sizeof(UChar)*uiCurrPartNumb );
+}
+
+UChar TComDataCU::getNumPartitions(const UInt uiAbsPartIdx) const
+{
+  UChar iNumPart = 0;
+
+  switch ( m_pePartSize[uiAbsPartIdx] )
+  {
+    case SIZE_2Nx2N:    iNumPart = 1; break;
+    case SIZE_2NxN:     iNumPart = 2; break;
+    case SIZE_Nx2N:     iNumPart = 2; break;
+    case SIZE_NxN:      iNumPart = 4; break;
+    case SIZE_2NxnU:    iNumPart = 2; break;
+    case SIZE_2NxnD:    iNumPart = 2; break;
+    case SIZE_nLx2N:    iNumPart = 2; break;
+    case SIZE_nRx2N:    iNumPart = 2; break;
+    default:            assert (0);   break;
+  }
+
+  return  iNumPart;
+}
+
+// This is for use by a leaf/sub CU object only, with no additional AbsPartIdx
+Void TComDataCU::getPartIndexAndSize( UInt uiPartIdx, UInt& ruiPartAddr, Int& riWidth, Int& riHeight ) const
+{
+  switch ( m_pePartSize[0] )
+  {
+    case SIZE_2NxN:
+      riWidth = getWidth(0);      riHeight = getHeight(0) >> 1; ruiPartAddr = ( uiPartIdx == 0 )? 0 : m_uiNumPartition >> 1;
+      break;
+    case SIZE_Nx2N:
+      riWidth = getWidth(0) >> 1; riHeight = getHeight(0);      ruiPartAddr = ( uiPartIdx == 0 )? 0 : m_uiNumPartition >> 2;
+      break;
+    case SIZE_NxN:
+      riWidth = getWidth(0) >> 1; riHeight = getHeight(0) >> 1; ruiPartAddr = ( m_uiNumPartition >> 2 ) * uiPartIdx;
+      break;
+    case SIZE_2NxnU:
+      riWidth     = getWidth(0);
+      riHeight    = ( uiPartIdx == 0 ) ?  getHeight(0) >> 2 : ( getHeight(0) >> 2 ) + ( getHeight(0) >> 1 );
+      ruiPartAddr = ( uiPartIdx == 0 ) ? 0 : m_uiNumPartition >> 3;
+      break;
+    case SIZE_2NxnD:
+      riWidth     = getWidth(0);
+      riHeight    = ( uiPartIdx == 0 ) ?  ( getHeight(0) >> 2 ) + ( getHeight(0) >> 1 ) : getHeight(0) >> 2;
+      ruiPartAddr = ( uiPartIdx == 0 ) ? 0 : (m_uiNumPartition >> 1) + (m_uiNumPartition >> 3);
+      break;
+    case SIZE_nLx2N:
+      riWidth     = ( uiPartIdx == 0 ) ? getWidth(0) >> 2 : ( getWidth(0) >> 2 ) + ( getWidth(0) >> 1 );
+      riHeight    = getHeight(0);
+      ruiPartAddr = ( uiPartIdx == 0 ) ? 0 : m_uiNumPartition >> 4;
+      break;
+    case SIZE_nRx2N:
+      riWidth     = ( uiPartIdx == 0 ) ? ( getWidth(0) >> 2 ) + ( getWidth(0) >> 1 ) : getWidth(0) >> 2;
+      riHeight    = getHeight(0);
+      ruiPartAddr = ( uiPartIdx == 0 ) ? 0 : (m_uiNumPartition >> 2) + (m_uiNumPartition >> 4);
+      break;
+    default:
+      assert ( m_pePartSize[0] == SIZE_2Nx2N );
+      riWidth = getWidth(0);      riHeight = getHeight(0);      ruiPartAddr = 0;
+      break;
+  }
+}
+
+// static member function
+Void TComDataCU::getMvField ( const TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefPicList, TComMvField& rcMvField )
+{
+  if ( pcCU == NULL )  // OUT OF BOUNDARY
+  {
+    TComMv  cZeroMv;
+    rcMvField.setMvField( cZeroMv, NOT_VALID );
+    return;
