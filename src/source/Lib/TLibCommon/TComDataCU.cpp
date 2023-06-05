@@ -1898,3 +1898,103 @@ Void TComDataCU::getMvField ( const TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicL
     TComMv  cZeroMv;
     rcMvField.setMvField( cZeroMv, NOT_VALID );
     return;
+  }
+
+  const TComCUMvField*  pcCUMvField = pcCU->getCUMvField( eRefPicList );
+  rcMvField.setMvField( pcCUMvField->getMv( uiAbsPartIdx ), pcCUMvField->getRefIdx( uiAbsPartIdx ) );
+}
+
+Void TComDataCU::deriveLeftRightTopIdxGeneral ( UInt uiAbsPartIdx, UInt uiPartIdx, UInt& ruiPartIdxLT, UInt& ruiPartIdxRT ) const
+{
+  ruiPartIdxLT = m_absZIdxInCtu + uiAbsPartIdx;
+  UInt uiPUWidth = 0;
+
+  switch ( m_pePartSize[uiAbsPartIdx] )
+  {
+    case SIZE_2Nx2N: uiPUWidth = m_puhWidth[uiAbsPartIdx];  break;
+    case SIZE_2NxN:  uiPUWidth = m_puhWidth[uiAbsPartIdx];   break;
+    case SIZE_Nx2N:  uiPUWidth = m_puhWidth[uiAbsPartIdx]  >> 1;  break;
+    case SIZE_NxN:   uiPUWidth = m_puhWidth[uiAbsPartIdx]  >> 1; break;
+    case SIZE_2NxnU:   uiPUWidth = m_puhWidth[uiAbsPartIdx]; break;
+    case SIZE_2NxnD:   uiPUWidth = m_puhWidth[uiAbsPartIdx]; break;
+    case SIZE_nLx2N:
+      if ( uiPartIdx == 0 )
+      {
+        uiPUWidth = m_puhWidth[uiAbsPartIdx]  >> 2;
+      }
+      else if ( uiPartIdx == 1 )
+      {
+        uiPUWidth = (m_puhWidth[uiAbsPartIdx]  >> 1) + (m_puhWidth[uiAbsPartIdx]  >> 2);
+      }
+      else
+      {
+        assert(0);
+      }
+      break;
+    case SIZE_nRx2N:
+      if ( uiPartIdx == 0 )
+      {
+        uiPUWidth = (m_puhWidth[uiAbsPartIdx]  >> 1) + (m_puhWidth[uiAbsPartIdx]  >> 2);
+      }
+      else if ( uiPartIdx == 1 )
+      {
+        uiPUWidth = m_puhWidth[uiAbsPartIdx]  >> 2;
+      }
+      else
+      {
+        assert(0);
+      }
+      break;
+    default:
+      assert (0);
+      break;
+  }
+
+  ruiPartIdxRT = g_auiRasterToZscan [g_auiZscanToRaster[ ruiPartIdxLT ] + uiPUWidth / m_pcPic->getMinCUWidth() - 1 ];
+}
+
+Void TComDataCU::deriveLeftBottomIdxGeneral( UInt uiAbsPartIdx, UInt uiPartIdx, UInt& ruiPartIdxLB ) const
+{
+  UInt uiPUHeight = 0;
+  switch ( m_pePartSize[uiAbsPartIdx] )
+  {
+    case SIZE_2Nx2N: uiPUHeight = m_puhHeight[uiAbsPartIdx];    break;
+    case SIZE_2NxN:  uiPUHeight = m_puhHeight[uiAbsPartIdx] >> 1;    break;
+    case SIZE_Nx2N:  uiPUHeight = m_puhHeight[uiAbsPartIdx];  break;
+    case SIZE_NxN:   uiPUHeight = m_puhHeight[uiAbsPartIdx] >> 1;    break;
+    case SIZE_2NxnU:
+      if ( uiPartIdx == 0 )
+      {
+        uiPUHeight = m_puhHeight[uiAbsPartIdx] >> 2;
+      }
+      else if ( uiPartIdx == 1 )
+      {
+        uiPUHeight = (m_puhHeight[uiAbsPartIdx] >> 1) + (m_puhHeight[uiAbsPartIdx] >> 2);
+      }
+      else
+      {
+        assert(0);
+      }
+      break;
+    case SIZE_2NxnD:
+      if ( uiPartIdx == 0 )
+      {
+        uiPUHeight = (m_puhHeight[uiAbsPartIdx] >> 1) + (m_puhHeight[uiAbsPartIdx] >> 2);
+      }
+      else if ( uiPartIdx == 1 )
+      {
+        uiPUHeight = m_puhHeight[uiAbsPartIdx] >> 2;
+      }
+      else
+      {
+        assert(0);
+      }
+      break;
+    case SIZE_nLx2N: uiPUHeight = m_puhHeight[uiAbsPartIdx];  break;
+    case SIZE_nRx2N: uiPUHeight = m_puhHeight[uiAbsPartIdx];  break;
+    default:
+      assert (0);
+      break;
+  }
+
+  ruiPartIdxLB      = g_auiRasterToZscan [g_auiZscanToRaster[ m_absZIdxInCtu + uiAbsPartIdx ] + ((uiPUHeight / m_pcPic->getMinCUHeight()) - 1)*m_pcPic->getNumPartInCtuWidth()];
