@@ -198,3 +198,44 @@ int main(int argc, char*argv[])
        ;
 
   cout << "Summary(Other): " << endl
+       << "  num_bytes(leading_zero_8bits): " << annexBStatsTotal_Other.m_numLeadingZero8BitsBytes << endl
+       << "  num_bytes(zero_byte): " << annexBStatsTotal_Other.m_numZeroByteBytes << endl
+       << "  num_bytes(start_code_prefix_one_3bytes): " << annexBStatsTotal_Other.m_numStartCodePrefixBytes << endl
+       << "  NumBytesInNALunit: " << annexBStatsTotal_Other.m_numBytesInNALUnit << endl
+       << "  num_bytes(trailing_zero_8bits): " << annexBStatsTotal_Other.m_numTrailingZero8BitsBytes << endl
+       ;
+
+  /* The first such type of bitstream, called Type I bitstream, is a
+   * NAL unit stream containing only the VCL NAL units and filler data
+   * NAL units for all access units in the bitstream.
+   */
+  unsigned totalBytes_T1HRD = annexBStatsTotal_VCL.m_numBytesInNALUnit + annexBStatsTotal_Filler.m_numBytesInNALUnit;
+
+  /*The second type of bitstream, called a Type II bitstream,
+   * contains, in addition to the VCL NAL units and filler data NAL
+   * units for all access units in the bitstream, at least one of
+   * the following:
+   *  (a) additional non-VCL NAL units other than filler data NAL
+   *      units.
+   */
+  unsigned totalBytes_T2aHRD = annexBStatsTotal.m_numBytesInNALUnit;
+
+  /*  (b) all leading_zero_8bits, zero_byte,
+   *      start_code_prefix_one_3bytes, and trailing_zero_8bits syntax
+   *      elements that form a byte stream from the NAL unit stream (as
+   *      specified in Annex B)
+   */
+  unsigned totalBytes_T2abHRD = 0;
+  totalBytes_T2abHRD += annexBStatsTotal.m_numLeadingZero8BitsBytes;
+  totalBytes_T2abHRD += annexBStatsTotal.m_numZeroByteBytes;
+  totalBytes_T2abHRD += annexBStatsTotal.m_numStartCodePrefixBytes;
+  totalBytes_T2abHRD += annexBStatsTotal.m_numBytesInNALUnit;
+  totalBytes_T2abHRD += annexBStatsTotal.m_numTrailingZero8BitsBytes;
+
+  cout << "Totals (bytes):" << endl;
+  cout << "  Type1 HRD: " << totalBytes_T1HRD << endl;
+  cout << "  Type2 HRD: " << totalBytes_T2aHRD << endl;
+  cout << "  Type2b HRD: " << totalBytes_T2abHRD << endl;
+
+  return 0;
+}
