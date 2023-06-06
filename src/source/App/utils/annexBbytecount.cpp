@@ -98,3 +98,103 @@ void selftest()
     cout << endl << "  MISSMATCH " #m << ", E(" << b.m << ") != " << a.m; \
   }
     VERIFY(actual, tests[i].expected, m_numLeadingZero8BitsBytes);
+    VERIFY(actual, tests[i].expected, m_numZeroByteBytes);
+    VERIFY(actual, tests[i].expected, m_numStartCodePrefixBytes);
+    VERIFY(actual, tests[i].expected, m_numBytesInNALUnit);
+    VERIFY(actual, tests[i].expected, m_numTrailingZero8BitsBytes);
+#undef VERIFY
+    if (ok)
+    {
+      cout << "OK";
+    }
+    cout << endl;
+  }
+}
+
+int main(int argc, char*argv[])
+{
+  selftest();
+
+  if (argc != 2)
+  {
+    return 0;
+  }
+
+  ifstream in(argv[1], ifstream::in | ifstream::binary);
+  InputByteStream bs(in);
+
+  AnnexBStats annexBStatsTotal = AnnexBStats();
+  AnnexBStats annexBStatsTotal_VCL = AnnexBStats();
+  AnnexBStats annexBStatsTotal_Filler = AnnexBStats();
+  AnnexBStats annexBStatsTotal_Other = AnnexBStats();
+  unsigned numNALUnits = 0;
+
+  cout << "NALUnits:" << endl;
+  while (!!in)
+  {
+    AnnexBStats annexBStatsSingle = AnnexBStats();
+    vector<uint8_t> nalUnit;
+
+    byteStreamNALUnit(bs, nalUnit, annexBStatsSingle);
+
+    int nal_unit_type = -1;
+    if (annexBStatsSingle.m_numBytesInNALUnit)
+    {
+      nal_unit_type = nalUnit[0] & 0x1f;
+    }
+
+    cout << " - NALU: #" << numNALUnits << " nal_unit_type:" << nal_unit_type << endl
+         << "   num_bytes(leading_zero_8bits): " << annexBStatsSingle.m_numLeadingZero8BitsBytes << endl
+         << "   num_bytes(zero_byte): " << annexBStatsSingle.m_numZeroByteBytes << endl
+         << "   num_bytes(start_code_prefix_one_3bytes): " << annexBStatsSingle.m_numStartCodePrefixBytes << endl
+         << "   NumBytesInNALunit: " << annexBStatsSingle.m_numBytesInNALUnit << endl
+         << "   num_bytes(trailing_zero_8bits): " << annexBStatsSingle.m_numTrailingZero8BitsBytes << endl
+         ;
+
+    annexBStatsTotal += annexBStatsSingle;
+    numNALUnits++;
+
+    if (!annexBStatsSingle.m_numBytesInNALUnit)
+    {
+      continue;
+    }
+
+    /* identify the NAL unit type and add stats to the correct
+     * accumulators */
+    switch (nalUnit[0] & 0x1f) {
+    case 1: case 2: case 3: case 4: case 5:
+      annexBStatsTotal_VCL += annexBStatsSingle;
+      break;
+    case 12:
+      annexBStatsTotal_Filler += annexBStatsSingle;
+      break;
+    default:
+      annexBStatsTotal_Other += annexBStatsSingle;
+    };
+  }
+
+  cout << "Summary: " << endl
+       << "  num_bytes(leading_zero_8bits): " << annexBStatsTotal.m_numLeadingZero8BitsBytes << endl
+       << "  num_bytes(zero_byte): " << annexBStatsTotal.m_numZeroByteBytes << endl
+       << "  num_bytes(start_code_prefix_one_3bytes): " << annexBStatsTotal.m_numStartCodePrefixBytes << endl
+       << "  NumBytesInNALunit: " << annexBStatsTotal.m_numBytesInNALUnit << endl
+       << "  num_bytes(trailing_zero_8bits): " << annexBStatsTotal.m_numTrailingZero8BitsBytes << endl
+       ;
+
+  cout << "Summary(VCL): " << endl
+       << "  num_bytes(leading_zero_8bits): " << annexBStatsTotal_VCL.m_numLeadingZero8BitsBytes << endl
+       << "  num_bytes(zero_byte): " << annexBStatsTotal_VCL.m_numZeroByteBytes << endl
+       << "  num_bytes(start_code_prefix_one_3bytes): " << annexBStatsTotal_VCL.m_numStartCodePrefixBytes << endl
+       << "  NumBytesInNALunit: " << annexBStatsTotal_VCL.m_numBytesInNALUnit << endl
+       << "  num_bytes(trailing_zero_8bits): " << annexBStatsTotal_VCL.m_numTrailingZero8BitsBytes << endl
+       ;
+
+  cout << "Summary(Filler): " << endl
+       << "  num_bytes(leading_zero_8bits): " << annexBStatsTotal_Filler.m_numLeadingZero8BitsBytes << endl
+       << "  num_bytes(zero_byte): " << annexBStatsTotal_Filler.m_numZeroByteBytes << endl
+       << "  num_bytes(start_code_prefix_one_3bytes): " << annexBStatsTotal_Filler.m_numStartCodePrefixBytes << endl
+       << "  NumBytesInNALunit: " << annexBStatsTotal_Filler.m_numBytesInNALUnit << endl
+       << "  num_bytes(trailing_zero_8bits): " << annexBStatsTotal_Filler.m_numTrailingZero8BitsBytes << endl
+       ;
+
+  cout << "Summary(Other): " << endl
