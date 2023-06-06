@@ -2098,3 +2098,103 @@ Void TComDataCU::deriveRightBottomIdx( UInt uiPartIdx, UInt &ruiPartIdxRB ) cons
     case SIZE_NxN:
       ruiPartIdxRB += ( m_uiNumPartition >> 2 ) * ( uiPartIdx - 1 );
       break;
+    case SIZE_2NxnU:
+      ruiPartIdxRB += ( uiPartIdx == 0 ) ? -((Int)m_uiNumPartition >> 3) : m_uiNumPartition >> 1;
+      break;
+    case SIZE_2NxnD:
+      ruiPartIdxRB += ( uiPartIdx == 0 ) ? (m_uiNumPartition >> 2) + (m_uiNumPartition >> 3): m_uiNumPartition >> 1;
+      break;
+    case SIZE_nLx2N:
+      ruiPartIdxRB += ( uiPartIdx == 0 ) ? (m_uiNumPartition >> 3) + (m_uiNumPartition >> 4): m_uiNumPartition >> 1;
+      break;
+    case SIZE_nRx2N:
+      ruiPartIdxRB += ( uiPartIdx == 0 ) ? (m_uiNumPartition >> 2) + (m_uiNumPartition >> 3) + (m_uiNumPartition >> 4) : m_uiNumPartition >> 1;
+      break;
+    default:
+      assert (0);
+      break;
+  }
+}
+
+Bool TComDataCU::hasEqualMotion( UInt uiAbsPartIdx, const TComDataCU* pcCandCU, UInt uiCandAbsPartIdx ) const
+{
+  if ( getInterDir( uiAbsPartIdx ) != pcCandCU->getInterDir( uiCandAbsPartIdx ) )
+  {
+    return false;
+  }
+
+  for ( UInt uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
+  {
+    if ( getInterDir( uiAbsPartIdx ) & ( 1 << uiRefListIdx ) )
+    {
+      if ( getCUMvField( RefPicList( uiRefListIdx ) )->getMv( uiAbsPartIdx )     != pcCandCU->getCUMvField( RefPicList( uiRefListIdx ) )->getMv( uiCandAbsPartIdx ) ||
+        getCUMvField( RefPicList( uiRefListIdx ) )->getRefIdx( uiAbsPartIdx ) != pcCandCU->getCUMvField( RefPicList( uiRefListIdx ) )->getRefIdx( uiCandAbsPartIdx ) )
+      {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+//! Construct a list of merging candidates
+#if MCTS_ENC_CHECK
+Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComMvField* pcMvFieldNeighbours, UChar* puhInterDirNeighbours, Int& numValidMergeCand, UInt &numSpatialMergeCandidates, Int mrgCandIdx ) const
+#else
+Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComMvField* pcMvFieldNeighbours, UChar* puhInterDirNeighbours, Int& numValidMergeCand, Int mrgCandIdx ) const
+#endif
+{
+  UInt uiAbsPartAddr = m_absZIdxInCtu + uiAbsPartIdx;
+  Bool abCandIsInter[ MRG_MAX_NUM_CANDS ];
+  for( UInt ui = 0; ui < getSlice()->getMaxNumMergeCand(); ++ui )
+  {
+    abCandIsInter[ui] = false;
+    pcMvFieldNeighbours[ ( ui << 1 )     ].setRefIdx(NOT_VALID);
+    pcMvFieldNeighbours[ ( ui << 1 ) + 1 ].setRefIdx(NOT_VALID);
+  }
+  numValidMergeCand = getSlice()->getMaxNumMergeCand();
+  // compute the location of the current PU
+  Int xP, yP, nPSW, nPSH;
+  this->getPartPosition(uiPUIdx, xP, yP, nPSW, nPSH);
+
+  Int iCount = 0;
+
+  UInt uiPartIdxLT, uiPartIdxRT, uiPartIdxLB;
+  PartSize cCurPS = getPartitionSize( uiAbsPartIdx );
+  deriveLeftRightTopIdxGeneral( uiAbsPartIdx, uiPUIdx, uiPartIdxLT, uiPartIdxRT );
+  deriveLeftBottomIdxGeneral( uiAbsPartIdx, uiPUIdx, uiPartIdxLB );
+
+  //left
+  UInt uiLeftPartIdx = 0;
+  const TComDataCU *pcCULeft = getPULeft( uiLeftPartIdx, uiPartIdxLB );
+
+  Bool isAvailableA1 = pcCULeft &&
+                       pcCULeft->isDiffMER(xP -1, yP+nPSH-1, xP, yP) &&
+                       !( uiPUIdx == 1 && (cCurPS == SIZE_Nx2N || cCurPS == SIZE_nLx2N || cCurPS == SIZE_nRx2N) ) &&
+                       pcCULeft->isInter( uiLeftPartIdx ) ;
+
+  if ( isAvailableA1 )
+  {
+    abCandIsInter[iCount] = true;
+    // get Inter Dir
+    puhInterDirNeighbours[iCount] = pcCULeft->getInterDir( uiLeftPartIdx );
+    // get Mv from Left
+    TComDataCU::getMvField( pcCULeft, uiLeftPartIdx, REF_PIC_LIST_0, pcMvFieldNeighbours[iCount<<1] );
+    if ( getSlice()->isInterB() )
+    {
+      TComDataCU::getMvField( pcCULeft, uiLeftPartIdx, REF_PIC_LIST_1, pcMvFieldNeighbours[(iCount<<1)+1] );
+    }
+    if ( mrgCandIdx == iCount )
+    {
+#if MCTS_ENC_CHECK
+      numSpatialMergeCandidates = iCount + 1;
+#endif
+      return;
+    }
+    iCount ++;
+  }
+
+  // early termination
+  if (iCount == getSlice()->getMaxNumMergeCand())
+  {
