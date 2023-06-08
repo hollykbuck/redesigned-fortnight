@@ -2298,3 +2298,103 @@ Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComM
       TComDataCU::getMvField( pcCULeftBottom, uiLeftBottomPartIdx, REF_PIC_LIST_1, pcMvFieldNeighbours[(iCount<<1)+1] );
     }
     if ( mrgCandIdx == iCount )
+    {
+#if MCTS_ENC_CHECK
+      numSpatialMergeCandidates = iCount + 1;
+#endif
+      return;
+    }
+    iCount ++;
+  }
+  // early termination
+  if (iCount == getSlice()->getMaxNumMergeCand())
+  {
+#if MCTS_ENC_CHECK
+    numSpatialMergeCandidates = iCount;
+#endif
+    return;
+  }
+
+  // above left
+  if( iCount < 4 )
+  {
+    UInt uiAboveLeftPartIdx = 0;
+    const TComDataCU *pcCUAboveLeft = getPUAboveLeft( uiAboveLeftPartIdx, uiAbsPartAddr );
+
+    Bool isAvailableB2 = pcCUAboveLeft &&
+                         pcCUAboveLeft->isDiffMER(xP-1, yP-1, xP, yP) &&
+                         pcCUAboveLeft->isInter( uiAboveLeftPartIdx );
+
+    if ( isAvailableB2 && ( !isAvailableA1 || !pcCULeft->hasEqualMotion( uiLeftPartIdx, pcCUAboveLeft, uiAboveLeftPartIdx ) )
+        && ( !isAvailableB1 || !pcCUAbove->hasEqualMotion( uiAbovePartIdx, pcCUAboveLeft, uiAboveLeftPartIdx ) ) )
+    {
+      abCandIsInter[iCount] = true;
+      // get Inter Dir
+      puhInterDirNeighbours[iCount] = pcCUAboveLeft->getInterDir( uiAboveLeftPartIdx );
+      // get Mv from Left
+      TComDataCU::getMvField( pcCUAboveLeft, uiAboveLeftPartIdx, REF_PIC_LIST_0, pcMvFieldNeighbours[iCount<<1] );
+      if ( getSlice()->isInterB() )
+      {
+        TComDataCU::getMvField( pcCUAboveLeft, uiAboveLeftPartIdx, REF_PIC_LIST_1, pcMvFieldNeighbours[(iCount<<1)+1] );
+      }
+      if ( mrgCandIdx == iCount )
+      {
+#if MCTS_ENC_CHECK
+        numSpatialMergeCandidates = iCount + 1;
+#endif
+        return;
+      }
+      iCount ++;
+    }
+  }
+  // early termination
+  if (iCount == getSlice()->getMaxNumMergeCand())
+  {
+#if MCTS_ENC_CHECK
+    numSpatialMergeCandidates = iCount;
+#endif
+    return;
+  }
+#if MCTS_ENC_CHECK
+  numSpatialMergeCandidates = iCount;
+#endif
+  if ( getSlice()->getEnableTMVPFlag() )
+  {
+    //>> MTK colocated-RightBottom
+    UInt uiPartIdxRB;
+
+    deriveRightBottomIdx( uiPUIdx, uiPartIdxRB );
+
+    UInt uiAbsPartIdxTmp = g_auiZscanToRaster[uiPartIdxRB];
+    const UInt numPartInCtuWidth  = m_pcPic->getNumPartInCtuWidth();
+    const UInt numPartInCtuHeight = m_pcPic->getNumPartInCtuHeight();
+
+    TComMv cColMv;
+    Int iRefIdx;
+    Int ctuRsAddr = -1;
+
+    if (   ( ( m_pcPic->getCtu(m_ctuRsAddr)->getCUPelX() + g_auiRasterToPelX[uiAbsPartIdxTmp] + m_pcPic->getMinCUWidth () ) < m_pcSlice->getSPS()->getPicWidthInLumaSamples () )  // image boundary check
+        && ( ( m_pcPic->getCtu(m_ctuRsAddr)->getCUPelY() + g_auiRasterToPelY[uiAbsPartIdxTmp] + m_pcPic->getMinCUHeight() ) < m_pcSlice->getSPS()->getPicHeightInLumaSamples() ) )
+    {
+      if ( ( uiAbsPartIdxTmp % numPartInCtuWidth < numPartInCtuWidth - 1 ) &&           // is not at the last column of CTU
+        ( uiAbsPartIdxTmp / numPartInCtuWidth < numPartInCtuHeight - 1 ) )              // is not at the last row    of CTU
+      {
+        uiAbsPartAddr = g_auiRasterToZscan[ uiAbsPartIdxTmp + numPartInCtuWidth + 1 ];
+        ctuRsAddr = getCtuRsAddr();
+      }
+      else if ( uiAbsPartIdxTmp % numPartInCtuWidth < numPartInCtuWidth - 1 )           // is not at the last column of CTU But is last row of CTU
+      {
+        uiAbsPartAddr = g_auiRasterToZscan[ (uiAbsPartIdxTmp + numPartInCtuWidth + 1) % m_pcPic->getNumPartitionsInCtu() ];
+      }
+      else if ( uiAbsPartIdxTmp / numPartInCtuWidth < numPartInCtuHeight - 1 )          // is not at the last row of CTU But is last column of CTU
+      {
+        uiAbsPartAddr = g_auiRasterToZscan[ uiAbsPartIdxTmp + 1 ];
+        ctuRsAddr = getCtuRsAddr() + 1;
+      }
+      else //is the right bottom corner of CTU
+      {
+        uiAbsPartAddr = 0;
+      }
+    }
+
+    iRefIdx = 0;
