@@ -98,3 +98,103 @@ Void TComPicSym::create  ( const TComSPS &sps, const TComPPS &pps, UInt uiMaxDep
   const UInt uiMaxCuWidth  = sps.getMaxCUWidth();
   const UInt uiMaxCuHeight = sps.getMaxCUHeight();
 
+  m_uhTotalDepth       = uiMaxDepth;
+  m_numPartitionsInCtu = 1<<(m_uhTotalDepth<<1);
+
+  m_uiMinCUWidth       = uiMaxCuWidth  >> m_uhTotalDepth;
+  m_uiMinCUHeight      = uiMaxCuHeight >> m_uhTotalDepth;
+
+  m_numPartInCtuWidth  = uiMaxCuWidth  / m_uiMinCUWidth;  // equivalent to 1<<m_uhTotalDepth
+  m_numPartInCtuHeight = uiMaxCuHeight / m_uiMinCUHeight; // equivalent to 1<<m_uhTotalDepth
+
+  m_frameWidthInCtus   = ( iPicWidth %uiMaxCuWidth  ) ? iPicWidth /uiMaxCuWidth  + 1 : iPicWidth /uiMaxCuWidth;
+  m_frameHeightInCtus  = ( iPicHeight%uiMaxCuHeight ) ? iPicHeight/uiMaxCuHeight + 1 : iPicHeight/uiMaxCuHeight;
+
+  m_numCtusInFrame     = m_frameWidthInCtus * m_frameHeightInCtus;
+#if REDUCED_ENCODER_MEMORY
+  m_pictureCtuArray    = NULL;
+#else
+  m_pictureCtuArray    = new TComDataCU*[m_numCtusInFrame];
+#endif
+
+  clearSliceBuffer();
+  allocateNewSlice();
+
+#if ADAPTIVE_QP_SELECTION
+  if (m_pParentARLBuffer == NULL)
+  {
+    m_pParentARLBuffer = new TCoeff[uiMaxCuWidth*uiMaxCuHeight*MAX_NUM_COMPONENT];
+  }
+#endif
+
+#if REDUCED_ENCODER_MEMORY
+  if (bAllocateCtuArray)
+  {
+    prepareForReconstruction();
+  }
+#else
+  for (UInt i=0; i<m_numCtusInFrame ; i++ )
+  {
+    m_pictureCtuArray[i] = new TComDataCU;
+    m_pictureCtuArray[i]->create( chromaFormatIDC, m_numPartitionsInCtu, uiMaxCuWidth, uiMaxCuHeight, false, uiMaxCuWidth >> m_uhTotalDepth
+#if ADAPTIVE_QP_SELECTION
+      , m_pParentARLBuffer
+#endif
+      );
+  }
+#endif
+
+  m_ctuTsToRsAddrMap = new UInt[m_numCtusInFrame+1];
+  m_puiTileIdxMap    = new UInt[m_numCtusInFrame];
+  m_ctuRsToTsAddrMap = new UInt[m_numCtusInFrame+1];
+
+  for(UInt i=0; i<m_numCtusInFrame; i++ )
+  {
+    m_ctuTsToRsAddrMap[i] = i;
+    m_ctuRsToTsAddrMap[i] = i;
+  }
+
+  m_saoBlkParams = new SAOBlkParam[m_numCtusInFrame];
+
+
+  xInitTiles();
+  xInitCtuTsRsAddrMaps();
+
+}
+
+#if REDUCED_ENCODER_MEMORY
+Void TComPicSym::prepareForReconstruction()
+{
+  const ChromaFormat chromaFormatIDC = m_sps.getChromaFormatIdc();
+  const UInt uiMaxCuWidth  = m_sps.getMaxCUWidth();
+  const UInt uiMaxCuHeight = m_sps.getMaxCUHeight();
+  if (m_pictureCtuArray == NULL)
+  {
+    m_pictureCtuArray = new TComDataCU*[m_numCtusInFrame];
+
+    for (UInt i=0; i<m_numCtusInFrame ; i++ )
+    {
+      m_pictureCtuArray[i] = new TComDataCU;
+      m_pictureCtuArray[i]->create( chromaFormatIDC, m_numPartitionsInCtu, uiMaxCuWidth, uiMaxCuHeight, false, uiMaxCuWidth >> m_uhTotalDepth
+#if ADAPTIVE_QP_SELECTION
+        , m_pParentARLBuffer
+#endif
+        );
+    }
+  }
+  if (m_dpbPerCtuData == NULL)
+  {
+    m_dpbPerCtuData = new DPBPerCtuData[m_numCtusInFrame];
+    for(UInt i=0; i<m_numCtusInFrame; i++)
+    {
+      for(Int j=0; j<NUM_REF_PIC_LIST_01; j++)
+      {
+        m_dpbPerCtuData[i].m_CUMvField[j].create( m_numPartitionsInCtu );
+      }
+      m_dpbPerCtuData[i].m_pePredMode = new SChar[m_numPartitionsInCtu];
+      memset(m_dpbPerCtuData[i].m_pePredMode, NUMBER_OF_PREDICTION_MODES, m_numPartitionsInCtu);
+      m_dpbPerCtuData[i].m_pePartSize = new SChar[m_numPartitionsInCtu];
+      memset(m_dpbPerCtuData[i].m_pePartSize, NUMBER_OF_PART_SIZES, m_numPartitionsInCtu);
+      m_dpbPerCtuData[i].m_pSlice=NULL;
+    }
+  }
