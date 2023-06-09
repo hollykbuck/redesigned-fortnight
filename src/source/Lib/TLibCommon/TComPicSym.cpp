@@ -198,3 +198,103 @@ Void TComPicSym::prepareForReconstruction()
       m_dpbPerCtuData[i].m_pSlice=NULL;
     }
   }
+}
+
+Void TComPicSym::releaseReconstructionIntermediateData()
+{
+  if (m_pictureCtuArray)
+  {
+    for (Int i = 0; i < m_numCtusInFrame; i++)
+    {
+      if (m_pictureCtuArray[i])
+      {
+        m_pictureCtuArray[i]->destroy();
+        delete m_pictureCtuArray[i];
+        m_pictureCtuArray[i] = NULL;
+      }
+    }
+    delete [] m_pictureCtuArray;
+    m_pictureCtuArray = NULL;
+  }
+}
+
+Void TComPicSym::releaseAllReconstructionData()
+{
+  releaseReconstructionIntermediateData();
+
+  if (m_dpbPerCtuData != NULL)
+  {
+    for(UInt i=0; i<m_numCtusInFrame; i++)
+    {
+      for(Int j=0; j<NUM_REF_PIC_LIST_01; j++)
+      {
+        m_dpbPerCtuData[i].m_CUMvField[j].destroy();
+      }
+      delete [] m_dpbPerCtuData[i].m_pePredMode;
+      delete [] m_dpbPerCtuData[i].m_pePartSize;
+    }
+    delete [] m_dpbPerCtuData;
+    m_dpbPerCtuData=NULL;
+  }
+}
+#endif
+
+Void TComPicSym::destroy()
+{
+  clearSliceBuffer();
+
+#if REDUCED_ENCODER_MEMORY
+  releaseAllReconstructionData();
+#else
+  if (m_pictureCtuArray)
+  {
+    for (Int i = 0; i < m_numCtusInFrame; i++)
+    {
+      if (m_pictureCtuArray[i])
+      {
+        m_pictureCtuArray[i]->destroy();
+        delete m_pictureCtuArray[i];
+        m_pictureCtuArray[i] = NULL;
+      }
+    }
+    delete [] m_pictureCtuArray;
+    m_pictureCtuArray = NULL;
+  }
+#endif
+
+  delete [] m_ctuTsToRsAddrMap;
+  m_ctuTsToRsAddrMap = NULL;
+
+  delete [] m_puiTileIdxMap;
+  m_puiTileIdxMap = NULL;
+
+  delete [] m_ctuRsToTsAddrMap;
+  m_ctuRsToTsAddrMap = NULL;
+
+  if(m_saoBlkParams)
+  {
+    delete[] m_saoBlkParams; m_saoBlkParams = NULL;
+  }
+
+#if ADAPTIVE_QP_SELECTION
+  delete [] m_pParentARLBuffer;
+  m_pParentARLBuffer = NULL;
+#endif
+}
+
+Void TComPicSym::allocateNewSlice()
+{
+  m_apSlices.push_back(new TComSlice);
+  m_apSlices.back()->setPPS(&m_pps);
+  m_apSlices.back()->setSPS(&m_sps);
+  if (m_apSlices.size()>=2)
+  {
+    m_apSlices.back()->copySliceInfo( m_apSlices[m_apSlices.size()-2] );
+    m_apSlices.back()->initSlice();
+  }
+}
+
+Void TComPicSym::clearSliceBuffer()
+{
+  for (UInt i = 0; i < UInt(m_apSlices.size()); i++)
+  {
