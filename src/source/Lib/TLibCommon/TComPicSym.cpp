@@ -298,3 +298,103 @@ Void TComPicSym::clearSliceBuffer()
 {
   for (UInt i = 0; i < UInt(m_apSlices.size()); i++)
   {
+    delete m_apSlices[i];
+  }
+  m_apSlices.clear();
+}
+
+Void TComPicSym::xInitCtuTsRsAddrMaps()
+{
+  //generate the Coding Order Map and Inverse Coding Order Map
+  for(Int ctuTsAddr=0, ctuRsAddr=0; ctuTsAddr<getNumberOfCtusInFrame(); ctuTsAddr++, ctuRsAddr = xCalculateNextCtuRSAddr(ctuRsAddr))
+  {
+    setCtuTsToRsAddrMap(ctuTsAddr, ctuRsAddr);
+    setCtuRsToTsAddrMap(ctuRsAddr, ctuTsAddr);
+  }
+  setCtuTsToRsAddrMap(getNumberOfCtusInFrame(), getNumberOfCtusInFrame());
+  setCtuRsToTsAddrMap(getNumberOfCtusInFrame(), getNumberOfCtusInFrame());
+}
+
+Void TComPicSym::xInitTiles()
+{
+  //set NumColumnsMinus1 and NumRowsMinus1
+  setNumTileColumnsMinus1( m_pps.getNumTileColumnsMinus1() );
+  setNumTileRowsMinus1(    m_pps.getNumTileRowsMinus1()    );
+
+  const Int numCols = m_pps.getNumTileColumnsMinus1() + 1;
+  const Int numRows = m_pps.getNumTileRowsMinus1() + 1;
+  const Int numTiles = numRows * numCols;
+
+  // allocate memory for tile parameters
+  m_tileParameters.resize(numTiles);
+
+  if( m_pps.getTileUniformSpacingFlag() )
+  {
+    //set width and height for each (uniform) tile
+    for(Int row=0; row < numRows; row++)
+    {
+      for(Int col=0; col < numCols; col++)
+      {
+        const Int tileIdx = row * numCols + col;
+        m_tileParameters[tileIdx].setTileWidthInCtus(  (col+1)*getFrameWidthInCtus( )/numCols - (col*getFrameWidthInCtus( ))/numCols );
+        m_tileParameters[tileIdx].setTileHeightInCtus( (row+1)*getFrameHeightInCtus()/numRows - (row*getFrameHeightInCtus())/numRows );
+      }
+    }
+  }
+  else
+  {
+    //set the width for each tile
+    for(Int row=0; row < numRows; row++)
+    {
+      Int cumulativeTileWidth = 0;
+      for(Int col=0; col < getNumTileColumnsMinus1(); col++)
+      {
+        m_tileParameters[row * numCols + col].setTileWidthInCtus( m_pps.getTileColumnWidth(col) );
+        cumulativeTileWidth += m_pps.getTileColumnWidth(col);
+      }
+      m_tileParameters[row * numCols + getNumTileColumnsMinus1()].setTileWidthInCtus( getFrameWidthInCtus()-cumulativeTileWidth );
+    }
+
+    //set the height for each tile
+    for(Int col=0; col < numCols; col++)
+    {
+      Int cumulativeTileHeight = 0;
+      for(Int row=0; row < getNumTileRowsMinus1(); row++)
+      {
+        m_tileParameters[row * numCols + col].setTileHeightInCtus( m_pps.getTileRowHeight(row) );
+        cumulativeTileHeight += m_pps.getTileRowHeight(row);
+      }
+      m_tileParameters[getNumTileRowsMinus1() * numCols + col].setTileHeightInCtus( getFrameHeightInCtus()-cumulativeTileHeight );
+    }
+  }
+
+  // Tile size check
+  Int minWidth  = 1;
+  Int minHeight = 1;
+  const Int profileIdc = m_sps.getPTL()->getGeneralPTL()->getProfileIdc();
+  if (  profileIdc == Profile::MAIN || profileIdc == Profile::MAIN10) //TODO: add more profiles to the tile-size check...
+  {
+    if (m_pps.getTilesEnabledFlag())
+    {
+      minHeight = 64  / m_sps.getMaxCUHeight();
+      minWidth  = 256 / m_sps.getMaxCUWidth();
+    }
+  }
+  for(Int row=0; row < numRows; row++)
+  {
+    for(Int col=0; col < numCols; col++)
+    {
+      const Int tileIdx = row * numCols + col;
+      assert (m_tileParameters[tileIdx].getTileWidthInCtus() >= minWidth);
+      assert (m_tileParameters[tileIdx].getTileHeightInCtus() >= minHeight);
+    }
+  }
+
+  //initialize each tile of the current picture
+  for( Int row=0; row < numRows; row++ )
+  {
+    for( Int col=0; col < numCols; col++ )
+    {
+      const Int tileIdx = row * numCols + col;
+
+      //initialize the RightEdgePosInCU for each tile
