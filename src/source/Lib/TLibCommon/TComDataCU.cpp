@@ -2398,3 +2398,103 @@ Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComM
     }
 
     iRefIdx = 0;
+
+    Bool bExistMV = false;
+    UInt uiPartIdxCenter;
+    Int dir = 0;
+    UInt uiArrayAddr = iCount;
+    xDeriveCenterIdx( uiPUIdx, uiPartIdxCenter );
+    bExistMV = ctuRsAddr >= 0 && xGetColMVP( REF_PIC_LIST_0, ctuRsAddr, uiAbsPartAddr, cColMv, iRefIdx );
+    if( bExistMV == false )
+    {
+      bExistMV = xGetColMVP( REF_PIC_LIST_0, getCtuRsAddr(), uiPartIdxCenter,  cColMv, iRefIdx );
+    }
+    if( bExistMV )
+    {
+      dir |= 1;
+      pcMvFieldNeighbours[ 2 * uiArrayAddr ].setMvField( cColMv, iRefIdx );
+    }
+
+    if ( getSlice()->isInterB() )
+    {
+      bExistMV = ctuRsAddr >= 0 && xGetColMVP( REF_PIC_LIST_1, ctuRsAddr, uiAbsPartAddr, cColMv, iRefIdx);
+      if( bExistMV == false )
+      {
+        bExistMV = xGetColMVP( REF_PIC_LIST_1, getCtuRsAddr(), uiPartIdxCenter, cColMv, iRefIdx );
+      }
+      if( bExistMV )
+      {
+        dir |= 2;
+        pcMvFieldNeighbours[ 2 * uiArrayAddr + 1 ].setMvField( cColMv, iRefIdx );
+      }
+    }
+
+    if (dir != 0)
+    {
+      puhInterDirNeighbours[uiArrayAddr] = dir;
+      abCandIsInter[uiArrayAddr] = true;
+
+      if ( mrgCandIdx == iCount )
+      {
+        return;
+      }
+      iCount++;
+    }
+  }
+  // early termination
+  if (iCount == getSlice()->getMaxNumMergeCand())
+  {
+    return;
+  }
+
+  UInt uiArrayAddr = iCount;
+  UInt uiCutoff = uiArrayAddr;
+
+  if ( getSlice()->isInterB() )
+  {
+    static const UInt NUM_PRIORITY_LIST=12;
+    static const UInt uiPriorityList0[NUM_PRIORITY_LIST] = {0 , 1, 0, 2, 1, 2, 0, 3, 1, 3, 2, 3};
+    static const UInt uiPriorityList1[NUM_PRIORITY_LIST] = {1 , 0, 2, 0, 2, 1, 3, 0, 3, 1, 3, 2};
+
+    for (Int idx=0; idx<uiCutoff*(uiCutoff-1) && uiArrayAddr!= getSlice()->getMaxNumMergeCand(); idx++)
+    {
+      assert(idx<NUM_PRIORITY_LIST);
+      Int i = uiPriorityList0[idx];
+      Int j = uiPriorityList1[idx];
+      if (abCandIsInter[i] && abCandIsInter[j]&& (puhInterDirNeighbours[i]&0x1)&&(puhInterDirNeighbours[j]&0x2))
+      {
+        abCandIsInter[uiArrayAddr] = true;
+        puhInterDirNeighbours[uiArrayAddr] = 3;
+
+        // get Mv from cand[i] and cand[j]
+        pcMvFieldNeighbours[uiArrayAddr << 1].setMvField(pcMvFieldNeighbours[i<<1].getMv(), pcMvFieldNeighbours[i<<1].getRefIdx());
+        pcMvFieldNeighbours[( uiArrayAddr << 1 ) + 1].setMvField(pcMvFieldNeighbours[(j<<1)+1].getMv(), pcMvFieldNeighbours[(j<<1)+1].getRefIdx());
+
+        Int iRefPOCL0 = m_pcSlice->getRefPOC( REF_PIC_LIST_0, pcMvFieldNeighbours[(uiArrayAddr<<1)].getRefIdx() );
+        Int iRefPOCL1 = m_pcSlice->getRefPOC( REF_PIC_LIST_1, pcMvFieldNeighbours[(uiArrayAddr<<1)+1].getRefIdx() );
+        if (iRefPOCL0 == iRefPOCL1 && pcMvFieldNeighbours[(uiArrayAddr<<1)].getMv() == pcMvFieldNeighbours[(uiArrayAddr<<1)+1].getMv())
+        {
+          abCandIsInter[uiArrayAddr] = false;
+        }
+        else
+        {
+          uiArrayAddr++;
+        }
+      }
+    }
+  }
+  // early termination
+  if (uiArrayAddr == getSlice()->getMaxNumMergeCand())
+  {
+    return;
+  }
+
+  Int iNumRefIdx = (getSlice()->isInterB()) ? min(m_pcSlice->getNumRefIdx(REF_PIC_LIST_0), m_pcSlice->getNumRefIdx(REF_PIC_LIST_1)) : m_pcSlice->getNumRefIdx(REF_PIC_LIST_0);
+
+  Int r = 0;
+  Int refcnt = 0;
+  while (uiArrayAddr < getSlice()->getMaxNumMergeCand())
+  {
+    abCandIsInter[uiArrayAddr] = true;
+    puhInterDirNeighbours[uiArrayAddr] = 1;
+    pcMvFieldNeighbours[uiArrayAddr << 1].setMvField( TComMv(0, 0), r);
