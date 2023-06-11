@@ -2598,3 +2598,103 @@ Void TComDataCU::getPartPosition( UInt partIdx, Int& xP, Int& yP, Int& nPSW, Int
     nPSW = getWidth(0);
     nPSH = getHeight(0);
     xP   = col ;
+    yP   = row ;
+
+    break;
+  }
+}
+
+/** Constructs a list of candidates for AMVP (See specification, section "Derivation process for motion vector predictor candidates")
+ * \param uiPartIdx
+ * \param uiPartAddr
+ * \param eRefPicList
+ * \param iRefIdx
+ * \param pInfo
+ */
+Void TComDataCU::fillMvpCand ( const UInt partIdx, const UInt partAddr, const RefPicList eRefPicList, const Int refIdx, AMVPInfo* pInfo ) const
+{
+  pInfo->iN = 0;
+  if (refIdx < 0)
+  {
+#if MCTS_ENC_CHECK
+    pInfo->numSpatialMVPCandidates = 0;
+#endif
+    return;
+  }
+
+  //-- Get Spatial MV
+  UInt partIdxLT, partIdxRT, partIdxLB;
+  deriveLeftRightTopIdx( partIdx, partIdxLT, partIdxRT );
+  deriveLeftBottomIdx( partIdx, partIdxLB );
+
+  Bool isScaledFlagLX = false; /// variable name from specification; true when the PUs below left or left are available (availableA0 || availableA1).
+  {
+    UInt idx;
+    const TComDataCU* tmpCU = getPUBelowLeft(idx, partIdxLB);
+    isScaledFlagLX = (tmpCU != NULL) && (tmpCU->isInter(idx));
+    if (!isScaledFlagLX)
+    {
+      tmpCU = getPULeft(idx, partIdxLB);
+      isScaledFlagLX = (tmpCU != NULL) && (tmpCU->isInter(idx));
+    }
+  }
+
+  // Left predictor search
+  if (isScaledFlagLX)
+  {
+    Bool bAdded = xAddMVPCandUnscaled( *pInfo, eRefPicList, refIdx, partIdxLB, MD_BELOW_LEFT);
+    if (!bAdded)
+    {
+      bAdded = xAddMVPCandUnscaled( *pInfo, eRefPicList, refIdx, partIdxLB, MD_LEFT );
+      if(!bAdded)
+      {
+        bAdded = xAddMVPCandWithScaling( *pInfo, eRefPicList, refIdx, partIdxLB, MD_BELOW_LEFT);
+        if (!bAdded)
+        {
+          xAddMVPCandWithScaling( *pInfo, eRefPicList, refIdx, partIdxLB, MD_LEFT );
+        }
+      }
+    }
+  }
+
+  // Above predictor search
+  {
+    Bool bAdded = xAddMVPCandUnscaled( *pInfo, eRefPicList, refIdx, partIdxRT, MD_ABOVE_RIGHT);
+    if (!bAdded)
+    {
+      bAdded = xAddMVPCandUnscaled( *pInfo, eRefPicList, refIdx, partIdxRT, MD_ABOVE);
+      if(!bAdded)
+      {
+        xAddMVPCandUnscaled( *pInfo, eRefPicList, refIdx, partIdxLT, MD_ABOVE_LEFT);
+      }
+    }
+  }
+
+  if(!isScaledFlagLX)
+  {
+    Bool bAdded = xAddMVPCandWithScaling( *pInfo, eRefPicList, refIdx, partIdxRT, MD_ABOVE_RIGHT);
+    if (!bAdded)
+    {
+      bAdded = xAddMVPCandWithScaling( *pInfo, eRefPicList, refIdx, partIdxRT, MD_ABOVE);
+      if(!bAdded)
+      {
+        xAddMVPCandWithScaling( *pInfo, eRefPicList, refIdx, partIdxLT, MD_ABOVE_LEFT);
+      }
+    }
+  }
+
+  if ( pInfo->iN == 2 )
+  {
+    if ( pInfo->m_acMvCand[ 0 ] == pInfo->m_acMvCand[ 1 ] )
+    {
+      pInfo->iN = 1;
+    }
+  }
+#if MCTS_ENC_CHECK
+  pInfo->numSpatialMVPCandidates = pInfo->iN;
+#endif
+  if (pInfo->iN < AMVP_MAX_NUM_CANDS && getSlice()->getEnableTMVPFlag() )
+  {
+    // Get Temporal Motion Predictor
+    const UInt numPartInCtuWidth  = m_pcPic->getNumPartInCtuWidth();
+    const UInt numPartInCtuHeight = m_pcPic->getNumPartInCtuHeight();
