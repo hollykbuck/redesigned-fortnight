@@ -398,3 +398,103 @@ Void TComPicSym::xInitTiles()
       const Int tileIdx = row * numCols + col;
 
       //initialize the RightEdgePosInCU for each tile
+      Int rightEdgePosInCTU = 0;
+      for( Int i=0; i <= col; i++ )
+      {
+        rightEdgePosInCTU += m_tileParameters[row * numCols + i].getTileWidthInCtus();
+      }
+      m_tileParameters[tileIdx].setRightEdgePosInCtus(rightEdgePosInCTU-1);
+
+      //initialize the BottomEdgePosInCU for each tile
+      Int bottomEdgePosInCTU = 0;
+      for( Int i=0; i <= row; i++ )
+      {
+        bottomEdgePosInCTU += m_tileParameters[i * numCols + col].getTileHeightInCtus();
+      }
+      m_tileParameters[tileIdx].setBottomEdgePosInCtus(bottomEdgePosInCTU-1);
+
+      //initialize the FirstCUAddr for each tile
+      m_tileParameters[tileIdx].setFirstCtuRsAddr( (m_tileParameters[tileIdx].getBottomEdgePosInCtus() - m_tileParameters[tileIdx].getTileHeightInCtus() + 1) * getFrameWidthInCtus() +
+                                                    m_tileParameters[tileIdx].getRightEdgePosInCtus()  - m_tileParameters[tileIdx].getTileWidthInCtus()  + 1);
+    }
+  }
+
+  Int  columnIdx = 0;
+  Int  rowIdx = 0;
+
+  //initialize the TileIdxMap
+  for( Int i=0; i<m_numCtusInFrame; i++)
+  {
+    for( Int col=0; col < numCols; col++)
+    {
+      if(i % getFrameWidthInCtus() <= m_tileParameters[col].getRightEdgePosInCtus())
+      {
+        columnIdx = col;
+        break;
+      }
+    }
+    for(Int row=0; row < numRows; row++)
+    {
+      if(i / getFrameWidthInCtus() <= m_tileParameters[row*numCols].getBottomEdgePosInCtus())
+      {
+        rowIdx = row;
+        break;
+      }
+    }
+    m_puiTileIdxMap[i] = rowIdx * numCols + columnIdx;
+  }
+}
+UInt TComPicSym::xCalculateNextCtuRSAddr( UInt currCtuRsAddr )
+{
+  UInt  nextCtuRsAddr;
+
+  //get the tile index for the current CTU
+  const UInt uiTileIdx = getTileIdxMap(currCtuRsAddr);
+
+  //get the raster scan address for the next CTU
+  if( currCtuRsAddr % m_frameWidthInCtus == getTComTile(uiTileIdx)->getRightEdgePosInCtus() && currCtuRsAddr / m_frameWidthInCtus == getTComTile(uiTileIdx)->getBottomEdgePosInCtus() )
+  //the current CTU is the last CTU of the tile
+  {
+    if(uiTileIdx+1 == getNumTiles())
+    {
+      nextCtuRsAddr = m_numCtusInFrame;
+    }
+    else
+    {
+      nextCtuRsAddr = getTComTile(uiTileIdx+1)->getFirstCtuRsAddr();
+    }
+  }
+  else //the current CTU is not the last CTU of the tile
+  {
+    if( currCtuRsAddr % m_frameWidthInCtus == getTComTile(uiTileIdx)->getRightEdgePosInCtus() )  //the current CTU is on the rightmost edge of the tile
+    {
+      nextCtuRsAddr = currCtuRsAddr + m_frameWidthInCtus - getTComTile(uiTileIdx)->getTileWidthInCtus() + 1;
+    }
+    else
+    {
+      nextCtuRsAddr = currCtuRsAddr + 1;
+    }
+  }
+
+  return nextCtuRsAddr;
+}
+
+Void TComPicSym::deriveLoopFilterBoundaryAvailibility(Int ctuRsAddr,
+                                                      Bool& isLeftAvail,
+                                                      Bool& isRightAvail,
+                                                      Bool& isAboveAvail,
+                                                      Bool& isBelowAvail,
+                                                      Bool& isAboveLeftAvail,
+                                                      Bool& isAboveRightAvail,
+                                                      Bool& isBelowLeftAvail,
+                                                      Bool& isBelowRightAvail
+                                                      )
+{
+
+  isLeftAvail      = (ctuRsAddr % m_frameWidthInCtus != 0);
+  isRightAvail     = (ctuRsAddr % m_frameWidthInCtus != m_frameWidthInCtus-1);
+  isAboveAvail     = (ctuRsAddr >= m_frameWidthInCtus );
+  isBelowAvail     = (ctuRsAddr <  m_numCtusInFrame - m_frameWidthInCtus);
+  isAboveLeftAvail = (isAboveAvail && isLeftAvail);
+  isAboveRightAvail= (isAboveAvail && isRightAvail);
+  isBelowLeftAvail = (isBelowAvail && isLeftAvail);
