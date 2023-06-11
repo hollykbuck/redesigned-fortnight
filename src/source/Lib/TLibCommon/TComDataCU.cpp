@@ -2498,3 +2498,103 @@ Void TComDataCU::getInterMergeCandidates( UInt uiAbsPartIdx, UInt uiPUIdx, TComM
     abCandIsInter[uiArrayAddr] = true;
     puhInterDirNeighbours[uiArrayAddr] = 1;
     pcMvFieldNeighbours[uiArrayAddr << 1].setMvField( TComMv(0, 0), r);
+
+    if ( getSlice()->isInterB() )
+    {
+      puhInterDirNeighbours[uiArrayAddr] = 3;
+      pcMvFieldNeighbours[(uiArrayAddr << 1) + 1].setMvField(TComMv(0, 0), r);
+    }
+    uiArrayAddr++;
+
+    if ( refcnt == iNumRefIdx - 1 )
+    {
+      r = 0;
+    }
+    else
+    {
+      ++r;
+      ++refcnt;
+    }
+  }
+  numValidMergeCand = uiArrayAddr;
+}
+
+/** Check whether the current PU and a spatial neighboring PU are in a same ME region.
+ * \param xN, yN   location of the upper-left corner pixel of a neighboring PU
+ * \param xP, yP   location of the upper-left corner pixel of the current PU
+ */
+Bool TComDataCU::isDiffMER(Int xN, Int yN, Int xP, Int yP) const
+{
+
+  UInt plevel = this->getSlice()->getPPS()->getLog2ParallelMergeLevelMinus2() + 2;
+  if ((xN>>plevel)!= (xP>>plevel))
+  {
+    return true;
+  }
+  if ((yN>>plevel)!= (yP>>plevel))
+  {
+    return true;
+  }
+  return false;
+}
+
+/** Calculate the location of upper-left corner pixel and size of the current PU.
+ * \param partIdx       PU index within a CU
+ * \param xP, yP        location of the upper-left corner pixel of the current PU
+ * \param nPSW, nPSH    size of the current PU
+ */
+Void TComDataCU::getPartPosition( UInt partIdx, Int& xP, Int& yP, Int& nPSW, Int& nPSH) const
+{
+  UInt col = m_uiCUPelX;
+  UInt row = m_uiCUPelY;
+
+  switch ( m_pePartSize[0] )
+  {
+  case SIZE_2NxN:
+    nPSW = getWidth(0);
+    nPSH = getHeight(0) >> 1;
+    xP   = col;
+    yP   = (partIdx ==0)? row: row + nPSH;
+    break;
+  case SIZE_Nx2N:
+    nPSW = getWidth(0) >> 1;
+    nPSH = getHeight(0);
+    xP   = (partIdx ==0)? col: col + nPSW;
+    yP   = row;
+    break;
+  case SIZE_NxN:
+    nPSW = getWidth(0) >> 1;
+    nPSH = getHeight(0) >> 1;
+    xP   = col + (partIdx&0x1)*nPSW;
+    yP   = row + (partIdx>>1)*nPSH;
+    break;
+  case SIZE_2NxnU:
+    nPSW = getWidth(0);
+    nPSH = ( partIdx == 0 ) ?  getHeight(0) >> 2 : ( getHeight(0) >> 2 ) + ( getHeight(0) >> 1 );
+    xP   = col;
+    yP   = (partIdx ==0)? row: row + getHeight(0) - nPSH;
+
+    break;
+  case SIZE_2NxnD:
+    nPSW = getWidth(0);
+    nPSH = ( partIdx == 0 ) ?  ( getHeight(0) >> 2 ) + ( getHeight(0) >> 1 ) : getHeight(0) >> 2;
+    xP   = col;
+    yP   = (partIdx ==0)? row: row + getHeight(0) - nPSH;
+    break;
+  case SIZE_nLx2N:
+    nPSW = ( partIdx == 0 ) ? getWidth(0) >> 2 : ( getWidth(0) >> 2 ) + ( getWidth(0) >> 1 );
+    nPSH = getHeight(0);
+    xP   = (partIdx ==0)? col: col + getWidth(0) - nPSW;
+    yP   = row;
+    break;
+  case SIZE_nRx2N:
+    nPSW = ( partIdx == 0 ) ? ( getWidth(0) >> 2 ) + ( getWidth(0) >> 1 ) : getWidth(0) >> 2;
+    nPSH = getHeight(0);
+    xP   = (partIdx ==0)? col: col + getWidth(0) - nPSW;
+    yP   = row;
+    break;
+  default:
+    assert ( m_pePartSize[0] == SIZE_2Nx2N );
+    nPSW = getWidth(0);
+    nPSH = getHeight(0);
+    xP   = col ;
