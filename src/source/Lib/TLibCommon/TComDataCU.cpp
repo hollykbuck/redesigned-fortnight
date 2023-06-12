@@ -2698,3 +2698,103 @@ Void TComDataCU::fillMvpCand ( const UInt partIdx, const UInt partAddr, const Re
     // Get Temporal Motion Predictor
     const UInt numPartInCtuWidth  = m_pcPic->getNumPartInCtuWidth();
     const UInt numPartInCtuHeight = m_pcPic->getNumPartInCtuHeight();
+    const Int refIdx_Col = refIdx;
+    TComMv cColMv;
+    UInt partIdxRB;
+    UInt absPartIdx;
+
+    deriveRightBottomIdx( partIdx, partIdxRB );
+    UInt absPartAddr = m_absZIdxInCtu + partAddr;
+
+    //----  co-located RightBottom Temporal Predictor (H) ---//
+    absPartIdx = g_auiZscanToRaster[partIdxRB];
+    Int ctuRsAddr = -1;
+    if (  ( ( m_pcPic->getCtu(m_ctuRsAddr)->getCUPelX() + g_auiRasterToPelX[absPartIdx] + m_pcPic->getMinCUWidth () ) < m_pcSlice->getSPS()->getPicWidthInLumaSamples () )  // image boundary check
+       && ( ( m_pcPic->getCtu(m_ctuRsAddr)->getCUPelY() + g_auiRasterToPelY[absPartIdx] + m_pcPic->getMinCUHeight() ) < m_pcSlice->getSPS()->getPicHeightInLumaSamples() ) )
+    {
+      if ( ( absPartIdx % numPartInCtuWidth < numPartInCtuWidth - 1 ) &&  // is not at the last column of CTU
+           ( absPartIdx / numPartInCtuWidth < numPartInCtuHeight - 1 ) )  // is not at the last row    of CTU
+      {
+        absPartAddr = g_auiRasterToZscan[ absPartIdx + numPartInCtuWidth + 1 ];
+        ctuRsAddr = getCtuRsAddr();
+      }
+      else if ( absPartIdx % numPartInCtuWidth < numPartInCtuWidth - 1 )  // is not at the last column of CTU But is last row of CTU
+      {
+        absPartAddr = g_auiRasterToZscan[ (absPartIdx + numPartInCtuWidth + 1) % m_pcPic->getNumPartitionsInCtu() ];
+      }
+      else if ( absPartIdx / numPartInCtuWidth < numPartInCtuHeight - 1 ) // is not at the last row of CTU But is last column of CTU
+      {
+        absPartAddr = g_auiRasterToZscan[ absPartIdx + 1 ];
+        ctuRsAddr = getCtuRsAddr() + 1;
+      }
+      else //is the right bottom corner of CTU
+      {
+        absPartAddr = 0;
+      }
+    }
+    if ( ctuRsAddr >= 0 && xGetColMVP( eRefPicList, ctuRsAddr, absPartAddr, cColMv, refIdx_Col ) )
+    {
+      pInfo->m_acMvCand[pInfo->iN++] = cColMv;
+    }
+    else
+    {
+      UInt uiPartIdxCenter;
+      xDeriveCenterIdx( partIdx, uiPartIdxCenter );
+      if (xGetColMVP( eRefPicList, getCtuRsAddr(), uiPartIdxCenter,  cColMv, refIdx_Col ))
+      {
+        pInfo->m_acMvCand[pInfo->iN++] = cColMv;
+      }
+    }
+    //----  co-located RightBottom Temporal Predictor  ---//
+  }
+
+  while (pInfo->iN < AMVP_MAX_NUM_CANDS)
+  {
+    pInfo->m_acMvCand[pInfo->iN].set(0,0);
+    pInfo->iN++;
+  }
+  return ;
+}
+
+
+Bool TComDataCU::isBipredRestriction(UInt puIdx) const
+{
+  Int width = 0;
+  Int height = 0;
+  UInt partAddr;
+
+  getPartIndexAndSize( puIdx, partAddr, width, height );
+  if ( getWidth(0) == 8 && (width < 8 || height < 8) )
+  {
+    return true;
+  }
+  return false;
+}
+
+
+Void TComDataCU::clipMv    (TComMv&  rcMv) const
+{
+  const TComSPS &sps=*(m_pcSlice->getSPS());
+  Int  iMvShift = 2;
+  Int iOffset = 8;
+  Int iHorMax = ( sps.getPicWidthInLumaSamples() + iOffset - (Int)m_uiCUPelX - 1 ) << iMvShift;
+  Int iHorMin = (      -(Int)sps.getMaxCUWidth() - iOffset - (Int)m_uiCUPelX + 1 ) << iMvShift;
+
+  Int iVerMax = ( sps.getPicHeightInLumaSamples() + iOffset - (Int)m_uiCUPelY - 1 ) << iMvShift;
+  Int iVerMin = (      -(Int)sps.getMaxCUHeight() - iOffset - (Int)m_uiCUPelY + 1 ) << iMvShift;
+
+  rcMv.setHor( min (iHorMax, max (iHorMin, rcMv.getHor())) );
+  rcMv.setVer( min (iVerMax, max (iVerMin, rcMv.getVer())) );
+}
+
+
+UInt TComDataCU::getIntraSizeIdx(UInt uiAbsPartIdx) const
+{
+  UInt uiShift = ( m_pePartSize[uiAbsPartIdx]==SIZE_NxN ? 1 : 0 );
+
+  UChar uiWidth = m_puhWidth[uiAbsPartIdx]>>uiShift;
+  UInt  uiCnt = 0;
+  while( uiWidth )
+  {
+    uiCnt++;
+    uiWidth>>=1;
