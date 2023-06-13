@@ -2798,3 +2798,103 @@ UInt TComDataCU::getIntraSizeIdx(UInt uiAbsPartIdx) const
   {
     uiCnt++;
     uiWidth>>=1;
+  }
+  uiCnt-=2;
+  return uiCnt > 6 ? 6 : uiCnt;
+}
+
+Void TComDataCU::clearCbf( UInt uiIdx, ComponentID compID, UInt uiNumParts )
+{
+  memset( &m_puhCbf[compID][uiIdx], 0, sizeof(UChar)*uiNumParts);
+}
+
+/** Set a I_PCM flag for all sub-partitions of a partition.
+ * \param bIpcmFlag I_PCM flag
+ * \param uiAbsPartIdx patition index
+ * \param uiDepth CU depth
+ * \returns Void
+ */
+Void TComDataCU::setIPCMFlagSubParts  (Bool bIpcmFlag, UInt uiAbsPartIdx, UInt uiDepth)
+{
+  UInt uiCurrPartNumb = m_pcPic->getNumPartitionsInCtu() >> (uiDepth << 1);
+
+  memset(m_pbIPCMFlag + uiAbsPartIdx, bIpcmFlag, sizeof(Bool)*uiCurrPartNumb );
+}
+
+/** Test whether the block at uiPartIdx is skipped.
+ * \param uiPartIdx Partition index
+ * \returns true if the current the block is skipped
+ */
+Bool TComDataCU::isSkipped( UInt uiPartIdx ) const
+{
+  return ( getSkipFlag( uiPartIdx ) );
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+Bool TComDataCU::xAddMVPCandUnscaled( AMVPInfo &info, const RefPicList eRefPicList, const Int iRefIdx, const UInt uiPartUnitIdx, const MVP_DIR eDir ) const
+{
+  const TComDataCU* neibCU = NULL;
+  UInt neibPUPartIdx;
+  switch( eDir )
+  {
+    case MD_LEFT:
+    {
+      neibCU = getPULeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+    case MD_ABOVE:
+    {
+      neibCU = getPUAbove(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+    case MD_ABOVE_RIGHT:
+    {
+      neibCU = getPUAboveRight(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+    case MD_BELOW_LEFT:
+    {
+      neibCU = getPUBelowLeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+    case MD_ABOVE_LEFT:
+    {
+      neibCU = getPUAboveLeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+
+  if ( neibCU == NULL )
+  {
+    return false;
+  }
+
+  const Int        currRefPOC     = m_pcSlice->getRefPic( eRefPicList, iRefIdx)->getPOC();
+  const RefPicList eRefPicList2nd = (eRefPicList == REF_PIC_LIST_0) ? REF_PIC_LIST_1 : REF_PIC_LIST_0;
+
+  for(Int predictorSource=0; predictorSource<2; predictorSource++) // examine the indicated reference picture list, then if not available, examine the other list.
+  {
+    const RefPicList eRefPicListIndex = (predictorSource==0) ? eRefPicList : eRefPicList2nd;
+    const Int        neibRefIdx       = neibCU->getCUMvField(eRefPicListIndex)->getRefIdx(neibPUPartIdx);
+
+    if ( neibRefIdx >= 0 && currRefPOC == neibCU->getSlice()->getRefPOC( eRefPicListIndex, neibRefIdx ))
+    {
+      info.m_acMvCand[info.iN++] = neibCU->getCUMvField(eRefPicListIndex)->getMv(neibPUPartIdx);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * \param pInfo
+ * \param eRefPicList
+ * \param iRefIdx
