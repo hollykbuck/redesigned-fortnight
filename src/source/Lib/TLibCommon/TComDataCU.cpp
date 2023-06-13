@@ -2898,3 +2898,103 @@ Bool TComDataCU::xAddMVPCandUnscaled( AMVPInfo &info, const RefPicList eRefPicLi
  * \param pInfo
  * \param eRefPicList
  * \param iRefIdx
+ * \param uiPartUnitIdx
+ * \param eDir
+ * \returns Bool
+ */
+Bool TComDataCU::xAddMVPCandWithScaling( AMVPInfo &info, const RefPicList eRefPicList, const Int iRefIdx, const UInt uiPartUnitIdx, const MVP_DIR eDir ) const
+{
+  const TComDataCU* neibCU = NULL;
+  UInt neibPUPartIdx;
+  switch( eDir )
+  {
+  case MD_LEFT:
+    {
+      neibCU = getPULeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+  case MD_ABOVE:
+    {
+      neibCU = getPUAbove(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+  case MD_ABOVE_RIGHT:
+    {
+      neibCU = getPUAboveRight(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+  case MD_BELOW_LEFT:
+    {
+      neibCU = getPUBelowLeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+  case MD_ABOVE_LEFT:
+    {
+      neibCU = getPUAboveLeft(neibPUPartIdx, uiPartUnitIdx);
+      break;
+    }
+  default:
+    {
+      break;
+    }
+  }
+
+  if ( neibCU == NULL )
+  {
+    return false;
+  }
+
+  const RefPicList eRefPicList2nd = (eRefPicList == REF_PIC_LIST_0) ? REF_PIC_LIST_1 : REF_PIC_LIST_0;
+
+  const Int  currPOC            = m_pcSlice->getPOC();
+  const Int  currRefPOC         = m_pcSlice->getRefPic( eRefPicList, iRefIdx)->getPOC();
+  const Bool bIsCurrRefLongTerm = m_pcSlice->getRefPic( eRefPicList, iRefIdx)->getIsLongTerm();
+  const Int  neibPOC            = currPOC;
+
+  for(Int predictorSource=0; predictorSource<2; predictorSource++) // examine the indicated reference picture list, then if not available, examine the other list.
+  {
+    const RefPicList eRefPicListIndex = (predictorSource==0) ? eRefPicList : eRefPicList2nd;
+    const Int        neibRefIdx       = neibCU->getCUMvField(eRefPicListIndex)->getRefIdx(neibPUPartIdx);
+    if( neibRefIdx >= 0)
+    {
+      const Bool bIsNeibRefLongTerm = neibCU->getSlice()->getRefPic( eRefPicListIndex, neibRefIdx )->getIsLongTerm();
+
+      if ( bIsCurrRefLongTerm == bIsNeibRefLongTerm )
+      {
+        const TComMv &cMvPred = neibCU->getCUMvField(eRefPicListIndex)->getMv(neibPUPartIdx);
+        TComMv rcMv;
+        if ( bIsCurrRefLongTerm /* || bIsNeibRefLongTerm*/ )
+        {
+          rcMv = cMvPred;
+        }
+        else
+        {
+          const Int neibRefPOC = neibCU->getSlice()->getRefPOC( eRefPicListIndex, neibRefIdx );
+          const Int scale      = xGetDistScaleFactor( currPOC, currRefPOC, neibPOC, neibRefPOC );
+          if ( scale == 4096 )
+          {
+            rcMv = cMvPred;
+          }
+          else
+          {
+            rcMv = cMvPred.scaleMv( scale );
+          }
+        }
+
+        info.m_acMvCand[info.iN++] = rcMv;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+Bool TComDataCU::xGetColMVP( const RefPicList eRefPicList, const Int ctuRsAddr, const Int partUnitIdx, TComMv& rcMv, const Int refIdx ) const
+{
+  const UInt absPartAddr = partUnitIdx;
+
+  // use coldir.
+  const TComPic    * const pColPic = getSlice()->getRefPic( RefPicList(getSlice()->isInterB() ? 1-getSlice()->getColFromL0Flag() : 0), getSlice()->getColRefIdx());
+#if REDUCED_ENCODER_MEMORY
+  if (!pColPic->getPicSym()->hasDPBPerCtuData())
+  {
