@@ -3198,3 +3198,25 @@ UInt TComDataCU::getCoefScanIdx(const UInt uiAbsPartIdx, const UInt uiWidth, con
   }
   else if (abs((Int)uiDirMode - HOR_IDX) <= MDCS_ANGLE_LIMIT)
   {
+    return SCAN_VER;
+  }
+  else
+  {
+    return SCAN_DIAG;
+  }
+}
+
+#if MCTS_ENC_CHECK
+Bool TComDataCU::isLastColumnCTUInTile() const
+{
+  UInt      currentTileIdx               = this->getPic()->getPicSym()->getTileIdxMap(this->getCtuRsAddr());
+  TComTile *pCurrentTile                 = m_pcPic->getPicSym()->getTComTile(currentTileIdx);
+  UInt      frameWidthInCtus             = m_pcPic->getPicSym()->getFrameWidthInCtus();
+  UInt      rightEdgeCTUPosInCurrentTile = pCurrentTile->getRightEdgePosInCtus();
+  UInt      ctuXPosInCtus                = this->getCtuRsAddr() % frameWidthInCtus;
+  
+  return (rightEdgeCTUPosInCurrentTile == ctuXPosInCtus);
+}
+#endif
+
+//! \}
