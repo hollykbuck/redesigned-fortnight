@@ -98,3 +98,56 @@ UInt SEIRemovalApp::decode()
   ofstream bitstreamFileOut(m_bitstreamFileNameOut.c_str(), ifstream::out | ifstream::binary);
 
   InputByteStream bytestream(bitstreamFileIn);
+
+  bitstreamFileIn.clear();
+  bitstreamFileIn.seekg( 0, ios::beg );
+
+  int unitCnt = 0;
+
+  while (!!bitstreamFileIn)
+  {
+    /* location serves to work around a design fault in the decoder, whereby
+     * the process of reading a new slice that is the first slice of a new frame
+     * requires the SEIRemovalApp::decode() method to be called again with the same
+     * nal unit. */
+    AnnexBStats stats = AnnexBStats();
+
+    InputNALUnit nalu;
+    byteStreamNALUnit(bytestream, nalu.getBitstream().getFifo(), stats);
+
+    // call actual decoding function
+    if (nalu.getBitstream().getFifo().empty())
+    {
+      /* this can happen if the following occur:
+       *  - empty input file
+       *  - two back-to-back start_code_prefixes
+       *  - start_code_prefix immediately followed by EOF
+       */
+      std::cerr << "Warning: Attempt to decode an empty NAL unit" <<  std::endl;
+    }
+    else
+    {
+      read2( nalu );
+      unitCnt++;
+
+      bool bWrite = true;
+      // just kick out all suffix SEIS
+      bWrite &= (( !m_discardSuffixSEIs || nalu.m_nalUnitType != NAL_UNIT_SUFFIX_SEI ) && ( !m_discardPrefixSEIs || nalu.m_nalUnitType != NAL_UNIT_PREFIX_SEI ));
+      bWrite &= unitCnt >= m_numNALUnitsToSkip;
+      bWrite &= m_numNALUnitsToWrite < 0 || unitCnt <= m_numNALUnitsToWrite;
+
+      if( bWrite )
+      {
+        int iNumZeros = stats.m_numLeadingZero8BitsBytes + stats.m_numZeroByteBytes + stats.m_numStartCodePrefixBytes -1;
+        char ch = 0;
+        for( int i = 0 ; i < iNumZeros; i++ ) { bitstreamFileOut.write( &ch, 1 ); }
+        ch = 1; bitstreamFileOut.write( &ch, 1 );
+        bitstreamFileOut.write( (const char*)nalu.getBitstream().getFifo().data(), nalu.getBitstream().getFifo().size() );
+      }
+    }
+  }
+
+  return 0;
+}
+
+//! \}
