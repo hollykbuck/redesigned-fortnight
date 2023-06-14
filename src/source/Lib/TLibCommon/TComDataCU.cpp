@@ -3098,3 +3098,103 @@ Int TComDataCU::xGetDistScaleFactor(Int iCurrPOC, Int iCurrRefPOC, Int iColPOC, 
   if( iDiffPocD == iDiffPocB )
   {
     return 4096;
+  }
+  else
+  {
+    Int iTDB      = Clip3( -128, 127, iDiffPocB );
+    Int iTDD      = Clip3( -128, 127, iDiffPocD );
+    Int iX        = (0x4000 + abs(iTDD/2)) / iTDD;
+    Int iScale    = Clip3( -4096, 4095, (iTDB * iX + 32) >> 6 );
+    return iScale;
+  }
+}
+
+Void TComDataCU::xDeriveCenterIdx( UInt uiPartIdx, UInt& ruiPartIdxCenter ) const
+{
+  UInt uiPartAddr;
+  Int  iPartWidth;
+  Int  iPartHeight;
+  getPartIndexAndSize( uiPartIdx, uiPartAddr, iPartWidth, iPartHeight);
+
+  ruiPartIdxCenter = m_absZIdxInCtu+uiPartAddr; // partition origin.
+  ruiPartIdxCenter = g_auiRasterToZscan[ g_auiZscanToRaster[ ruiPartIdxCenter ]
+                                        + ( iPartHeight/m_pcPic->getMinCUHeight()  )/2*m_pcPic->getNumPartInCtuWidth()
+                                        + ( iPartWidth/m_pcPic->getMinCUWidth()  )/2];
+}
+
+Void TComDataCU::compressMV()
+{
+#if REDUCED_ENCODER_MEMORY
+  const Int scaleFactor = std::max<Int>(1,4 * AMVP_DECIMATION_FACTOR / m_unitSize);
+  TComPicSym &picSym=*(getPic()->getPicSym());
+  TComPicSym::DPBPerCtuData &dpbForCtu=picSym.getDPBPerCtuData(getCtuRsAddr());
+
+  for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+  {
+    dpbForCtu.m_CUMvField[i].compress(dpbForCtu.m_pePredMode, m_pePredMode, scaleFactor,m_acCUMvField[i]);
+    memcpy(dpbForCtu.m_pePartSize, m_pePartSize, sizeof(*m_pePartSize)*m_uiNumPartition);
+    dpbForCtu.m_pSlice = getSlice();
+  }
+#else
+  Int scaleFactor = 4 * AMVP_DECIMATION_FACTOR / m_unitSize;
+  if (scaleFactor > 0)
+  {
+    for(UInt i=0; i<NUM_REF_PIC_LIST_01; i++)
+    {
+      m_acCUMvField[i].compress(m_pePredMode, scaleFactor);
+    }
+  }
+#endif
+}
+
+UInt TComDataCU::getCoefScanIdx(const UInt uiAbsPartIdx, const UInt uiWidth, const UInt uiHeight, const ComponentID compID) const
+{
+  //------------------------------------------------
+
+  //this mechanism is available for intra only
+
+  if (!isIntra(uiAbsPartIdx))
+  {
+    return SCAN_DIAG;
+  }
+
+  //------------------------------------------------
+
+  //check that MDCS can be used for this TU
+
+  const ChromaFormat format = getPic()->getChromaFormat();
+
+  const UInt maximumWidth  = MDCS_MAXIMUM_WIDTH  >> getComponentScaleX(compID, format);
+  const UInt maximumHeight = MDCS_MAXIMUM_HEIGHT >> getComponentScaleY(compID, format);
+
+  if ((uiWidth > maximumWidth) || (uiHeight > maximumHeight))
+  {
+    return SCAN_DIAG;
+  }
+
+  //------------------------------------------------
+
+  //otherwise, select the appropriate mode
+
+  UInt uiDirMode  = getIntraDir(toChannelType(compID), uiAbsPartIdx);
+
+  if (uiDirMode==DM_CHROMA_IDX)
+  {
+    const TComSPS *sps=getSlice()->getSPS();
+    const UInt partsPerMinCU = 1<<(2*(sps->getMaxTotalCUDepth() - sps->getLog2DiffMaxMinCodingBlockSize()));
+    uiDirMode = getIntraDir(CHANNEL_TYPE_LUMA, getChromasCorrespondingPULumaIdx(uiAbsPartIdx, getPic()->getChromaFormat(), partsPerMinCU));
+  }
+
+  if (isChroma(compID) && (format == CHROMA_422))
+  {
+    uiDirMode = g_chroma422IntraAngleMappingTable[uiDirMode];
+  }
+
+  //------------------
+
+  if      (abs((Int)uiDirMode - VER_IDX) <= MDCS_ANGLE_LIMIT)
+  {
+    return SCAN_HOR;
+  }
+  else if (abs((Int)uiDirMode - HOR_IDX) <= MDCS_ANGLE_LIMIT)
+  {
