@@ -198,3 +198,103 @@
   #define DEBUG_STRING_OUTPUT(os, name)
   #define DEBUG_STRING_APPEND(str1, str2)
   #define DEBUG_STRING_SWAP(srt1, str2)
+  #define DEBUG_STRING_CHANNEL_CONDITION(compID)
+#endif
+
+// ====================================================================================================================
+// Error checks
+// ====================================================================================================================
+
+#if ((RExt__HIGH_PRECISION_FORWARD_TRANSFORM != 0) && (RExt__HIGH_BIT_DEPTH_SUPPORT == 0))
+#error ERROR: cannot enable RExt__HIGH_PRECISION_FORWARD_TRANSFORM without RExt__HIGH_BIT_DEPTH_SUPPORT
+#endif
+
+// ====================================================================================================================
+// Basic type redefinition
+// ====================================================================================================================
+
+typedef       void                Void;
+typedef       bool                Bool;
+
+typedef       char                TChar; // Used for text/characters
+typedef       signed char         SChar; // Signed 8-bit values
+typedef       unsigned char       UChar; // Unsigned 8-bit values
+typedef       short               Short;
+typedef       unsigned short      UShort;
+typedef       int                 Int;
+typedef       unsigned int        UInt;
+typedef       double              Double;
+typedef       float               Float;
+
+
+// ====================================================================================================================
+// 64-bit integer type
+// ====================================================================================================================
+
+#ifdef _MSC_VER
+typedef       __int64             Int64;
+
+#if _MSC_VER <= 1200 // MS VC6
+typedef       __int64             UInt64;   // MS VC6 does not support unsigned __int64 to double conversion
+#else
+typedef       unsigned __int64    UInt64;
+#endif
+
+#else
+
+typedef       long long           Int64;
+typedef       unsigned long long  UInt64;
+
+#endif
+
+// ====================================================================================================================
+// Named numerical types
+// ====================================================================================================================
+
+#if RExt__HIGH_BIT_DEPTH_SUPPORT
+typedef       Int             Pel;               ///< pixel type
+typedef       Int64           TCoeff;            ///< transform coefficient
+typedef       Int             TMatrixCoeff;      ///< transform matrix coefficient
+typedef       Short           TFilterCoeff;      ///< filter coefficient
+typedef       Int64           Intermediate_Int;  ///< used as intermediate value in calculations
+typedef       UInt64          Intermediate_UInt; ///< used as intermediate value in calculations
+#else
+typedef       Short           Pel;               ///< pixel type
+typedef       Int             TCoeff;            ///< transform coefficient
+typedef       Short           TMatrixCoeff;      ///< transform matrix coefficient
+typedef       Short           TFilterCoeff;      ///< filter coefficient
+typedef       Int             Intermediate_Int;  ///< used as intermediate value in calculations
+typedef       UInt            Intermediate_UInt; ///< used as intermediate value in calculations
+#endif
+
+#if FULL_NBIT
+typedef       UInt64          Distortion;        ///< distortion measurement
+#else
+typedef       UInt            Distortion;        ///< distortion measurement
+#endif
+
+// ====================================================================================================================
+// Enumeration
+// ====================================================================================================================
+
+enum RDPCMMode
+{
+  RDPCM_OFF             = 0,
+  RDPCM_HOR             = 1,
+  RDPCM_VER             = 2,
+  NUMBER_OF_RDPCM_MODES = 3
+};
+
+enum RDPCMSignallingMode
+{
+  RDPCM_SIGNAL_IMPLICIT            = 0,
+  RDPCM_SIGNAL_EXPLICIT            = 1,
+  NUMBER_OF_RDPCM_SIGNALLING_MODES = 2
+};
+
+/// supported slice type
+enum SliceType
+{
+  B_SLICE               = 0,
+  P_SLICE               = 1,
+  I_SLICE               = 2,
