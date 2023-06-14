@@ -98,3 +98,18 @@ protected:
   Void  xCreateDecLib     (); ///< create internal classes
   Void  xDestroyDecLib    (); ///< destroy internal classes
   Void  xInitDecLib       (); ///< initialize decoder class
+
+  Void  xWriteOutput      ( TComList<TComPic*>* pcListPic , UInt tId); ///< write YUV to file
+  Void  xFlushOutput      ( TComList<TComPic*>* pcListPic ); ///< flush all remaining decoded pictures to file
+  Bool  isNaluWithinTargetDecLayerIdSet ( InputNALUnit* nalu ); ///< check whether given Nalu is within targetDecLayerIdSet
+
+private:
+  Void applyColourRemapping(const TComPicYuv& pic, SEIColourRemappingInfo& pCriSEI, const TComSPS &activeSPS);
+  Void xOutputColourRemapPic(TComPic* pcPic);
+  Void xOutputAnnotatedRegions(TComPic* pcPic);
+};
+
+//! \}
+
+#endif
+
