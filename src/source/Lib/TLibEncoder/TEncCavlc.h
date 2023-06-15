@@ -98,3 +98,51 @@ public:
   Void  codeSliceFinish         ();
 
   Void codeMVPIdx ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+  Void codeSAOBlkParam(SAOBlkParam& /*saoBlkParam*/, const BitDepths& /*bitDepths*/, Bool* /*sliceEnabled*/, Bool /*leftMergeAvail*/, Bool /*aboveMergeAvail*/, Bool /*onlyEstMergeInfo*/ = false){printf("only supported in CABAC"); assert(0); exit(-1);}
+  Void codeCUTransquantBypassFlag( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeSkipFlag      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeMergeFlag     ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeMergeIndex    ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+
+  Void codeAlfCtrlFlag   ( ComponentID /*component*/, UInt /*code*/ ) {printf("Not supported\n"); assert(0);}
+  Void codeInterModeFlag( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth, UInt uiEncMode );
+  Void codeSplitFlag     ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+
+  Void codePartSize      ( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth );
+  Void codePredMode      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+
+  Void codeIPCMInfo      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+
+  Void codeTransformSubdivFlag( UInt uiSymbol, UInt uiCtx );
+  Void codeQtCbf         ( TComTU &rTu, const ComponentID compID, const Bool lowestLevel );
+  Void codeQtRootCbf     ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeQtCbfZero     ( TComTU &rTu, const ChannelType chType );
+  Void codeQtRootCbfZero ( );
+  Void codeIntraDirLumaAng( TComDataCU* pcCU, UInt absPartIdx, Bool isMultiple);
+  Void codeIntraDirChroma( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeInterDir      ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeRefFrmIdx     ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+  Void codeMvd           ( TComDataCU* pcCU, UInt uiAbsPartIdx, RefPicList eRefList );
+
+  Void codeCrossComponentPrediction( TComTU &rTu, ComponentID compID );
+
+  Void codeDeltaQP       ( TComDataCU* pcCU, UInt uiAbsPartIdx );
+  Void codeChromaQpAdjustment( TComDataCU* pcCU, UInt uiAbsPartIdx );
+
+  Void codeCoeffNxN      ( TComTU &rTu, TCoeff* pcCoef, const ComponentID compID );
+  Void codeTransformSkipFlags ( TComTU &rTu, ComponentID component );
+
+  Void estBit            ( estBitsSbacStruct* pcEstBitsSbac, Int width, Int height, ChannelType chType, COEFF_SCAN_TYPE scanType );
+
+  Void xCodePredWeightTable          ( TComSlice* pcSlice );
+
+  Void codeScalingList  ( const TComScalingList &scalingList );
+  Void xCodeScalingList ( const TComScalingList* scalingList, UInt sizeId, UInt listId);
+
+  Void codeExplicitRdpcmMode( TComTU &rTu, const ComponentID compID );
+};
+
+//! \}
+
+#endif // !defined(AFX_TENCCAVLC_H__EE8A0B30_945B_4169_B290_24D3AD52296F__INCLUDED_)
+
