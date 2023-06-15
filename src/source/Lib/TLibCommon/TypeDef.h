@@ -298,3 +298,103 @@ enum SliceType
   B_SLICE               = 0,
   P_SLICE               = 1,
   I_SLICE               = 2,
+  NUMBER_OF_SLICE_TYPES = 3
+};
+
+/// chroma formats (according to semantics of chroma_format_idc)
+enum ChromaFormat
+{
+  CHROMA_400        = 0,
+  CHROMA_420        = 1,
+  CHROMA_422        = 2,
+  CHROMA_444        = 3,
+  NUM_CHROMA_FORMAT = 4
+};
+
+enum ChannelType
+{
+  CHANNEL_TYPE_LUMA    = 0,
+  CHANNEL_TYPE_CHROMA  = 1,
+  MAX_NUM_CHANNEL_TYPE = 2
+};
+
+enum ComponentID
+{
+  COMPONENT_Y       = 0,
+  COMPONENT_Cb      = 1,
+  COMPONENT_Cr      = 2,
+  MAX_NUM_COMPONENT = 3
+};
+
+enum InputColourSpaceConversion // defined in terms of conversion prior to input of encoder.
+{
+  IPCOLOURSPACE_UNCHANGED               = 0,
+  IPCOLOURSPACE_YCbCrtoYCrCb            = 1, // Mainly used for debug!
+  IPCOLOURSPACE_YCbCrtoYYY              = 2, // Mainly used for debug!
+  IPCOLOURSPACE_RGBtoGBR                = 3,
+  NUMBER_INPUT_COLOUR_SPACE_CONVERSIONS = 4
+};
+
+enum MATRIX_COEFFICIENTS // Table E.5 (Matrix coefficients)
+{
+  MATRIX_COEFFICIENTS_RGB                           = 0,
+  MATRIX_COEFFICIENTS_BT709                         = 1,
+  MATRIX_COEFFICIENTS_UNSPECIFIED                   = 2,
+  MATRIX_COEFFICIENTS_RESERVED_BY_ITUISOIEC         = 3,
+  MATRIX_COEFFICIENTS_USFCCT47                      = 4,
+  MATRIX_COEFFICIENTS_BT601_625                     = 5,
+  MATRIX_COEFFICIENTS_BT601_525                     = 6,
+  MATRIX_COEFFICIENTS_SMPTE240                      = 7,
+  MATRIX_COEFFICIENTS_YCGCO                         = 8,
+  MATRIX_COEFFICIENTS_BT2020_NON_CONSTANT_LUMINANCE = 9,
+  MATRIX_COEFFICIENTS_BT2020_CONSTANT_LUMINANCE     = 10,
+};
+
+enum DeblockEdgeDir
+{
+  EDGE_VER     = 0,
+  EDGE_HOR     = 1,
+  NUM_EDGE_DIR = 2
+};
+
+/// supported partition shape
+enum PartSize
+{
+  SIZE_2Nx2N           = 0,           ///< symmetric motion partition,  2Nx2N
+  SIZE_2NxN            = 1,           ///< symmetric motion partition,  2Nx N
+  SIZE_Nx2N            = 2,           ///< symmetric motion partition,   Nx2N
+  SIZE_NxN             = 3,           ///< symmetric motion partition,   Nx N
+  SIZE_2NxnU           = 4,           ///< asymmetric motion partition, 2Nx( N/2) + 2Nx(3N/2)
+  SIZE_2NxnD           = 5,           ///< asymmetric motion partition, 2Nx(3N/2) + 2Nx( N/2)
+  SIZE_nLx2N           = 6,           ///< asymmetric motion partition, ( N/2)x2N + (3N/2)x2N
+  SIZE_nRx2N           = 7,           ///< asymmetric motion partition, (3N/2)x2N + ( N/2)x2N
+  NUMBER_OF_PART_SIZES = 8
+};
+
+/// supported prediction type
+enum PredMode
+{
+  MODE_INTER                 = 0,     ///< inter-prediction mode
+  MODE_INTRA                 = 1,     ///< intra-prediction mode
+  NUMBER_OF_PREDICTION_MODES = 2,
+};
+
+/// reference list index
+enum RefPicList
+{
+  REF_PIC_LIST_0               = 0,   ///< reference list 0
+  REF_PIC_LIST_1               = 1,   ///< reference list 1
+  NUM_REF_PIC_LIST_01          = 2,
+  REF_PIC_LIST_X               = 100  ///< special mark
+};
+
+/// distortion function index
+enum DFunc
+{
+  DF_DEFAULT         = 0,
+  DF_SSE             = 1,      ///< general size SSE
+  DF_SSE4            = 2,      ///<   4xM SSE
+  DF_SSE8            = 3,      ///<   8xM SSE
+  DF_SSE16           = 4,      ///<  16xM SSE
+  DF_SSE32           = 5,      ///<  32xM SSE
+  DF_SSE64           = 6,      ///<  64xM SSE
