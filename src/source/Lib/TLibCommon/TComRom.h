@@ -98,3 +98,82 @@ extern const TMatrixCoeff T64_DCT[64][64];
 static const Int chromaQPMappingTableSize = 58;
 
 extern const UChar  g_aucChromaScale[NUM_CHROMA_FORMAT][chromaQPMappingTableSize];
+
+
+// ====================================================================================================================
+// Scanning order & context mapping table
+// ====================================================================================================================
+
+extern const UInt   ctxIndMap4x4[4*4];
+
+extern const UInt   g_uiGroupIdx[ MAX_TU_SIZE ];
+extern const UInt   g_uiMinInGroup[ LAST_SIGNIFICANT_GROUPS ];
+
+// ====================================================================================================================
+// Intra prediction table
+// ====================================================================================================================
+
+extern const UChar  g_aucIntraModeNumFast_UseMPM[MAX_CU_DEPTH];
+extern const UChar  g_aucIntraModeNumFast_NotUseMPM[MAX_CU_DEPTH];
+
+extern const UChar  g_chroma422IntraAngleMappingTable[NUM_INTRA_MODE];
+
+// ====================================================================================================================
+// Mode-Dependent DST Matrices
+// ====================================================================================================================
+
+extern const TMatrixCoeff g_as_DST_MAT_4 [TRANSFORM_NUMBER_OF_DIRECTIONS][4][4];
+
+// ====================================================================================================================
+// Misc.
+// ====================================================================================================================
+
+extern       SChar   g_aucConvertToBit  [ MAX_CU_SIZE+1 ];   // from width to log2(width)-2
+
+
+#if ENC_DEC_TRACE
+extern FILE*  g_hTrace;
+extern Bool   g_bJustDoIt;
+extern const Bool g_bEncDecTraceEnable;
+extern const Bool g_bEncDecTraceDisable;
+extern Bool   g_HLSTraceEnable;
+extern UInt64 g_nSymbolCounter;
+
+#define COUNTER_START    1
+#define COUNTER_END      0 //( UInt64(1) << 63 )
+
+#define DTRACE_CABAC_F(x)     if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "%f", x );
+#define DTRACE_CABAC_V(x)     if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "%d", x );
+#define DTRACE_CABAC_VL(x)    if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "%lld", x );
+#define DTRACE_CABAC_T(x)     if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "%s", x );
+#define DTRACE_CABAC_X(x)     if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "%x", x );
+#define DTRACE_CABAC_R( x,y ) if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, x,    y );
+#define DTRACE_CABAC_N        if ( ( g_nSymbolCounter >= COUNTER_START && g_nSymbolCounter <= COUNTER_END )|| g_bJustDoIt ) fprintf( g_hTrace, "\n"    );
+
+#else
+
+#define DTRACE_CABAC_F(x)
+#define DTRACE_CABAC_V(x)
+#define DTRACE_CABAC_VL(x)
+#define DTRACE_CABAC_T(x)
+#define DTRACE_CABAC_X(x)
+#define DTRACE_CABAC_R( x,y )
+#define DTRACE_CABAC_N
+
+#endif
+
+const TChar* nalUnitTypeToString(NalUnitType type);
+
+extern const TChar *MatrixType[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM];
+extern const TChar *MatrixType_DC[SCALING_LIST_SIZE_NUM][SCALING_LIST_NUM];
+
+extern const Int g_quantTSDefault4x4[4*4];
+extern const Int g_quantIntraDefault8x8[8*8];
+extern const Int g_quantInterDefault8x8[8*8];
+
+extern const UInt g_scalingListSize [SCALING_LIST_SIZE_NUM];
+extern const UInt g_scalingListSizeX[SCALING_LIST_SIZE_NUM];
+//! \}
+
+#endif  //__TCOMROM__
+
