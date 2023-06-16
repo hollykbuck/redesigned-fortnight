@@ -98,3 +98,47 @@ protected:
   Void xDCPredFiltering( const Pel* pSrc, Int iSrcStride, Pel* pDst, Int iDstStride, Int iWidth, Int iHeight, ChannelType channelType );
   Bool xCheckIdenticalMotion    ( TComDataCU* pcCU, UInt PartAddr);
   Void destroy();
+
+public:
+  TComPrediction();
+  virtual ~TComPrediction();
+
+  Void    initTempBuff(ChromaFormat chromaFormatIDC);
+
+  ChromaFormat getChromaFormat() const { return m_cYuvPredTemp.getChromaFormat(); }
+
+  // inter
+  Void motionCompensation         ( TComDataCU*  pcCU, TComYuv* pcYuvPred, RefPicList eRefPicList = REF_PIC_LIST_X, Int iPartIdx = -1 );
+
+  // motion vector prediction
+  Void getMvPredAMVP              ( TComDataCU* pcCU, UInt uiPartIdx, UInt uiPartAddr, RefPicList eRefPicList, TComMv& rcMvPred );
+
+  // Angular Intra
+  Void predIntraAng               ( const ComponentID compID, UInt uiDirMode, Pel *piOrg /* Will be null for decoding */, UInt uiOrgStride, Pel* piPred, UInt uiStride, TComTU &rTu, const Bool bUseFilteredPredSamples, const Bool bUseLosslessDPCM = false );
+
+  Pel  predIntraGetPredValDC      ( const Pel* pSrc, Int iSrcStride, UInt iWidth, UInt iHeight);
+
+  Pel*  getPredictorPtr           ( const ComponentID compID, const Bool bUseFilteredPredictions )
+  {
+    return m_piYuvExt[compID][bUseFilteredPredictions?PRED_BUF_FILTERED:PRED_BUF_UNFILTERED];
+  }
+
+  // This function is actually still in TComPattern.cpp
+  /// set parameters from CU data for accessing intra data
+  Void initIntraPatternChType ( TComTU &rTu,
+                              const ComponentID compID, const Bool bFilterRefSamples
+                              DEBUG_STRING_FN_DECLARE(sDebug)
+                              );
+
+  static Bool filteringIntraReferenceSamples(const ComponentID compID, UInt uiDirMode, UInt uiTuChWidth, UInt uiTuChHeight, const ChromaFormat chFmt, const Bool intraReferenceSmoothingDisabled);
+
+  static Bool UseDPCMForFirstPassIntraEstimation(TComTU &rTu, const UInt uiDirMode);
+
+#if MCTS_ENC_CHECK
+  Bool checkTMctsMvp(TComDataCU* pcCU, Int partIdx = -1);
+#endif
+};
+
+//! \}
+
+#endif // __TCOMPREDICTION__
