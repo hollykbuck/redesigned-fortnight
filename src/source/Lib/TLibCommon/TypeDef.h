@@ -398,3 +398,103 @@ enum DFunc
   DF_SSE16           = 4,      ///<  16xM SSE
   DF_SSE32           = 5,      ///<  32xM SSE
   DF_SSE64           = 6,      ///<  64xM SSE
+  DF_SSE16N          = 7,      ///< 16NxM SSE
+
+  DF_SAD             = 8,      ///< general size SAD
+  DF_SAD4            = 9,      ///<   4xM SAD
+  DF_SAD8            = 10,     ///<   8xM SAD
+  DF_SAD16           = 11,     ///<  16xM SAD
+  DF_SAD32           = 12,     ///<  32xM SAD
+  DF_SAD64           = 13,     ///<  64xM SAD
+  DF_SAD16N          = 14,     ///< 16NxM SAD
+
+  DF_SADS            = 15,     ///< general size SAD with step
+  DF_SADS4           = 16,     ///<   4xM SAD with step
+  DF_SADS8           = 17,     ///<   8xM SAD with step
+  DF_SADS16          = 18,     ///<  16xM SAD with step
+  DF_SADS32          = 19,     ///<  32xM SAD with step
+  DF_SADS64          = 20,     ///<  64xM SAD with step
+  DF_SADS16N         = 21,     ///< 16NxM SAD with step
+
+  DF_HADS            = 22,     ///< general size Hadamard with step
+  DF_HADS4           = 23,     ///<   4xM HAD with step
+  DF_HADS8           = 24,     ///<   8xM HAD with step
+  DF_HADS16          = 25,     ///<  16xM HAD with step
+  DF_HADS32          = 26,     ///<  32xM HAD with step
+  DF_HADS64          = 27,     ///<  64xM HAD with step
+  DF_HADS16N         = 28,     ///< 16NxM HAD with step
+
+  DF_SAD12           = 43,
+  DF_SAD24           = 44,
+  DF_SAD48           = 45,
+
+  DF_SADS12          = 46,
+  DF_SADS24          = 47,
+  DF_SADS48          = 48,
+
+  DF_SSE_FRAME       = 50,     ///< Frame-based SSE
+  DF_TOTAL_FUNCTIONS = 64
+};
+
+/// index for SBAC based RD optimization
+enum CI_IDX
+{
+  CI_CURR_BEST = 0,     ///< best mode index
+  CI_NEXT_BEST,         ///< next best index
+  CI_TEMP_BEST,         ///< temporal index
+  CI_CHROMA_INTRA,      ///< chroma intra index
+  CI_QT_TRAFO_TEST,
+  CI_QT_TRAFO_ROOT,
+  CI_NUM,               ///< total number
+};
+
+/// motion vector predictor direction used in AMVP
+enum MVP_DIR
+{
+  MD_LEFT = 0,          ///< MVP of left block
+  MD_ABOVE,             ///< MVP of above block
+  MD_ABOVE_RIGHT,       ///< MVP of above right block
+  MD_BELOW_LEFT,        ///< MVP of below left block
+  MD_ABOVE_LEFT         ///< MVP of above left block
+};
+
+enum StoredResidualType
+{
+  RESIDUAL_RECONSTRUCTED          = 0,
+  RESIDUAL_ENCODER_SIDE           = 1,
+  NUMBER_OF_STORED_RESIDUAL_TYPES = 2
+};
+
+enum TransformDirection
+{
+  TRANSFORM_FORWARD              = 0,
+  TRANSFORM_INVERSE              = 1,
+  TRANSFORM_NUMBER_OF_DIRECTIONS = 2
+};
+
+/// supported ME search methods
+enum MESearchMethod
+{
+  MESEARCH_FULL              = 0,
+  MESEARCH_DIAMOND           = 1,
+  MESEARCH_SELECTIVE         = 2,
+  MESEARCH_DIAMOND_ENHANCED  = 3,
+  MESEARCH_NUMBER_OF_METHODS = 4
+};
+
+/// coefficient scanning type used in ACS
+enum COEFF_SCAN_TYPE
+{
+  SCAN_DIAG = 0,        ///< up-right diagonal scan
+  SCAN_HOR  = 1,        ///< horizontal first scan
+  SCAN_VER  = 2,        ///< vertical first scan
+  SCAN_NUMBER_OF_TYPES = 3
+};
+
+enum COEFF_SCAN_GROUP_TYPE
+{
+  SCAN_UNGROUPED   = 0,
+  SCAN_GROUPED_4x4 = 1,
+  SCAN_NUMBER_OF_GROUP_TYPES = 2
+};
+
