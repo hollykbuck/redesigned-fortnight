@@ -98,3 +98,103 @@ enum NalUnitType
   RESERVED_NVCL45,
   RESERVED_NVCL46,
   RESERVED_NVCL47,
+  UNSPECIFIED_48,
+  UNSPECIFIED_49,
+  UNSPECIFIED_50,
+  UNSPECIFIED_51,
+  UNSPECIFIED_52,
+  UNSPECIFIED_53,
+  UNSPECIFIED_54,
+  UNSPECIFIED_55,
+  UNSPECIFIED_56,
+  UNSPECIFIED_57,
+  UNSPECIFIED_58,
+  UNSPECIFIED_59,
+  UNSPECIFIED_60,
+  UNSPECIFIED_61,
+  UNSPECIFIED_62,
+  UNSPECIFIED_63,
+  INVALID,
+};
+
+/**
+ Find the beginning and end of a NAL (Network Abstraction Layer) unit in a byte buffer containing H264 bitstream data.
+ @param[in]   buf        the buffer
+ @param[in]   size       the size of the buffer
+ @param[out]  nal_start  the beginning offset of the nal
+ @param[out]  nal_end    the end offset of the nal
+ @return                 the length of the nal, or 0 if did not find start of nal, or -1 if did not find end of nal
+ */
+// DEPRECATED - this will be replaced by a similar function with a slightly different API
+int find_nal_unit(const uint8_t* buf, int size, int* nal_start, int* nal_end)
+{
+  int i;
+  // find start
+  *nal_start = 0;
+  *nal_end = 0;
+
+  i = 0;
+  while (   //( next_bits( 24 ) != 0x000001 && next_bits( 32 ) != 0x00000001 )
+    (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0x01) &&
+    (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0 || buf[i+3] != 0x01)
+    )
+  {
+    i++; // skip leading zero
+    if (i+4 >= size) { return 0; } // did not find nal start
+  }
+
+  if  (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0x01) // ( next_bits( 24 ) != 0x000001 )
+  {
+    i++;
+  }
+
+  if  (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0x01) { /* error, should never happen */ return 0; }
+  i+= 3;
+  *nal_start = i;
+
+  while (//( next_bits( 24 ) != 0x000000 && next_bits( 24 ) != 0x000001 )
+    i+3 < size &&
+    (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0) &&
+    (buf[i] != 0 || buf[i+1] != 0 || buf[i+2] != 0x01)
+    )
+  {
+    i++;
+    // FIXME the next line fails when reading a nal that ends exactly at the end of the data
+  }
+
+  if (i+3 == size)
+  {
+    *nal_end = size;
+  }
+  else
+  {
+    *nal_end = i;
+  }
+
+  return (*nal_end - *nal_start);
+}
+
+const bool verbose = false;
+
+const char * NALU_TYPE[] =
+{
+    "TRAIL_N",
+    "TRAIL_R",
+    "TSA_N",
+    "TSA_R",
+    "STSA_N",
+    "STSA_R",
+    "RADL_N",
+    "RADL_R",
+    "RASL_N",
+    "RASL_R",
+    "RSV_VCL_N10",
+    "RSV_VCL_N12",
+    "RSV_VCL_N14",
+    "RSV_VCL_R11",
+    "RSV_VCL_R13",
+    "RSV_VCL_R15",
+    "BLA_W_LP",
+    "BLA_W_RADL",
+    "BLA_N_LP",
+    "IDR_W_RADL",
