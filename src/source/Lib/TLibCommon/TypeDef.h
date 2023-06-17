@@ -598,3 +598,103 @@ namespace Profile
     MAINREXT = 4,
     HIGHTHROUGHPUTREXT = 5
   };
+}
+
+namespace Level
+{
+  enum Tier
+  {
+    MAIN = 0,
+    HIGH = 1,
+    NUMBER_OF_TIERS = 2
+  };
+
+  enum Name
+  {
+    // code = (level * 30)
+    NONE     = 0,
+    LEVEL1   = 30,
+    LEVEL2   = 60,
+    LEVEL2_1 = 63,
+    LEVEL3   = 90,
+    LEVEL3_1 = 93,
+    LEVEL4   = 120,
+    LEVEL4_1 = 123,
+    LEVEL5   = 150,
+    LEVEL5_1 = 153,
+    LEVEL5_2 = 156,
+    LEVEL6   = 180,
+    LEVEL6_1 = 183,
+    LEVEL6_2 = 186,
+#if JVET_X0079_MODIFIED_BITRATES
+    LEVEL6_3 = 189,
+#endif
+    LEVEL8_5 = 255,
+  };
+}
+
+enum CostMode
+{
+  COST_STANDARD_LOSSY              = 0,
+  COST_SEQUENCE_LEVEL_LOSSLESS     = 1,
+  COST_LOSSLESS_CODING             = 2,
+  COST_MIXED_LOSSLESS_LOSSY_CODING = 3
+};
+
+enum WeightedPredictionMethod
+{
+  WP_PER_PICTURE_WITH_SIMPLE_DC_COMBINED_COMPONENT                          =0,
+  WP_PER_PICTURE_WITH_SIMPLE_DC_PER_COMPONENT                               =1,
+  WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT                           =2,
+  WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING              =3,
+  WP_PER_PICTURE_WITH_HISTOGRAM_AND_PER_COMPONENT_AND_CLIPPING_AND_EXTENSION=4
+};
+
+enum FastInterSearchMode
+{
+  FASTINTERSEARCH_DISABLED = 0,
+  FASTINTERSEARCH_MODE1    = 1, // TODO: assign better names to these.
+  FASTINTERSEARCH_MODE2    = 2,
+  FASTINTERSEARCH_MODE3    = 3
+};
+
+enum SPSExtensionFlagIndex
+{
+  SPS_EXT__REXT           = 0,
+//SPS_EXT__MVHEVC         = 1, //for use in future versions
+//SPS_EXT__SHVC           = 2, //for use in future versions
+  NUM_SPS_EXTENSION_FLAGS = 8
+};
+
+enum PPSExtensionFlagIndex
+{
+  PPS_EXT__REXT           = 0,
+//PPS_EXT__MVHEVC         = 1, //for use in future versions
+//PPS_EXT__SHVC           = 2, //for use in future versions
+  NUM_PPS_EXTENSION_FLAGS = 8
+};
+
+// TODO: Existing names used for the different NAL unit types can be altered to better reflect the names in the spec.
+//       However, the names in the spec are not yet stable at this point. Once the names are stable, a cleanup
+//       effort can be done without use of macros to alter the names used to indicate the different NAL unit types.
+enum NalUnitType
+{
+  NAL_UNIT_CODED_SLICE_TRAIL_N = 0, // 0
+  NAL_UNIT_CODED_SLICE_TRAIL_R,     // 1
+
+  NAL_UNIT_CODED_SLICE_TSA_N,       // 2
+  NAL_UNIT_CODED_SLICE_TSA_R,       // 3
+
+  NAL_UNIT_CODED_SLICE_STSA_N,      // 4
+  NAL_UNIT_CODED_SLICE_STSA_R,      // 5
+
+  NAL_UNIT_CODED_SLICE_RADL_N,      // 6
+  NAL_UNIT_CODED_SLICE_RADL_R,      // 7
+
+  NAL_UNIT_CODED_SLICE_RASL_N,      // 8
+  NAL_UNIT_CODED_SLICE_RASL_R,      // 9
+
+  NAL_UNIT_RESERVED_VCL_N10,
+  NAL_UNIT_RESERVED_VCL_R11,
+  NAL_UNIT_RESERVED_VCL_N12,
+  NAL_UNIT_RESERVED_VCL_R13,
