@@ -198,3 +198,103 @@ const char * NALU_TYPE[] =
     "BLA_W_RADL",
     "BLA_N_LP",
     "IDR_W_RADL",
+    "IDR_N_LP",
+    "CRA_NUT",
+    "RSV_IRAP_VCL22",
+    "RSV_IRAP_VCL23",
+    "unk",
+    "unk",
+    "unk",
+    "unk",
+    "unk",
+    "unk",
+    "unk",
+    "unk",
+    "VPS_NUT",
+    "SPS_NUT",
+    "PPS_NUT",
+    "AUD_NUT",
+    "EOS_NUT",
+    "EOB_NUT",
+    "FD_NUT",
+    "PREFIX_SEI_NUT",
+    "SUFFIX_SEI_NUT",
+};
+
+int calc_poc(int iPOClsb, int prevTid0POC, int getBitsForPOC, int nalu_type)
+{
+  int iPrevPOC = prevTid0POC;
+  int iMaxPOClsb = 1<< getBitsForPOC;
+  int iPrevPOClsb = iPrevPOC & (iMaxPOClsb - 1);
+  int iPrevPOCmsb = iPrevPOC-iPrevPOClsb;
+  int iPOCmsb;
+  if( ( iPOClsb  <  iPrevPOClsb ) && ( ( iPrevPOClsb - iPOClsb )  >=  ( iMaxPOClsb / 2 ) ) )
+  {
+    iPOCmsb = iPrevPOCmsb + iMaxPOClsb;
+  }
+  else if( (iPOClsb  >  iPrevPOClsb )  && ( (iPOClsb - iPrevPOClsb )  >  ( iMaxPOClsb / 2 ) ) )
+  {
+    iPOCmsb = iPrevPOCmsb - iMaxPOClsb;
+  }
+  else
+  {
+    iPOCmsb = iPrevPOCmsb;
+  }
+  if ( nalu_type == BLA_W_LP
+    || nalu_type == BLA_W_RADL
+    || nalu_type == BLA_N_LP )
+  {
+    // For BLA picture types, POCmsb is set to 0.
+    iPOCmsb = 0;
+  }
+
+  return iPOCmsb + iPOClsb;
+}
+
+std::vector<uint8_t> filter_segment(const std::vector<uint8_t> & v, int idx, int * poc_base, int * last_idr_poc)
+{
+  const uint8_t * p = v.data();
+  const uint8_t * buf = v.data();
+  int sz = (int) v.size();
+  int nal_start, nal_end;
+  int off = 0;
+  int cnt = 0;
+  bool idr_found = false;
+
+  std::vector<uint8_t> out;
+  out.reserve(v.size());
+
+  int bits_for_poc = 8;
+  bool skip_next_sei = false;
+
+  while(find_nal_unit(p, sz, &nal_start, &nal_end) > 0)
+  {
+    if(verbose)
+    {
+       printf( "!! Found NAL at offset %lld (0x%04llX), size %lld (0x%04llX) \n",
+          (long long int)(off + (p - buf)),
+          (long long int)(off + (p - buf)),
+          (long long int)(nal_end - nal_start),
+          (long long int)(nal_end - nal_start) );
+    }
+
+    p += nal_start;
+
+    std::vector<uint8_t> nalu(p, p + nal_end - nal_start);
+    int nalu_type = nalu[0] >> 1;
+    int poc = -1;
+    int poc_lsb = -1;
+    int new_poc = -1;
+
+    if(nalu_type == IDR_W_RADL || nalu_type == IDR_N_LP)
+    {
+      poc = 0;
+      new_poc = *poc_base + poc;
+    }
+
+    if(nalu_type < 32 && nalu_type != IDR_W_RADL && nalu_type != IDR_N_LP)
+    {
+      int offset = 16;
+
+      offset += 1; //first_slice_segment_in_pic_flag
+      if (nalu_type >= BLA_W_LP && nalu_type <= RESERVED_IRAP_VCL23)
