@@ -798,3 +798,103 @@ private:
   SAOOffset offsetParam[MAX_NUM_COMPONENT];
 
 };
+
+
+struct BitDepths
+{
+#if JVET_X0048_X0103_FILM_GRAIN
+  const int &operator[](const ChannelType ch) const { return recon[ch]; }
+#endif
+#if O0043_BEST_EFFORT_DECODING
+  Int recon[MAX_NUM_CHANNEL_TYPE]; ///< the bit depth used for reconstructing the video
+  Int stream[MAX_NUM_CHANNEL_TYPE];///< the bit depth used indicated in the SPS
+#else
+  Int recon[MAX_NUM_CHANNEL_TYPE]; ///< the bit depth as indicated in the SPS
+#endif
+};
+
+/// parameters for deblocking filter
+typedef struct _LFCUParam
+{
+  Bool bInternalEdge;                     ///< indicates internal edge
+  Bool bLeftEdge;                         ///< indicates left edge
+  Bool bTopEdge;                          ///< indicates top edge
+} LFCUParam;
+
+
+
+//TU settings for entropy encoding
+struct TUEntropyCodingParameters
+{
+  const UInt            *scan;
+  const UInt            *scanCG;
+        COEFF_SCAN_TYPE  scanType;
+        UInt             widthInGroups;
+        UInt             heightInGroups;
+        UInt             firstSignificanceMapContext;
+};
+
+
+struct TComPictureHash
+{
+  std::vector<UChar> hash;
+
+  Bool operator==(const TComPictureHash &other) const
+  {
+    if (other.hash.size() != hash.size())
+    {
+      return false;
+    }
+    for(UInt i=0; i<UInt(hash.size()); i++)
+    {
+      if (other.hash[i] != hash[i])
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Bool operator!=(const TComPictureHash &other) const
+  {
+    return !(*this == other);
+  }
+};
+
+struct TComSEITimeSet
+{
+  TComSEITimeSet() : clockTimeStampFlag(false),
+                     numUnitFieldBasedFlag(false),
+                     countingType(0),
+                     fullTimeStampFlag(false),
+                     discontinuityFlag(false),
+                     cntDroppedFlag(false),
+                     numberOfFrames(0),
+                     secondsValue(0),
+                     minutesValue(0),
+                     hoursValue(0),
+                     secondsFlag(false),
+                     minutesFlag(false),
+                     hoursFlag(false),
+                     timeOffsetLength(0),
+                     timeOffsetValue(0)
+  { }
+  Bool clockTimeStampFlag;
+  Bool numUnitFieldBasedFlag;
+  Int  countingType;
+  Bool fullTimeStampFlag;
+  Bool discontinuityFlag;
+  Bool cntDroppedFlag;
+  Int  numberOfFrames;
+  Int  secondsValue;
+  Int  minutesValue;
+  Int  hoursValue;
+  Bool secondsFlag;
+  Bool minutesFlag;
+  Bool hoursFlag;
+  Int  timeOffsetLength;
+  Int  timeOffsetValue;
+};
+
+struct TComSEIMasteringDisplay
+{
