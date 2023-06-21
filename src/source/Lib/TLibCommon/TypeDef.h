@@ -898,3 +898,103 @@ struct TComSEITimeSet
 
 struct TComSEIMasteringDisplay
 {
+  Bool      colourVolumeSEIEnabled;
+  UInt      maxLuminance;
+  UInt      minLuminance;
+  UShort    primaries[3][2];
+  UShort    whitePoint[2];
+};
+
+struct LumaLevelToDeltaQPMapping
+{
+  LumaLevelToDQPMode                 mode;             ///< use deltaQP determined by block luma level
+  Double                             maxMethodWeight;  ///< weight of max luma value when mode = 2
+  std::vector< std::pair<Int, Int> > mapping;          ///< first=luma level, second=delta QP.
+  Bool isEnabled() const { return mode!=LUMALVL_TO_DQP_DISABLED; }
+};
+
+struct WCGChromaQPControl
+{
+  Bool isEnabled() const { return enabled; }
+  Bool   enabled;         ///< Enabled flag (0:default)
+  Double chromaCbQpScale; ///< Chroma Cb QP Scale (1.0:default)
+  Double chromaCrQpScale; ///< Chroma Cr QP Scale (1.0:default)
+  Double chromaQpScale;   ///< Chroma QP Scale (0.0:default)
+  Double chromaQpOffset;  ///< Chroma QP Offset (0.0:default)
+};
+
+struct TComSEIFisheyeVideoInfo
+{
+  struct ActiveAreaInfo
+  {
+    UInt m_fisheyeCircularRegionCentreX;
+    UInt m_fisheyeCircularRegionCentreY;
+    UInt m_fisheyeRectRegionTop;
+    UInt m_fisheyeRectRegionLeft;
+    UInt m_fisheyeRectRegionWidth;
+    UInt m_fisheyeRectRegionHeight;
+    UInt m_fisheyeCircularRegionRadius;
+    UInt m_fisheyeSceneRadius;
+
+    Int  m_fisheyeCameraCentreAzimuth;
+    Int  m_fisheyeCameraCentreElevation;
+    Int  m_fisheyeCameraCentreTilt;
+    UInt m_fisheyeCameraCentreOffsetX;
+    UInt m_fisheyeCameraCentreOffsetY;
+    UInt m_fisheyeCameraCentreOffsetZ;
+    UInt m_fisheyeFieldOfView;
+    std::vector<Int> m_fisheyePolynomialCoeff;
+  };
+
+  Bool  m_fisheyeCancelFlag;
+  Bool  m_fisheyePersistenceFlag;
+  UInt  m_fisheyeViewDimensionIdc;
+  std::vector<ActiveAreaInfo> m_fisheyeActiveAreas;
+  TComSEIFisheyeVideoInfo() : m_fisheyeCancelFlag(false), m_fisheyePersistenceFlag(false), m_fisheyeViewDimensionIdc(0), m_fisheyeActiveAreas() { }
+};
+
+class Window
+{
+private:
+  Bool m_enabledFlag;
+  Int  m_winLeftOffset;
+  Int  m_winRightOffset;
+  Int  m_winTopOffset;
+  Int  m_winBottomOffset;
+public:
+  Window()
+  : m_enabledFlag    (false)
+  , m_winLeftOffset  (0)
+  , m_winRightOffset (0)
+  , m_winTopOffset   (0)
+  , m_winBottomOffset(0)
+  { }
+
+  Bool getWindowEnabledFlag() const   { return m_enabledFlag;                          }
+  Int  getWindowLeftOffset() const    { return m_enabledFlag ? m_winLeftOffset : 0;    }
+  Void setWindowLeftOffset(Int val)   { m_winLeftOffset = val; m_enabledFlag = true;   }
+  Int  getWindowRightOffset() const   { return m_enabledFlag ? m_winRightOffset : 0;   }
+  Void setWindowRightOffset(Int val)  { m_winRightOffset = val; m_enabledFlag = true;  }
+  Int  getWindowTopOffset() const     { return m_enabledFlag ? m_winTopOffset : 0;     }
+  Void setWindowTopOffset(Int val)    { m_winTopOffset = val; m_enabledFlag = true;    }
+  Int  getWindowBottomOffset() const  { return m_enabledFlag ? m_winBottomOffset: 0;   }
+  Void setWindowBottomOffset(Int val) { m_winBottomOffset = val; m_enabledFlag = true; }
+
+  Void setWindow(Int offsetLeft, Int offsetRight, Int offsetTop, Int offsetBottom)
+  {
+    m_enabledFlag     = (offsetLeft || offsetRight || offsetTop || offsetBottom);
+    m_winLeftOffset   = offsetLeft;
+    m_winRightOffset  = offsetRight;
+    m_winTopOffset    = offsetTop;
+    m_winBottomOffset = offsetBottom;
+  }
+  Bool operator == (const Window &rhs) const
+  {
+    return ( m_enabledFlag && rhs.m_enabledFlag && 
+      m_winLeftOffset == rhs.m_winLeftOffset &&
+      m_winRightOffset == rhs.m_winRightOffset &&
+      m_winTopOffset == rhs.m_winTopOffset &&
+      m_winBottomOffset == rhs.m_winBottomOffset
+      );
+  }
+};
