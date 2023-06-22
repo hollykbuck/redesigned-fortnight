@@ -998,3 +998,35 @@ public:
       );
   }
 };
+
+class RNSEIWindow : public Window
+{
+private:
+  UInt m_regionId;
+public:
+  RNSEIWindow() : Window(), m_regionId(0) {}
+  Int  getRegionId() const     { return getWindowEnabledFlag() ? m_regionId : 0;    }
+  Void setRegionId(UInt const val)   { m_regionId = val; }
+  // Check two RNSEIWindows are identical
+  Bool operator == (RNSEIWindow const &rhs) const
+  {
+    return ( (m_regionId == rhs.m_regionId) &&
+      Window(*this) == Window(rhs) );
+  }
+  // Check if two windows are identical, even though regions may be different
+  Bool checkSameRegion(RNSEIWindow const &rhs) const
+  {
+    return ( Window(*this) == Window(rhs) );
+  }
+  Bool checkSameID(RNSEIWindow const &rhs) const
+  {
+    return ( m_regionId == rhs.m_regionId );
+  }
+  friend std::ostream& operator<<(std::ostream  &os, RNSEIWindow const &region);
+};
+typedef std::vector<RNSEIWindow> RNSEIWindowVec;
+//! \}
+
+#endif
+
+
