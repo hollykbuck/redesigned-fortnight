@@ -98,3 +98,103 @@ Void TEncCu::create(UChar uhTotalDepth, UInt uiMaxWidth, UInt uiMaxHeight, Chrom
 
   m_bEncodeDQP                     = false;
   m_stillToCodeChromaQpOffsetFlag  = false;
+  m_cuChromaQpOffsetIdxPlus1       = 0;
+  m_bFastDeltaQP                   = false;
+
+  // initialize partition order.
+  UInt* piTmp = &g_auiZscanToRaster[0];
+  initZscanToRaster( m_uhTotalDepth, 1, 0, piTmp);
+  initRasterToZscan( uiMaxWidth, uiMaxHeight, m_uhTotalDepth );
+
+  // initialize conversion matrix from partition index to pel
+  initRasterToPelXY( uiMaxWidth, uiMaxHeight, m_uhTotalDepth );
+}
+
+Void TEncCu::destroy()
+{
+  Int i;
+
+  for( i=0 ; i<m_uhTotalDepth-1 ; i++)
+  {
+    if(m_ppcBestCU[i])
+    {
+      m_ppcBestCU[i]->destroy();      delete m_ppcBestCU[i];      m_ppcBestCU[i] = NULL;
+    }
+    if(m_ppcTempCU[i])
+    {
+      m_ppcTempCU[i]->destroy();      delete m_ppcTempCU[i];      m_ppcTempCU[i] = NULL;
+    }
+    if(m_ppcPredYuvBest[i])
+    {
+      m_ppcPredYuvBest[i]->destroy(); delete m_ppcPredYuvBest[i]; m_ppcPredYuvBest[i] = NULL;
+    }
+    if(m_ppcResiYuvBest[i])
+    {
+      m_ppcResiYuvBest[i]->destroy(); delete m_ppcResiYuvBest[i]; m_ppcResiYuvBest[i] = NULL;
+    }
+    if(m_ppcRecoYuvBest[i])
+    {
+      m_ppcRecoYuvBest[i]->destroy(); delete m_ppcRecoYuvBest[i]; m_ppcRecoYuvBest[i] = NULL;
+    }
+    if(m_ppcPredYuvTemp[i])
+    {
+      m_ppcPredYuvTemp[i]->destroy(); delete m_ppcPredYuvTemp[i]; m_ppcPredYuvTemp[i] = NULL;
+    }
+    if(m_ppcResiYuvTemp[i])
+    {
+      m_ppcResiYuvTemp[i]->destroy(); delete m_ppcResiYuvTemp[i]; m_ppcResiYuvTemp[i] = NULL;
+    }
+    if(m_ppcRecoYuvTemp[i])
+    {
+      m_ppcRecoYuvTemp[i]->destroy(); delete m_ppcRecoYuvTemp[i]; m_ppcRecoYuvTemp[i] = NULL;
+    }
+    if(m_ppcOrigYuv[i])
+    {
+      m_ppcOrigYuv[i]->destroy();     delete m_ppcOrigYuv[i];     m_ppcOrigYuv[i] = NULL;
+    }
+  }
+  if(m_ppcBestCU)
+  {
+    delete [] m_ppcBestCU;
+    m_ppcBestCU = NULL;
+  }
+  if(m_ppcTempCU)
+  {
+    delete [] m_ppcTempCU;
+    m_ppcTempCU = NULL;
+  }
+
+  if(m_ppcPredYuvBest)
+  {
+    delete [] m_ppcPredYuvBest;
+    m_ppcPredYuvBest = NULL;
+  }
+  if(m_ppcResiYuvBest)
+  {
+    delete [] m_ppcResiYuvBest;
+    m_ppcResiYuvBest = NULL;
+  }
+  if(m_ppcRecoYuvBest)
+  {
+    delete [] m_ppcRecoYuvBest;
+    m_ppcRecoYuvBest = NULL;
+  }
+  if(m_ppcPredYuvTemp)
+  {
+    delete [] m_ppcPredYuvTemp;
+    m_ppcPredYuvTemp = NULL;
+  }
+  if(m_ppcResiYuvTemp)
+  {
+    delete [] m_ppcResiYuvTemp;
+    m_ppcResiYuvTemp = NULL;
+  }
+  if(m_ppcRecoYuvTemp)
+  {
+    delete [] m_ppcRecoYuvTemp;
+    m_ppcRecoYuvTemp = NULL;
+  }
+  if(m_ppcOrigYuv)
+  {
+    delete [] m_ppcOrigYuv;
+    m_ppcOrigYuv = NULL;
