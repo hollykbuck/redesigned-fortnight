@@ -198,3 +198,103 @@ Void TEncCu::destroy()
   {
     delete [] m_ppcOrigYuv;
     m_ppcOrigYuv = NULL;
+  }
+}
+
+/** \param    pcEncTop      pointer of encoder class
+ */
+Void TEncCu::init( TEncTop* pcEncTop )
+{
+  m_pcEncCfg           = pcEncTop;
+  m_pcPredSearch       = pcEncTop->getPredSearch();
+  m_pcTrQuant          = pcEncTop->getTrQuant();
+  m_pcRdCost           = pcEncTop->getRdCost();
+
+  m_pcEntropyCoder     = pcEncTop->getEntropyCoder();
+  m_pcBinCABAC         = pcEncTop->getBinCABAC();
+
+  m_pppcRDSbacCoder    = pcEncTop->getRDSbacCoder();
+  m_pcRDGoOnSbacCoder  = pcEncTop->getRDGoOnSbacCoder();
+
+  m_pcRateCtrl         = pcEncTop->getRateCtrl();
+  m_lumaQPOffset       = 0;
+  initLumaDeltaQpLUT();
+#if JVET_V0078
+  m_smoothQPoffset     = 0;
+#endif
+#if JVET_Y0077_BIM
+  m_BimQPoffset        = 0;
+#endif
+}
+
+// ====================================================================================================================
+// Public member functions
+// ====================================================================================================================
+
+/** 
+ \param  pCtu pointer of CU data class
+ */
+Void TEncCu::compressCtu( TComDataCU* pCtu )
+{
+  // initialize CU data
+  m_ppcBestCU[0]->initCtu( pCtu->getPic(), pCtu->getCtuRsAddr() );
+  m_ppcTempCU[0]->initCtu( pCtu->getPic(), pCtu->getCtuRsAddr() );
+  m_bEncodeDQP         = false;
+
+  // analysis of CU
+  DEBUG_STRING_NEW(sDebug)
+
+  xCompressCU( m_ppcBestCU[0], m_ppcTempCU[0], 0 DEBUG_STRING_PASS_INTO(sDebug) );
+  DEBUG_STRING_OUTPUT(std::cout, sDebug)
+
+#if ADAPTIVE_QP_SELECTION
+  if( m_pcEncCfg->getUseAdaptQpSelect() )
+  {
+    if(pCtu->getSlice()->getSliceType()!=I_SLICE) //IIII
+    {
+      xCtuCollectARLStats( pCtu );
+    }
+  }
+#endif
+}
+/** \param  pCtu  pointer of CU data class
+ */
+Void TEncCu::encodeCtu ( TComDataCU* pCtu )
+{
+  if ( pCtu->getSlice()->getPPS()->getUseDQP() )
+  {
+    setdQPFlag(true);
+  }
+
+  if ( pCtu->getSlice()->getUseChromaQpAdj() )
+  {
+    setCodeChromaQpAdjFlag(true);
+  }
+
+  // Encode CU data
+  xEncodeCU( pCtu, 0, 0 );
+}
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+
+Void TEncCu::initLumaDeltaQpLUT()
+{
+  const LumaLevelToDeltaQPMapping &mapping=m_pcEncCfg->getLumaLevelToDeltaQPMapping();
+
+  if ( !mapping.isEnabled() )
+  {
+    return;
+  }
+
+  // map the sparse LumaLevelToDeltaQPMapping.mapping to a fully populated linear table.
+
+  Int         lastDeltaQPValue=0;
+  std::size_t nextSparseIndex=0;
+  for(Int index=0; index<LUMA_LEVEL_TO_DQP_LUT_MAXSIZE; index++)
+  {
+    while (nextSparseIndex < mapping.mapping.size() && index>=mapping.mapping[nextSparseIndex].first)
+    {
+      lastDeltaQPValue=mapping.mapping[nextSparseIndex].second;
+      nextSparseIndex++;
