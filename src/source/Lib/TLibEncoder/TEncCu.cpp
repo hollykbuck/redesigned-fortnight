@@ -398,3 +398,103 @@ Int TEncCu::calculateLumaDQPsmooth(TComDataCU *pCU, const UInt absPartIdx, const
     Double b1sum = avg;
     Double b2sum = 0.0;
     Double b3sum = 0.0;
+    Double b4sum = 0.0;
+    Double b5sum = 0.0;;
+    Double b6sum = 0.0;;
+
+    const Pel *pY1 = pOrgYuv->getAddr(COMPONENT_Y, absPartIdx);
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < width; x++)
+      {
+        b2sum += ((Double)pY1[x])*((Double)x + boffset[0]);
+        b3sum += ((Double)pY1[x])*((Double)y + boffset[1]);
+        b4sum += ((Double)pY1[x])*((Double)x*(Double)y + boffset[2]);
+        b5sum += ((Double)pY1[x])*((Double)x*(Double)x + boffset[3]);
+        b6sum += ((Double)pY1[x])*((Double)y*(Double)y + boffset[4]);
+      }
+      pY1 += stride;
+    }
+
+    Double r[numBasis];
+    for (Int b = 0; b < numBasis; b++)
+    {
+      r[b] = invb[b][0] * b1sum + invb[b][1] * b2sum + invb[b][2] * b3sum + invb[b][3] * b4sum + invb[b][4] * b5sum + invb[b][5] * b6sum;
+    }
+
+    // compute SAD for model
+    const Pel *pY2 = pOrgYuv->getAddr(COMPONENT_Y, absPartIdx);
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < width; x++)
+      {
+        diff += abs((Int)pY2[x] - (Int)(r[0] + r[1] * ((Double)x + boffset[0]) + r[2] * ((Double)y + boffset[1]) + r[3] * ((Double)x*(Double)y + boffset[2]) + r[4] * ((Double)x*(Double)x + boffset[3]) + r[5] * ((Double)y*(Double)y + boffset[4])));
+      }
+      pY2 += stride;
+    }
+    if (diff < thr)
+    {
+      iQP = std::max(m_pcEncCfg->getSmoothQPReductionLimit(), std::min(0, (Int)(m_pcEncCfg->getSmoothQPReductionModelScale()*(Double)iBaseQP + m_pcEncCfg->getSmoothQPReductionModelOffset())));
+    }
+  }
+  return iQP;
+}
+#endif
+
+//! Derive small set of test modes for AMP encoder speed-up
+#if AMP_ENC_SPEEDUP
+#if AMP_MRG
+Void TEncCu::deriveTestModeAMP (TComDataCU *pcBestCU, PartSize eParentPartSize, Bool &bTestAMP_Hor, Bool &bTestAMP_Ver, Bool &bTestMergeAMP_Hor, Bool &bTestMergeAMP_Ver)
+#else
+Void TEncCu::deriveTestModeAMP (TComDataCU *pcBestCU, PartSize eParentPartSize, Bool &bTestAMP_Hor, Bool &bTestAMP_Ver)
+#endif
+{
+  if ( pcBestCU->getPartitionSize(0) == SIZE_2NxN )
+  {
+    bTestAMP_Hor = true;
+  }
+  else if ( pcBestCU->getPartitionSize(0) == SIZE_Nx2N )
+  {
+    bTestAMP_Ver = true;
+  }
+  else if ( pcBestCU->getPartitionSize(0) == SIZE_2Nx2N && pcBestCU->getMergeFlag(0) == false && pcBestCU->isSkipped(0) == false )
+  {
+    bTestAMP_Hor = true;
+    bTestAMP_Ver = true;
+  }
+
+#if AMP_MRG
+  //! Utilizing the partition size of parent PU
+  if ( eParentPartSize >= SIZE_2NxnU && eParentPartSize <= SIZE_nRx2N )
+  {
+    bTestMergeAMP_Hor = true;
+    bTestMergeAMP_Ver = true;
+  }
+
+  if ( eParentPartSize == NUMBER_OF_PART_SIZES ) //! if parent is intra
+  {
+    if ( pcBestCU->getPartitionSize(0) == SIZE_2NxN )
+    {
+      bTestMergeAMP_Hor = true;
+    }
+    else if ( pcBestCU->getPartitionSize(0) == SIZE_Nx2N )
+    {
+      bTestMergeAMP_Ver = true;
+    }
+  }
+
+  if ( pcBestCU->getPartitionSize(0) == SIZE_2Nx2N && pcBestCU->isSkipped(0) == false )
+  {
+    bTestMergeAMP_Hor = true;
+    bTestMergeAMP_Ver = true;
+  }
+
+  if ( pcBestCU->getWidth(0) == 64 )
+  {
+    bTestAMP_Hor = false;
+    bTestAMP_Ver = false;
+  }
+#else
+  //! Utilizing the partition size of parent PU
+  if ( eParentPartSize >= SIZE_2NxnU && eParentPartSize <= SIZE_nRx2N )
+  {
