@@ -298,3 +298,103 @@ Void TEncCu::initLumaDeltaQpLUT()
     {
       lastDeltaQPValue=mapping.mapping[nextSparseIndex].second;
       nextSparseIndex++;
+    }
+    m_lumaLevelToDeltaQPLUT[index]=lastDeltaQPValue;
+  }
+}
+
+Int TEncCu::calculateLumaDQP(TComDataCU *pCU, const UInt absPartIdx, const TComYuv * pOrgYuv)
+{
+  const Pel *pY = pOrgYuv->getAddr(COMPONENT_Y, absPartIdx);
+  const Int stride  = pOrgYuv->getStride(COMPONENT_Y);
+  Int width = pCU->getWidth(absPartIdx);
+  Int height = pCU->getHeight(absPartIdx);
+  Double avg = 0;
+
+  // limit the block by picture size
+  const TComSPS* pSPS = pCU->getSlice()->getSPS();
+  if ( pCU->getCUPelX() + width > pSPS->getPicWidthInLumaSamples() )
+  {
+    width = pSPS->getPicWidthInLumaSamples() - pCU->getCUPelX();
+  }
+  if ( pCU->getCUPelY() + height > pSPS->getPicHeightInLumaSamples() )
+  {
+    height = pSPS->getPicHeightInLumaSamples() - pCU->getCUPelY();
+  }
+
+  // Get QP offset derived from Luma level
+  if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().mode == LUMALVL_TO_DQP_AVG_METHOD )
+  {
+    // Use avg method
+    Int sum = 0;
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < width; x++)
+      {
+        sum += pY[x];
+      }
+      pY += stride;
+    }
+    avg = (Double)sum/(width*height);
+  }
+  else
+  {
+    // Use maximum luma value
+    Int maxVal = 0;
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < width; x++)
+      {
+        if (pY[x] > maxVal)
+        {
+          maxVal = pY[x];
+        }
+      }
+      pY += stride;
+    }
+    // use a percentage of the maxVal
+    avg = (Double)maxVal * m_pcEncCfg->getLumaLevelToDeltaQPMapping().maxMethodWeight;
+  }
+
+  Int lumaIdx = Clip3<Int>(0, Int(LUMA_LEVEL_TO_DQP_LUT_MAXSIZE)-1, Int(avg+0.5) );
+  Int QP = m_lumaLevelToDeltaQPLUT[lumaIdx];
+  return QP;
+}
+
+#if JVET_V0078
+Int TEncCu::calculateLumaDQPsmooth(TComDataCU *pCU, const UInt absPartIdx, const TComYuv * pOrgYuv, Int iBaseQP)
+{
+  const Pel *pY = pOrgYuv->getAddr(COMPONENT_Y, absPartIdx);
+  const Int stride = pOrgYuv->getStride(COMPONENT_Y);
+  Double avg = 0;
+  Double diff = 0;
+  Int width = pCU->getWidth(absPartIdx);
+  Int height = pCU->getHeight(absPartIdx);
+  Double thr = (Double)m_pcEncCfg->getSmoothQPReductionThreshold()*height*width;
+  Int iQP = 0;
+  if (height == 64 && width == 64)
+  {
+    Int sum = 0;
+    for (Int y = 0; y < height; y++)
+    {
+      for (Int x = 0; x < width; x++)
+      {
+        sum += pY[x];
+      }
+      pY += stride;
+    }
+    avg = (Double)sum;
+
+    // determine parameters for 1+x+y+x*x+y*y model
+    const Int numBasis = 6;
+    Double invb[numBasis][numBasis] = { {0.001*0.244140625000000,                   0,                   0,                   0,                   0,                   0},
+                                        {0,   0.001*0.013204564833946,   0.001*0.002080251479290, -0.001*0.000066039729501, -0.001*0.000165220364313,   0.000000000000000},
+                                        {0,   0.001*0.002080251479290,   0.001*0.013204564833946, -0.001*0.000066039729501,   0.000000000000000, -0.001*0.000165220364313},
+                                        {0, -0.001*0.000066039729501, -0.001*0.000066039729501,   0.001*0.000002096499349, 0.000000000000000, 0.000000000000000},
+                                        {0, -0.001*0.000165220364313,   0.000000000000000, 0.000000000000000,   0.001*0.000002622545465, 0.000000000000000},
+                                        {0,   0.000000000000000, -0.001*0.000165220364313, 0.000000000000000, 0.000000000000000,   0.001*0.000002622545465} };
+    Double boffset[5] = { -31.5, -31.5, -992.25, -1333.5, -1333.5 };
+
+    Double b1sum = avg;
+    Double b2sum = 0.0;
+    Double b3sum = 0.0;
