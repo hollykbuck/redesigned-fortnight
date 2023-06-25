@@ -498,3 +498,103 @@ Void TEncCu::deriveTestModeAMP (TComDataCU *pcBestCU, PartSize eParentPartSize, 
   //! Utilizing the partition size of parent PU
   if ( eParentPartSize >= SIZE_2NxnU && eParentPartSize <= SIZE_nRx2N )
   {
+    bTestAMP_Hor = true;
+    bTestAMP_Ver = true;
+  }
+
+  if ( eParentPartSize == SIZE_2Nx2N )
+  {
+    bTestAMP_Hor = false;
+    bTestAMP_Ver = false;
+  }
+#endif
+}
+#endif
+
+
+// ====================================================================================================================
+// Protected member functions
+// ====================================================================================================================
+/** Compress a CU block recursively with enabling sub-CTU-level delta QP
+ *  - for loop of QP value to compress the current CU with all possible QP
+*/
+#if AMP_ENC_SPEEDUP
+Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const UInt uiDepth DEBUG_STRING_FN_DECLARE(sDebug_), PartSize eParentPartSize )
+#else
+Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const UInt uiDepth )
+#endif
+{
+  TComPic* pcPic = rpcBestCU->getPic();
+  DEBUG_STRING_NEW(sDebug)
+  const TComPPS &pps=*(rpcTempCU->getSlice()->getPPS());
+  const TComSPS &sps=*(rpcTempCU->getSlice()->getSPS());
+  
+  // These are only used if getFastDeltaQp() is true
+  const UInt fastDeltaQPCuMaxSize    = Clip3(sps.getMaxCUHeight()>>sps.getLog2DiffMaxMinCodingBlockSize(), sps.getMaxCUHeight(), 32u);
+
+  // get Original YUV data from picture
+  m_ppcOrigYuv[uiDepth]->copyFromPicYuv( pcPic->getPicYuvOrg(), rpcBestCU->getCtuRsAddr(), rpcBestCU->getZorderIdxInCtu() );
+
+  // variable for Cbf fast mode PU decision
+  Bool    doNotBlockPu = true;
+  Bool    earlyDetectionSkipMode = false;
+
+  const UInt uiLPelX   = rpcBestCU->getCUPelX();
+  const UInt uiRPelX   = uiLPelX + rpcBestCU->getWidth(0)  - 1;
+  const UInt uiTPelY   = rpcBestCU->getCUPelY();
+  const UInt uiBPelY   = uiTPelY + rpcBestCU->getHeight(0) - 1;
+  const UInt uiWidth   = rpcBestCU->getWidth(0);
+
+  Int iBaseQP = xComputeQP( rpcBestCU, uiDepth );
+  Int iMinQP;
+  Int iMaxQP;
+  Bool isAddLowestQP = false;
+
+  const UInt numberValidComponents = rpcBestCU->getPic()->getNumberValidComponents();
+
+  if( uiDepth <= pps.getMaxCuDQPDepth() )
+  {
+    Int idQP = m_pcEncCfg->getMaxDeltaQP();
+    iMinQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP-idQP );
+    iMaxQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP+idQP );
+  }
+  else
+  {
+    iMinQP = rpcTempCU->getQP(0);
+    iMaxQP = rpcTempCU->getQP(0);
+  }
+
+  if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() )
+  {
+    if ( uiDepth <= pps.getMaxCuDQPDepth() )
+    {
+      // keep using the same m_QP_LUMA_OFFSET in the same CTU
+      m_lumaQPOffset = calculateLumaDQP(rpcTempCU, 0, m_ppcOrigYuv[uiDepth]);
+    }
+    iMinQP = Clip3(-sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP - m_lumaQPOffset);
+    iMaxQP = iMinQP; // force encode choose the modified QO
+  }
+
+#if JVET_V0078
+  if (m_pcEncCfg->getSmoothQPReductionEnable())
+  {
+    if (uiDepth <= pps.getMaxCuDQPDepth())
+    {
+      m_smoothQPoffset = 0;
+
+      // enable smooth QP reduction on selected frames
+      bool checkSmoothQP = false;
+      if (m_pcEncCfg->getSmoothQPReductionPeriodicity() != 0)
+      {
+        checkSmoothQP = ((m_pcEncCfg->getSmoothQPReductionPeriodicity() == 0) && rpcTempCU->getSlice()->isIntra()) || (m_pcEncCfg->getSmoothQPReductionPeriodicity() == 1) || ((rpcTempCU->getSlice()->getPOC() % m_pcEncCfg->getSmoothQPReductionPeriodicity()) == 0);
+      }
+      else
+      {
+        checkSmoothQP = ((m_pcEncCfg->getSmoothQPReductionPeriodicity() == 0) && rpcTempCU->getSlice()->isIntra());
+      }
+      if (checkSmoothQP)
+      {
+        if (m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled())
+        {
+          m_smoothQPoffset = calculateLumaDQPsmooth(rpcTempCU, 0, m_ppcOrigYuv[uiDepth], iBaseQP - m_lumaQPOffset);
+        }
