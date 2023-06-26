@@ -698,3 +698,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
       if( rpcBestCU->getSlice()->getSliceType() != I_SLICE )
       {
         // 2Nx2N
+        if(m_pcEncCfg->getUseEarlySkipDetection())
+        {
+          xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2Nx2N DEBUG_STRING_PASS_INTO(sDebug) );
+          rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );//by Competition for inter_2Nx2N
+        }
+        // SKIP
+        xCheckRDCostMerge2Nx2N( rpcBestCU, rpcTempCU DEBUG_STRING_PASS_INTO(sDebug), &earlyDetectionSkipMode );//by Merge for inter_2Nx2N
+        rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+        if(!m_pcEncCfg->getUseEarlySkipDetection())
+        {
+          // 2Nx2N, NxN
+          xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2Nx2N DEBUG_STRING_PASS_INTO(sDebug) );
+          rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+          if(m_pcEncCfg->getUseCbfFastMode())
+          {
+            doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+          }
+        }
+      }
+
+      if (bIsLosslessMode) // Restore loop variable if lossless mode was searched.
+      {
+        iQP = iMinQP;
+      }
+    }
+
+    if(!earlyDetectionSkipMode)
+    {
+      for (Int iQP=iMinQP; iQP<=iMaxQP; iQP++)
+      {
+        const Bool bIsLosslessMode = isAddLowestQP && (iQP == iMinQP); // If lossless, then iQP is irrelevant for subsequent modules.
+
+        if (bIsLosslessMode)
+        {
+          iQP = lowestQP;
+        }
+
+        rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+        // do inter modes, NxN, 2NxN, and Nx2N
+        if( rpcBestCU->getSlice()->getSliceType() != I_SLICE )
+        {
+          // 2Nx2N, NxN
+
+          if(!( (rpcBestCU->getWidth(0)==8) && (rpcBestCU->getHeight(0)==8) ))
+          {
+            if( uiDepth == sps.getLog2DiffMaxMinCodingBlockSize() && doNotBlockPu)
+            {
+              xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_NxN DEBUG_STRING_PASS_INTO(sDebug)   );
+              rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            }
+          }
+
+          if(doNotBlockPu)
+          {
+            xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_Nx2N DEBUG_STRING_PASS_INTO(sDebug)  );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_Nx2N )
+            {
+              doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+            }
+          }
+          if(doNotBlockPu)
+          {
+            xCheckRDCostInter      ( rpcBestCU, rpcTempCU, SIZE_2NxN DEBUG_STRING_PASS_INTO(sDebug)  );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_2NxN)
+            {
+              doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+            }
+          }
+
+          //! Try AMP (SIZE_2NxnU, SIZE_2NxnD, SIZE_nLx2N, SIZE_nRx2N)
+          if(sps.getUseAMP() && uiDepth < sps.getLog2DiffMaxMinCodingBlockSize() )
+          {
+#if AMP_ENC_SPEEDUP
+            Bool bTestAMP_Hor = false, bTestAMP_Ver = false;
+
+#if AMP_MRG
+            Bool bTestMergeAMP_Hor = false, bTestMergeAMP_Ver = false;
+
+            deriveTestModeAMP (rpcBestCU, eParentPartSize, bTestAMP_Hor, bTestAMP_Ver, bTestMergeAMP_Hor, bTestMergeAMP_Ver);
+#else
+            deriveTestModeAMP (rpcBestCU, eParentPartSize, bTestAMP_Hor, bTestAMP_Ver);
+#endif
+
+            //! Do horizontal AMP
+            if ( bTestAMP_Hor )
+            {
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnU DEBUG_STRING_PASS_INTO(sDebug) );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_2NxnU )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+              if(doNotBlockPu)
