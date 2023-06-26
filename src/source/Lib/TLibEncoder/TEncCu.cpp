@@ -798,3 +798,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
                 }
               }
               if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnD DEBUG_STRING_PASS_INTO(sDebug) );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_2NxnD )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+            }
+#if AMP_MRG
+            else if ( bTestMergeAMP_Hor )
+            {
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnU DEBUG_STRING_PASS_INTO(sDebug), true );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_2NxnU )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnD DEBUG_STRING_PASS_INTO(sDebug), true );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_2NxnD )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+            }
+#endif
+
+            //! Do horizontal AMP
+            if ( bTestAMP_Ver )
+            {
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nLx2N DEBUG_STRING_PASS_INTO(sDebug) );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_nLx2N )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nRx2N DEBUG_STRING_PASS_INTO(sDebug) );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+              }
+            }
+#if AMP_MRG
+            else if ( bTestMergeAMP_Ver )
+            {
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nLx2N DEBUG_STRING_PASS_INTO(sDebug), true );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+                if(m_pcEncCfg->getUseCbfFastMode() && rpcBestCU->getPartitionSize(0) == SIZE_nLx2N )
+                {
+                  doNotBlockPu = rpcBestCU->getQtRootCbf( 0 ) != 0;
+                }
+              }
+              if(doNotBlockPu)
+              {
+                xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nRx2N DEBUG_STRING_PASS_INTO(sDebug), true );
+                rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+              }
+            }
+#endif
+
+#else
+            xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnU );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_2NxnD );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nLx2N );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+            xCheckRDCostInter( rpcBestCU, rpcTempCU, SIZE_nRx2N );
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+#endif
+          }
+        }
+
+        // do normal intra modes
+        // speedup for inter frames
+#if MCTS_ENC_CHECK
+        if ( m_pcEncCfg->getTMCTSSEITileConstraint() || (rpcBestCU->getSlice()->getSliceType() == I_SLICE) ||
+             ((!m_pcEncCfg->getDisableIntraPUsInInterSlices()) && (
+             (rpcBestCU->getCbf(0, COMPONENT_Y) != 0) ||
+             ((rpcBestCU->getCbf(0, COMPONENT_Cb) != 0) && (numberValidComponents > COMPONENT_Cb)) ||
+             ((rpcBestCU->getCbf(0, COMPONENT_Cr) != 0) && (numberValidComponents > COMPONENT_Cr))  // avoid very complex intra if it is unlikely
+            )))
+        {
+#else
+        if((rpcBestCU->getSlice()->getSliceType() == I_SLICE)                                        ||
+            ((!m_pcEncCfg->getDisableIntraPUsInInterSlices()) && (
+              (rpcBestCU->getCbf( 0, COMPONENT_Y  ) != 0)                                            ||
