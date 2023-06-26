@@ -598,3 +598,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
         {
           m_smoothQPoffset = calculateLumaDQPsmooth(rpcTempCU, 0, m_ppcOrigYuv[uiDepth], iBaseQP - m_lumaQPOffset);
         }
+        else
+        {
+          m_smoothQPoffset = calculateLumaDQPsmooth(rpcTempCU, 0, m_ppcOrigYuv[uiDepth], iBaseQP);
+        }
+      }
+    }
+    if (m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled())
+    {
+      iMinQP = Clip3(-sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP - m_lumaQPOffset + m_smoothQPoffset);
+    }
+    else
+    {
+      iMinQP = Clip3(-sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP + m_smoothQPoffset);
+    }
+    iMaxQP = iMinQP; // force encode choose the modified QO
+  }
+#endif
+
+#if JVET_Y0077_BIM
+  if( m_pcEncCfg->getBIM() )
+  {
+    if ( uiDepth <= pps.getMaxCuDQPDepth() )
+    {
+      std::map<Int, Int*> *QPmap = m_pcEncCfg->getAdaptQPmap();
+      Int iCTUoffset = uiTPelY / MAX_CU_SIZE * pcPic->getFrameWidthInCtus() + uiLPelX / MAX_CU_SIZE;
+      m_BimQPoffset = ( QPmap->find( pcPic->getPOC() ) == QPmap->end() ) ? 0 : (*QPmap)[pcPic->getPOC()][iCTUoffset];
+    }
+    
+    Int idQP = m_pcEncCfg->getMaxDeltaQP();
+    iMinQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP - idQP - m_lumaQPOffset + m_smoothQPoffset + m_BimQPoffset );
+    iMaxQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP + idQP - m_lumaQPOffset + m_smoothQPoffset + m_BimQPoffset );
+  }
+#endif
+
+  if ( m_pcEncCfg->getUseRateCtrl() )
+  {
+    iMinQP = m_pcRateCtrl->getRCQP();
+    iMaxQP = m_pcRateCtrl->getRCQP();
+  }
+
+  // transquant-bypass (TQB) processing loop variable initialisation ---
+
+  const Int lowestQP = iMinQP; // For TQB, use this QP which is the lowest non TQB QP tested (rather than QP'=0) - that way delta QPs are smaller, and TQB can be tested at all CU levels.
+
+  if ( (pps.getTransquantBypassEnabledFlag()) )
+  {
+    isAddLowestQP = true; // mark that the first iteration is to cost TQB mode.
+    iMinQP = iMinQP - 1;  // increase loop variable range by 1, to allow testing of TQB mode along with other QPs
+    if ( m_pcEncCfg->getCUTransquantBypassFlagForceValue() )
+    {
+      iMaxQP = iMinQP;
+    }
+  }
+
+  TComSlice * pcSlice = rpcTempCU->getPic()->getSlice(rpcTempCU->getPic()->getCurrSliceIdx());
+
+  const Bool bBoundary = !( uiRPelX < sps.getPicWidthInLumaSamples() && uiBPelY < sps.getPicHeightInLumaSamples() );
+
+  if ( !bBoundary )
+  {
+    for (Int iQP=iMinQP; iQP<=iMaxQP; iQP++)
+    {
+      const Bool bIsLosslessMode = isAddLowestQP && (iQP == iMinQP);
+
+      if (bIsLosslessMode)
+      {
+        iQP = lowestQP;
+      }
+#if JVET_Y0077_BIM
+      if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable() || m_pcEncCfg->getBIM()) && uiDepth <= pps.getMaxCuDQPDepth())
+#else
+#if JVET_V0078
+	  if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable()) && uiDepth <= pps.getMaxCuDQPDepth())
+#else
+	  if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() && uiDepth <= pps.getMaxCuDQPDepth() )
+#endif
+#endif
+      {
+        getSliceEncoder()->updateLambda(pcSlice, iQP);
+      }
+
+      m_cuChromaQpOffsetIdxPlus1 = 0;
+      if (pcSlice->getUseChromaQpAdj())
+      {
+        /* Pre-estimation of chroma QP based on input block activity may be performed
+         * here, using for example m_ppcOrigYuv[uiDepth] */
+        /* To exercise the current code, the index used for adjustment is based on
+         * block position
+         */
+        Int lgMinCuSize = sps.getLog2MinCodingBlockSize() +
+                          std::max<Int>(0, sps.getLog2DiffMaxMinCodingBlockSize()-Int(pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth()));
+        m_cuChromaQpOffsetIdxPlus1 = ((uiLPelX >> lgMinCuSize) + (uiTPelY >> lgMinCuSize)) % (pps.getPpsRangeExtension().getChromaQpOffsetListLen() + 1);
+      }
+
+      rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+      // do inter modes, SKIP and 2Nx2N
+      if( rpcBestCU->getSlice()->getSliceType() != I_SLICE )
+      {
+        // 2Nx2N
