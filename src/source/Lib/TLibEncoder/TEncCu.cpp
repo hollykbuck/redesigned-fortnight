@@ -998,3 +998,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
   {
     iMaxQP = iMinQP; // If all TUs are forced into using transquant bypass, do not loop here.
   }
+
+  const Bool bSubBranch = bBoundary || !( m_pcEncCfg->getUseEarlyCU() && rpcBestCU->getTotalCost()!=MAX_DOUBLE && rpcBestCU->isSkipped(0) );
+
+  if( bSubBranch && uiDepth < sps.getLog2DiffMaxMinCodingBlockSize() && (!getFastDeltaQp() || uiWidth > fastDeltaQPCuMaxSize || bBoundary))
+  {
+    // further split
+    Double splitTotalCost = 0;
+
+    for (Int iQP=iMinQP; iQP<=iMaxQP; iQP++)
+    {
+      const Bool bIsLosslessMode = false; // False at this level. Next level down may set it to true.
+
+      rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+
+      UChar       uhNextDepth         = uiDepth+1;
+      TComDataCU* pcSubBestPartCU     = m_ppcBestCU[uhNextDepth];
+      TComDataCU* pcSubTempPartCU     = m_ppcTempCU[uhNextDepth];
+      DEBUG_STRING_NEW(sTempDebug)
+
+      for ( UInt uiPartUnitIdx = 0; uiPartUnitIdx < 4; uiPartUnitIdx++ )
+      {
+        pcSubBestPartCU->initSubCU( rpcTempCU, uiPartUnitIdx, uhNextDepth, iQP );           // clear sub partition datas or init.
+        pcSubTempPartCU->initSubCU( rpcTempCU, uiPartUnitIdx, uhNextDepth, iQP );           // clear sub partition datas or init.
+
+        if( ( pcSubBestPartCU->getCUPelX() < sps.getPicWidthInLumaSamples() ) && ( pcSubBestPartCU->getCUPelY() < sps.getPicHeightInLumaSamples() ) )
+        {
+          if ( 0 == uiPartUnitIdx) //initialize RD with previous depth buffer
+          {
+            m_pppcRDSbacCoder[uhNextDepth][CI_CURR_BEST]->load(m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST]);
+          }
+          else
+          {
+            m_pppcRDSbacCoder[uhNextDepth][CI_CURR_BEST]->load(m_pppcRDSbacCoder[uhNextDepth][CI_NEXT_BEST]);
+          }
+
+#if AMP_ENC_SPEEDUP
+          DEBUG_STRING_NEW(sChild)
+          if ( !(rpcBestCU->getTotalCost()!=MAX_DOUBLE && rpcBestCU->isInter(0)) )
+          {
+            xCompressCU( pcSubBestPartCU, pcSubTempPartCU, uhNextDepth DEBUG_STRING_PASS_INTO(sChild), NUMBER_OF_PART_SIZES );
+          }
+          else
+          {
+
+            xCompressCU( pcSubBestPartCU, pcSubTempPartCU, uhNextDepth DEBUG_STRING_PASS_INTO(sChild), rpcBestCU->getPartitionSize(0) );
+          }
+          DEBUG_STRING_APPEND(sTempDebug, sChild)
+#else
+          xCompressCU( pcSubBestPartCU, pcSubTempPartCU, uhNextDepth );
+#endif
+
+          rpcTempCU->copyPartFrom( pcSubBestPartCU, uiPartUnitIdx, uhNextDepth );         // Keep best part data to current temporary data.
+          xCopyYuv2Tmp( pcSubBestPartCU->getTotalNumPart()*uiPartUnitIdx, uhNextDepth );
+#if JVET_Y0077_BIM
+          if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable() || m_pcEncCfg->getBIM()) && pps.getMaxCuDQPDepth() >= 1)
+#else
+#if JVET_V0078
+		  if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable()) && pps.getMaxCuDQPDepth() >= 1)
+#else
+		  if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() && pps.getMaxCuDQPDepth() >= 1 )
+#endif
+#endif
+          {
+            splitTotalCost += pcSubBestPartCU->getTotalCost();
+          }
+        }
+        else
+        {
+          pcSubBestPartCU->copyToPic( uhNextDepth );
+          rpcTempCU->copyPartFrom( pcSubBestPartCU, uiPartUnitIdx, uhNextDepth );
+        }
+      }
+
+      m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[uhNextDepth][CI_NEXT_BEST]);
+      if( !bBoundary )
+      {
+        m_pcEntropyCoder->resetBits();
+        m_pcEntropyCoder->encodeSplitFlag( rpcTempCU, 0, uiDepth, true );
+#if JVET_Y0077_BIM
+        if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable() || m_pcEncCfg->getBIM()) && pps.getMaxCuDQPDepth() >= 1)
+#else
+#if JVET_V0078
+        if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable()) && pps.getMaxCuDQPDepth() >= 1)
+#else
+        if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() && pps.getMaxCuDQPDepth() >= 1 )
+#endif
+#endif
+        {
+          Int splitBits = m_pcEntropyCoder->getNumberOfWrittenBits();
+          Double splitBitCost = m_pcRdCost->calcRdCost( splitBits, 0 );
+          splitTotalCost += splitBitCost;
+        }
+
+        rpcTempCU->getTotalBits() += m_pcEntropyCoder->getNumberOfWrittenBits(); // split bits
+        rpcTempCU->getTotalBins() += ((TEncBinCABAC *)((TEncSbac*)m_pcEntropyCoder->m_pcEntropyCoderIf)->getEncBinIf())->getBinsCoded();
+      }
+
+#if JVET_Y0077_BIM
+      if ((m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() || m_pcEncCfg->getSmoothQPReductionEnable() || m_pcEncCfg->getBIM()) && pps.getMaxCuDQPDepth() >= 1)
+#else
