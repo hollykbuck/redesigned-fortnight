@@ -898,3 +898,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
         if((rpcBestCU->getSlice()->getSliceType() == I_SLICE)                                        ||
             ((!m_pcEncCfg->getDisableIntraPUsInInterSlices()) && (
               (rpcBestCU->getCbf( 0, COMPONENT_Y  ) != 0)                                            ||
+             ((rpcBestCU->getCbf( 0, COMPONENT_Cb ) != 0) && (numberValidComponents > COMPONENT_Cb)) ||
+             ((rpcBestCU->getCbf( 0, COMPONENT_Cr ) != 0) && (numberValidComponents > COMPONENT_Cr))  // avoid very complex intra if it is unlikely
+            )))
+        {
+#endif 
+          xCheckRDCostIntra( rpcBestCU, rpcTempCU, SIZE_2Nx2N DEBUG_STRING_PASS_INTO(sDebug) );
+          rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+          if( uiDepth == sps.getLog2DiffMaxMinCodingBlockSize() )
+          {
+            if( rpcTempCU->getWidth(0) > ( 1 << sps.getQuadtreeTULog2MinSize() ) )
+            {
+              xCheckRDCostIntra( rpcBestCU, rpcTempCU, SIZE_NxN DEBUG_STRING_PASS_INTO(sDebug)   );
+              rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+            }
+          }
+        }
+
+        // test PCM
+        if(sps.getUsePCM()
+          && rpcTempCU->getWidth(0) <= (1<<sps.getPCMLog2MaxSize())
+          && rpcTempCU->getWidth(0) >= (1<<sps.getPCMLog2MinSize()) )
+        {
+          UInt uiRawBits = getTotalBits(rpcBestCU->getWidth(0), rpcBestCU->getHeight(0), rpcBestCU->getPic()->getChromaFormat(), sps.getBitDepths().recon);
+          UInt uiBestBits = rpcBestCU->getTotalBits();
+          if((uiBestBits > uiRawBits) || (rpcBestCU->getTotalCost() > m_pcRdCost->calcRdCost(uiRawBits, 0)))
+          {
+            xCheckIntraPCM (rpcBestCU, rpcTempCU);
+            rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+          }
+        }
+
+        if (bIsLosslessMode) // Restore loop variable if lossless mode was searched.
+        {
+          iQP = iMinQP;
+        }
+      }
+    }
+
+    if( rpcBestCU->getTotalCost()!=MAX_DOUBLE )
+    {
+      m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[uiDepth][CI_NEXT_BEST]);
+      m_pcEntropyCoder->resetBits();
+      m_pcEntropyCoder->encodeSplitFlag( rpcBestCU, 0, uiDepth, true );
+      rpcBestCU->getTotalBits() += m_pcEntropyCoder->getNumberOfWrittenBits(); // split bits
+      rpcBestCU->getTotalBins() += ((TEncBinCABAC *)((TEncSbac*)m_pcEntropyCoder->m_pcEntropyCoderIf)->getEncBinIf())->getBinsCoded();
+      rpcBestCU->getTotalCost()  = m_pcRdCost->calcRdCost( rpcBestCU->getTotalBits(), rpcBestCU->getTotalDistortion() );
+      m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[uiDepth][CI_NEXT_BEST]);
+    }
+  }
+
+  // copy original YUV samples to PCM buffer
+  if( rpcBestCU->getTotalCost()!=MAX_DOUBLE && rpcBestCU->isLosslessCoded(0) && (rpcBestCU->getIPCMFlag(0) == false))
+  {
+    xFillPCMBuffer(rpcBestCU, m_ppcOrigYuv[uiDepth]);
+  }
+
+  if( uiDepth == pps.getMaxCuDQPDepth() )
+  {
+    Int idQP = m_pcEncCfg->getMaxDeltaQP();
+    iMinQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP-idQP );
+    iMaxQP = Clip3( -sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP+idQP );
+#if JVET_Y0077_BIM
+    if (m_pcEncCfg->getBIM())
+    {
+      std::map<Int, Int*> *QPmap = m_pcEncCfg->getAdaptQPmap();
+      Int iCTUoffset = uiTPelY / MAX_CU_SIZE * pcPic->getFrameWidthInCtus() + uiLPelX / MAX_CU_SIZE;
+      Int iOffset = ( QPmap->find( pcPic->getPOC() ) == QPmap->end() ) ? 0 : (*QPmap)[pcPic->getPOC()][iCTUoffset];
+      iMinQP += iOffset;
+      iMaxQP += iOffset;
+    }
+#endif
+  }
+  else if( uiDepth < pps.getMaxCuDQPDepth() )
+  {
+    iMinQP = iBaseQP;
+    iMaxQP = iBaseQP;
+  }
+  else
+  {
+    const Int iStartQP = rpcTempCU->getQP(0);
+    iMinQP = iStartQP;
+    iMaxQP = iStartQP;
+  }
+
+  if ( m_pcEncCfg->getLumaLevelToDeltaQPMapping().isEnabled() )
+  {
+    iMinQP = Clip3(-sps.getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQP - m_lumaQPOffset);
+    iMaxQP = iMinQP;
+  }
+
+  if ( m_pcEncCfg->getUseRateCtrl() )
+  {
+    iMinQP = m_pcRateCtrl->getRCQP();
+    iMaxQP = m_pcRateCtrl->getRCQP();
+  }
+
+  if ( m_pcEncCfg->getCUTransquantBypassFlagForceValue() )
+  {
+    iMaxQP = iMinQP; // If all TUs are forced into using transquant bypass, do not loop here.
+  }
