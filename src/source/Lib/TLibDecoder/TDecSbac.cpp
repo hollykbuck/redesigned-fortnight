@@ -798,3 +798,103 @@ Void TDecSbac::parseMvd( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiPartIdx, UI
   }
   else
   {
+    m_pcTDecBinIf->decodeBin( uiHorAbs, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD) );
+    m_pcTDecBinIf->decodeBin( uiVerAbs, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD) );
+
+    const Bool bHorAbsGr0 = uiHorAbs != 0;
+    const Bool bVerAbsGr0 = uiVerAbs != 0;
+    pCtx++;
+
+    if( bHorAbsGr0 )
+    {
+      m_pcTDecBinIf->decodeBin( uiSymbol, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD) );
+      uiHorAbs += uiSymbol;
+    }
+
+    if( bVerAbsGr0 )
+    {
+      m_pcTDecBinIf->decodeBin( uiSymbol, *pCtx RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD) );
+      uiVerAbs += uiSymbol;
+    }
+
+    if( bHorAbsGr0 )
+    {
+      if( 2 == uiHorAbs )
+      {
+        xReadEpExGolomb( uiSymbol, 1 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD_EP) );
+        uiHorAbs += uiSymbol;
+      }
+
+      m_pcTDecBinIf->decodeBinEP( uiHorSign RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD_EP) );
+    }
+
+    if( bVerAbsGr0 )
+    {
+      if( 2 == uiVerAbs )
+      {
+        xReadEpExGolomb( uiSymbol, 1 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD_EP) );
+        uiVerAbs += uiSymbol;
+      }
+
+      m_pcTDecBinIf->decodeBinEP( uiVerSign RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__MVD_EP) );
+    }
+
+  }
+
+  const TComMv cMv( uiHorSign ? -Int( uiHorAbs ): uiHorAbs, uiVerSign ? -Int( uiVerAbs ) : uiVerAbs );
+  pcCU->getCUMvField( eRefList )->setAllMvd( cMv, pcCU->getPartitionSize( uiAbsPartIdx ), uiAbsPartIdx, uiDepth, uiPartIdx );
+  return;
+}
+
+Void TDecSbac::parseCrossComponentPrediction( TComTU &rTu, ComponentID compID )
+{
+  TComDataCU *pcCU = rTu.getCU();
+
+  if( isLuma(compID) || !pcCU->getSlice()->getPPS()->getPpsRangeExtension().getCrossComponentPredictionEnabledFlag() )
+  {
+    return;
+  }
+
+  const UInt uiAbsPartIdx = rTu.GetAbsPartIdxTU();
+
+  if (!pcCU->isIntra(uiAbsPartIdx) || (pcCU->getIntraDir( CHANNEL_TYPE_CHROMA, uiAbsPartIdx ) == DM_CHROMA_IDX))
+  {
+    SChar alpha = 0;
+    UInt symbol = 0;
+
+    DTRACE_CABAC_VL( g_nSymbolCounter++ )
+    DTRACE_CABAC_T("\tparseCrossComponentPrediction()")
+    DTRACE_CABAC_T( "\tAddr=" )
+    DTRACE_CABAC_V( compID )
+    DTRACE_CABAC_T( "\tuiAbsPartIdx=" )
+    DTRACE_CABAC_V( uiAbsPartIdx )
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+    TComCodingStatisticsClassType ctype(STATS__CABAC_BITS__CROSS_COMPONENT_PREDICTION, (g_aucConvertToBit[rTu.getRect(compID).width] + 2), compID);
+#endif
+    ContextModel *pCtx = m_cCrossComponentPredictionSCModel.get(0, 0) + ((compID == COMPONENT_Cr) ? (NUM_CROSS_COMPONENT_PREDICTION_CTX >> 1) : 0);
+    m_pcTDecBinIf->decodeBin( symbol, pCtx[0] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+    if(symbol != 0)
+    {
+      // Cross-component prediction alpha is non-zero.
+      UInt sign = 0;
+      m_pcTDecBinIf->decodeBin( symbol, pCtx[1] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+      if (symbol != 0)
+      {
+        // alpha is 2 (symbol=1), 4(symbol=2) or 8(symbol=3).
+        // Read up to two more bits
+        xReadUnaryMaxSymbol( symbol, (pCtx + 2), 1, 2 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+        symbol += 1;
+      }
+      m_pcTDecBinIf->decodeBin( sign, pCtx[4] RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+      alpha = (sign != 0) ? -(1 << symbol) : (1 << symbol);
+    }
+    DTRACE_CABAC_T( "\tAlpha=" )
+    DTRACE_CABAC_V( alpha )
+    DTRACE_CABAC_T( "\n" )
+
+    pcCU->setCrossComponentPredictionAlphaPartRange( alpha, compID, uiAbsPartIdx, rTu.GetAbsPartIdxNumParts( compID ) );
+  }
+}
