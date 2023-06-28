@@ -1198,3 +1198,103 @@ Void TEncCu::xCompressCU( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, const 
 Void TEncCu::finishCU( TComDataCU* pcCU, UInt uiAbsPartIdx )
 {
   TComPic* pcPic = pcCU->getPic();
+  TComSlice * pcSlice = pcCU->getPic()->getSlice(pcCU->getPic()->getCurrSliceIdx());
+
+  //Calculate end address
+  const Int  currentCTUTsAddr = pcPic->getPicSym()->getCtuRsToTsAddrMap(pcCU->getCtuRsAddr());
+  const Bool isLastSubCUOfCtu = pcCU->isLastSubCUOfCtu(uiAbsPartIdx);
+  if ( isLastSubCUOfCtu )
+  {
+    // The 1-terminating bit is added to all streams, so don't add it here when it's 1.
+    // i.e. when the slice segment CurEnd CTU address is the current CTU address+1.
+    if (pcSlice->getSliceSegmentCurEndCtuTsAddr() != currentCTUTsAddr+1)
+    {
+      m_pcEntropyCoder->encodeTerminatingBit( 0 );
+    }
+  }
+}
+
+/** Compute QP for each CU
+ * \param pcCU Target CU
+ * \param uiDepth CU depth
+ * \returns quantization parameter
+ */
+Int TEncCu::xComputeQP( TComDataCU* pcCU, UInt uiDepth )
+{
+  Int iBaseQp = pcCU->getSlice()->getSliceQp();
+  Int iQpOffset = 0;
+  if ( m_pcEncCfg->getUseAdaptiveQP() )
+  {
+    TEncPic* pcEPic = dynamic_cast<TEncPic*>( pcCU->getPic() );
+    UInt uiAQDepth = min( uiDepth, pcEPic->getMaxAQDepth()-1 );
+    TEncPicQPAdaptationLayer* pcAQLayer = pcEPic->getAQLayer( uiAQDepth );
+    UInt uiAQUPosX = pcCU->getCUPelX() / pcAQLayer->getAQPartWidth();
+    UInt uiAQUPosY = pcCU->getCUPelY() / pcAQLayer->getAQPartHeight();
+    UInt uiAQUStride = pcAQLayer->getAQPartStride();
+    TEncQPAdaptationUnit* acAQU = pcAQLayer->getQPAdaptationUnit();
+
+    Double dMaxQScale = pow(2.0, m_pcEncCfg->getQPAdaptationRange()/6.0);
+    Double dAvgAct = pcAQLayer->getAvgActivity();
+    Double dCUAct = acAQU[uiAQUPosY * uiAQUStride + uiAQUPosX].getActivity();
+    Double dNormAct = (dMaxQScale*dCUAct + dAvgAct) / (dCUAct + dMaxQScale*dAvgAct);
+    Double dQpOffset = log(dNormAct) / log(2.0) * 6.0;
+    iQpOffset = Int(floor( dQpOffset + 0.49999 ));
+  }
+
+  return Clip3(-pcCU->getSlice()->getSPS()->getQpBDOffset(CHANNEL_TYPE_LUMA), MAX_QP, iBaseQp+iQpOffset );
+}
+
+/** encode a CU block recursively
+ * \param pcCU
+ * \param uiAbsPartIdx
+ * \param uiDepth
+ * \returns Void
+ */
+Void TEncCu::xEncodeCU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
+{
+        TComPic   *const pcPic   = pcCU->getPic();
+        TComSlice *const pcSlice = pcCU->getSlice();
+  const TComSPS   &sps =*(pcSlice->getSPS());
+  const TComPPS   &pps =*(pcSlice->getPPS());
+
+  const UInt maxCUWidth  = sps.getMaxCUWidth();
+  const UInt maxCUHeight = sps.getMaxCUHeight();
+
+        Bool bBoundary = false;
+        UInt uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  const UInt uiRPelX   = uiLPelX + (maxCUWidth>>uiDepth)  - 1;
+        UInt uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ];
+  const UInt uiBPelY   = uiTPelY + (maxCUHeight>>uiDepth) - 1;
+
+  if( ( uiRPelX < sps.getPicWidthInLumaSamples() ) && ( uiBPelY < sps.getPicHeightInLumaSamples() ) )
+  {
+    m_pcEntropyCoder->encodeSplitFlag( pcCU, uiAbsPartIdx, uiDepth );
+  }
+  else
+  {
+    bBoundary = true;
+  }
+
+  if( ( ( uiDepth < pcCU->getDepth( uiAbsPartIdx ) ) && ( uiDepth < sps.getLog2DiffMaxMinCodingBlockSize() ) ) || bBoundary )
+  {
+    UInt uiQNumParts = ( pcPic->getNumPartitionsInCtu() >> (uiDepth<<1) )>>2;
+    if( uiDepth == pps.getMaxCuDQPDepth() && pps.getUseDQP())
+    {
+      setdQPFlag(true);
+    }
+
+    if( uiDepth == pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth() && pcSlice->getUseChromaQpAdj())
+    {
+      setCodeChromaQpAdjFlag(true);
+    }
+
+    for ( UInt uiPartUnitIdx = 0; uiPartUnitIdx < 4; uiPartUnitIdx++, uiAbsPartIdx+=uiQNumParts )
+    {
+      uiLPelX   = pcCU->getCUPelX() + g_auiRasterToPelX[ g_auiZscanToRaster[uiAbsPartIdx] ];
+      uiTPelY   = pcCU->getCUPelY() + g_auiRasterToPelY[ g_auiZscanToRaster[uiAbsPartIdx] ];
+      if( ( uiLPelX < sps.getPicWidthInLumaSamples() ) && ( uiTPelY < sps.getPicHeightInLumaSamples() ) )
+      {
+        xEncodeCU( pcCU, uiAbsPartIdx, uiDepth+1 );
+      }
+    }
+    return;
