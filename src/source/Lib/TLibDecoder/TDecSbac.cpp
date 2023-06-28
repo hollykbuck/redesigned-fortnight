@@ -898,3 +898,103 @@ Void TDecSbac::parseCrossComponentPrediction( TComTU &rTu, ComponentID compID )
     pcCU->setCrossComponentPredictionAlphaPartRange( alpha, compID, uiAbsPartIdx, rTu.GetAbsPartIdxNumParts( compID ) );
   }
 }
+
+Void TDecSbac::parseTransformSubdivFlag( UInt& ruiSubdivFlag, UInt uiLog2TransformBlockSize )
+{
+  m_pcTDecBinIf->decodeBin( ruiSubdivFlag, m_cCUTransSubdivFlagSCModel.get( 0, 0, uiLog2TransformBlockSize )
+      RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(TComCodingStatisticsClassType(STATS__CABAC_BITS__TRANSFORM_SUBDIV_FLAG, 5-uiLog2TransformBlockSize))
+                          );
+  DTRACE_CABAC_VL( g_nSymbolCounter++ )
+  DTRACE_CABAC_T( "\tparseTransformSubdivFlag()" )
+  DTRACE_CABAC_T( "\tsymbol=" )
+  DTRACE_CABAC_V( ruiSubdivFlag )
+  DTRACE_CABAC_T( "\tctx=" )
+  DTRACE_CABAC_V( uiLog2TransformBlockSize )
+  DTRACE_CABAC_T( "\n" )
+}
+
+Void TDecSbac::parseQtRootCbf( UInt uiAbsPartIdx, UInt& uiQtRootCbf )
+{
+  UInt uiSymbol;
+  const UInt uiCtx = 0;
+  m_pcTDecBinIf->decodeBin( uiSymbol , m_cCUQtRootCbfSCModel.get( 0, 0, uiCtx ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__QT_ROOT_CBF) );
+  DTRACE_CABAC_VL( g_nSymbolCounter++ )
+  DTRACE_CABAC_T( "\tparseQtRootCbf()" )
+  DTRACE_CABAC_T( "\tsymbol=" )
+  DTRACE_CABAC_V( uiSymbol )
+  DTRACE_CABAC_T( "\tctx=" )
+  DTRACE_CABAC_V( uiCtx )
+  DTRACE_CABAC_T( "\tuiAbsPartIdx=" )
+  DTRACE_CABAC_V( uiAbsPartIdx )
+  DTRACE_CABAC_T( "\n" )
+
+  uiQtRootCbf = uiSymbol;
+}
+
+Void TDecSbac::parseDeltaQP( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
+{
+  Int qp;
+  UInt uiDQp;
+  Int  iDQp;
+
+  UInt uiSymbol;
+
+  xReadUnaryMaxSymbol (uiDQp,  &m_cCUDeltaQpSCModel.get( 0, 0, 0 ), 1, CU_DQP_TU_CMAX RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__DELTA_QP_EP) );
+
+  if( uiDQp >= CU_DQP_TU_CMAX)
+  {
+    xReadEpExGolomb( uiSymbol, CU_DQP_EG_k RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__DELTA_QP_EP));
+    uiDQp+=uiSymbol;
+  }
+
+  if ( uiDQp > 0 )
+  {
+    UInt uiSign;
+    Int qpBdOffsetY = pcCU->getSlice()->getSPS()->getQpBDOffset(CHANNEL_TYPE_LUMA);
+    m_pcTDecBinIf->decodeBinEP(uiSign RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(STATS__CABAC_BITS__DELTA_QP_EP));
+    iDQp = uiDQp;
+    if(uiSign)
+    {
+      iDQp = -iDQp;
+    }
+    qp = (((Int) pcCU->getRefQP( uiAbsPartIdx ) + iDQp + 52 + 2*qpBdOffsetY )%(52+qpBdOffsetY)) - qpBdOffsetY;
+  }
+  else
+  {
+    qp = pcCU->getRefQP(uiAbsPartIdx);
+  }
+
+  pcCU->setQPSubParts(qp, uiAbsPartIdx, uiDepth);
+  pcCU->setCodedQP(qp);
+}
+
+/** parse chroma qp adjustment, converting to the internal table representation.
+ * \returns Void
+ */
+Void TDecSbac::parseChromaQpAdjustment( TComDataCU* cu, UInt absPartIdx, UInt depth )
+{
+  UInt symbol;
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  const TComCodingStatisticsClassType ctype(STATS__CABAC_BITS__CHROMA_QP_ADJUSTMENT, g_aucConvertToBit[cu->getSlice()->getSPS()->getMaxCUWidth()>>depth]+2, CHANNEL_TYPE_CHROMA);
+#endif
+
+  Int chromaQpOffsetListLen = cu->getSlice()->getPPS()->getPpsRangeExtension().getChromaQpOffsetListLen();
+
+  // cu_chroma_qp_offset_flag
+  m_pcTDecBinIf->decodeBin( symbol, m_ChromaQpAdjFlagSCModel.get( 0, 0, 0 ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+  if (symbol && chromaQpOffsetListLen > 1)
+  {
+    // cu_chroma_qp_offset_idx
+    xReadUnaryMaxSymbol( symbol,  &m_ChromaQpAdjIdcSCModel.get( 0, 0, 0 ), 0, chromaQpOffsetListLen - 1 RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+    symbol++;
+  }
+  /* NB, symbol = 0 if outer flag is not set,
+   *              1 if outer flag is set and there is no inner flag
+   *              1+ otherwise */
+  cu->setChromaQpAdjSubParts( symbol, absPartIdx, depth );
+  cu->setCodedChromaQpAdj(symbol);
+}
+
+Void TDecSbac::parseQtCbf( TComTU &rTu, const ComponentID compID, const Bool lowestLevel )
+{
