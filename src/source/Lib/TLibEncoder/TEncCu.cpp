@@ -1298,3 +1298,103 @@ Void TEncCu::xEncodeCU( TComDataCU* pcCU, UInt uiAbsPartIdx, UInt uiDepth )
       }
     }
     return;
+  }
+
+  if( uiDepth <= pps.getMaxCuDQPDepth() && pps.getUseDQP())
+  {
+    setdQPFlag(true);
+  }
+
+  if( uiDepth <= pps.getPpsRangeExtension().getDiffCuChromaQpOffsetDepth() && pcSlice->getUseChromaQpAdj())
+  {
+    setCodeChromaQpAdjFlag(true);
+  }
+
+  if (pps.getTransquantBypassEnabledFlag())
+  {
+    m_pcEntropyCoder->encodeCUTransquantBypassFlag( pcCU, uiAbsPartIdx );
+  }
+
+  if( !pcSlice->isIntra() )
+  {
+    m_pcEntropyCoder->encodeSkipFlag( pcCU, uiAbsPartIdx );
+  }
+
+  if( pcCU->isSkipped( uiAbsPartIdx ) )
+  {
+    m_pcEntropyCoder->encodeMergeIndex( pcCU, uiAbsPartIdx );
+    finishCU(pcCU,uiAbsPartIdx);
+    return;
+  }
+
+  m_pcEntropyCoder->encodePredMode( pcCU, uiAbsPartIdx );
+  m_pcEntropyCoder->encodePartSize( pcCU, uiAbsPartIdx, uiDepth );
+
+  if (pcCU->isIntra( uiAbsPartIdx ) && pcCU->getPartitionSize( uiAbsPartIdx ) == SIZE_2Nx2N )
+  {
+    m_pcEntropyCoder->encodeIPCMInfo( pcCU, uiAbsPartIdx );
+
+    if(pcCU->getIPCMFlag(uiAbsPartIdx))
+    {
+      // Encode slice finish
+      finishCU(pcCU,uiAbsPartIdx);
+      return;
+    }
+  }
+
+  // prediction Info ( Intra : direction mode, Inter : Mv, reference idx )
+  m_pcEntropyCoder->encodePredInfo( pcCU, uiAbsPartIdx );
+
+  // Encode Coefficients
+  Bool bCodeDQP = getdQPFlag();
+  Bool codeChromaQpAdj = getCodeChromaQpAdjFlag();
+  m_pcEntropyCoder->encodeCoeff( pcCU, uiAbsPartIdx, uiDepth, bCodeDQP, codeChromaQpAdj );
+  setCodeChromaQpAdjFlag( codeChromaQpAdj );
+  setdQPFlag( bCodeDQP );
+
+  // --- write terminating bit ---
+  finishCU(pcCU,uiAbsPartIdx);
+}
+
+Int xCalcHADs8x8_ISlice(Pel *piOrg, Int iStrideOrg)
+{
+  Int k, i, j, jj;
+  Int diff[64], m1[8][8], m2[8][8], m3[8][8], iSumHad = 0;
+
+  for( k = 0; k < 64; k += 8 )
+  {
+    diff[k+0] = piOrg[0] ;
+    diff[k+1] = piOrg[1] ;
+    diff[k+2] = piOrg[2] ;
+    diff[k+3] = piOrg[3] ;
+    diff[k+4] = piOrg[4] ;
+    diff[k+5] = piOrg[5] ;
+    diff[k+6] = piOrg[6] ;
+    diff[k+7] = piOrg[7] ;
+
+    piOrg += iStrideOrg;
+  }
+
+  //horizontal
+  for (j=0; j < 8; j++)
+  {
+    jj = j << 3;
+    m2[j][0] = diff[jj  ] + diff[jj+4];
+    m2[j][1] = diff[jj+1] + diff[jj+5];
+    m2[j][2] = diff[jj+2] + diff[jj+6];
+    m2[j][3] = diff[jj+3] + diff[jj+7];
+    m2[j][4] = diff[jj  ] - diff[jj+4];
+    m2[j][5] = diff[jj+1] - diff[jj+5];
+    m2[j][6] = diff[jj+2] - diff[jj+6];
+    m2[j][7] = diff[jj+3] - diff[jj+7];
+
+    m1[j][0] = m2[j][0] + m2[j][2];
+    m1[j][1] = m2[j][1] + m2[j][3];
+    m1[j][2] = m2[j][0] - m2[j][2];
+    m1[j][3] = m2[j][1] - m2[j][3];
+    m1[j][4] = m2[j][4] + m2[j][6];
+    m1[j][5] = m2[j][5] + m2[j][7];
+    m1[j][6] = m2[j][4] - m2[j][6];
+    m1[j][7] = m2[j][5] - m2[j][7];
+
+    m2[j][0] = m1[j][0] + m1[j][1];
