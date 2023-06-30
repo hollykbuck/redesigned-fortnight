@@ -1098,3 +1098,103 @@ Void TDecSbac::parseQtCbf( TComTU &rTu, const ComponentID compID, const Bool low
 }
 
 
+Void TDecSbac::parseTransformSkipFlags (TComTU &rTu, ComponentID component)
+{
+  TComDataCU* pcCU=rTu.getCU();
+  UInt uiAbsPartIdx=rTu.GetAbsPartIdxTU(component);
+
+  if (pcCU->getCUTransquantBypass(uiAbsPartIdx))
+  {
+    return;
+  }
+
+  if (!TUCompRectHasAssociatedTransformSkipFlag(rTu.getRect(component), pcCU->getSlice()->getPPS()->getPpsRangeExtension().getLog2MaxTransformSkipBlockSize()))
+  {
+    return;
+  }
+
+  UInt useTransformSkip;
+
+  m_pcTDecBinIf->decodeBin( useTransformSkip , m_cTransformSkipSCModel.get( 0, toChannelType(component), 0 )
+      RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(TComCodingStatisticsClassType(STATS__CABAC_BITS__TRANSFORM_SKIP_FLAGS, component))
+                          );
+
+  DTRACE_CABAC_VL( g_nSymbolCounter++ )
+  DTRACE_CABAC_T("\tparseTransformSkip()");
+  DTRACE_CABAC_T( "\tsymbol=" )
+  DTRACE_CABAC_V( useTransformSkip )
+  DTRACE_CABAC_T( "\tAddr=" )
+  DTRACE_CABAC_V( pcCU->getCtuRsAddr() )
+  DTRACE_CABAC_T( "\tetype=" )
+  DTRACE_CABAC_V( component )
+  DTRACE_CABAC_T( "\tuiAbsPartIdx=" )
+  DTRACE_CABAC_V( rTu.GetAbsPartIdxTU() )
+  DTRACE_CABAC_T( "\n" )
+
+  pcCU->setTransformSkipPartRange( useTransformSkip, component, uiAbsPartIdx, rTu.GetAbsPartIdxNumParts(component));
+}
+
+
+/** Parse (X,Y) position of the last significant coefficient
+ * \param uiPosLastX reference to X component of last coefficient
+ * \param uiPosLastY reference to Y component of last coefficient
+ * \param width  Block width
+ * \param height Block height
+ * \param component chroma compinent ID
+ * \param uiScanIdx scan type (zig-zag, hor, ver)
+ *
+ * This method decodes the X and Y component within a block of the last significant coefficient.
+ */
+Void TDecSbac::parseLastSignificantXY( UInt& uiPosLastX, UInt& uiPosLastY, Int width, Int height, ComponentID component, UInt uiScanIdx )
+{
+  UInt uiLast;
+
+  ContextModel *pCtxX = m_cCuCtxLastX.get( 0, toChannelType(component) );
+  ContextModel *pCtxY = m_cCuCtxLastY.get( 0, toChannelType(component) );
+
+#if RExt__DECODER_DEBUG_BIT_STATISTICS
+  TComCodingStatisticsClassType ctype(STATS__CABAC_BITS__LAST_SIG_X_Y, g_aucConvertToBit[width]+2, component);
+#endif
+
+
+  if ( uiScanIdx == SCAN_VER )
+  {
+    swap( width, height );
+  }
+
+  Int blkSizeOffsetX, blkSizeOffsetY, shiftX, shiftY;
+  getLastSignificantContextParameters(component, width, height, blkSizeOffsetX, blkSizeOffsetY, shiftX, shiftY);
+
+  //------------------
+
+  // posX
+
+  for( uiPosLastX = 0; uiPosLastX < g_uiGroupIdx[ width - 1 ]; uiPosLastX++ )
+  {
+    m_pcTDecBinIf->decodeBin( uiLast, *( pCtxX + blkSizeOffsetX + (uiPosLastX >>shiftX) ) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+    if( !uiLast )
+    {
+      break;
+    }
+  }
+
+  // posY
+
+  for( uiPosLastY = 0; uiPosLastY < g_uiGroupIdx[ height - 1 ]; uiPosLastY++ )
+  {
+    m_pcTDecBinIf->decodeBin( uiLast, *( pCtxY + blkSizeOffsetY + (uiPosLastY >>shiftY)) RExt__DECODER_DEBUG_BIT_STATISTICS_PASS_OPT_ARG(ctype) );
+
+    if( !uiLast )
+    {
+      break;
+    }
+  }
+
+  // EP-coded part
+
+  if ( uiPosLastX > 3 )
+  {
+    UInt uiTemp  = 0;
+    UInt uiCount = ( uiPosLastX - 2 ) >> 1;
+    for ( Int i = uiCount - 1; i >= 0; i-- )
