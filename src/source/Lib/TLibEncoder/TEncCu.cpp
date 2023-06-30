@@ -1398,3 +1398,103 @@ Int xCalcHADs8x8_ISlice(Pel *piOrg, Int iStrideOrg)
     m1[j][7] = m2[j][5] - m2[j][7];
 
     m2[j][0] = m1[j][0] + m1[j][1];
+    m2[j][1] = m1[j][0] - m1[j][1];
+    m2[j][2] = m1[j][2] + m1[j][3];
+    m2[j][3] = m1[j][2] - m1[j][3];
+    m2[j][4] = m1[j][4] + m1[j][5];
+    m2[j][5] = m1[j][4] - m1[j][5];
+    m2[j][6] = m1[j][6] + m1[j][7];
+    m2[j][7] = m1[j][6] - m1[j][7];
+  }
+
+  //vertical
+  for (i=0; i < 8; i++)
+  {
+    m3[0][i] = m2[0][i] + m2[4][i];
+    m3[1][i] = m2[1][i] + m2[5][i];
+    m3[2][i] = m2[2][i] + m2[6][i];
+    m3[3][i] = m2[3][i] + m2[7][i];
+    m3[4][i] = m2[0][i] - m2[4][i];
+    m3[5][i] = m2[1][i] - m2[5][i];
+    m3[6][i] = m2[2][i] - m2[6][i];
+    m3[7][i] = m2[3][i] - m2[7][i];
+
+    m1[0][i] = m3[0][i] + m3[2][i];
+    m1[1][i] = m3[1][i] + m3[3][i];
+    m1[2][i] = m3[0][i] - m3[2][i];
+    m1[3][i] = m3[1][i] - m3[3][i];
+    m1[4][i] = m3[4][i] + m3[6][i];
+    m1[5][i] = m3[5][i] + m3[7][i];
+    m1[6][i] = m3[4][i] - m3[6][i];
+    m1[7][i] = m3[5][i] - m3[7][i];
+
+    m2[0][i] = m1[0][i] + m1[1][i];
+    m2[1][i] = m1[0][i] - m1[1][i];
+    m2[2][i] = m1[2][i] + m1[3][i];
+    m2[3][i] = m1[2][i] - m1[3][i];
+    m2[4][i] = m1[4][i] + m1[5][i];
+    m2[5][i] = m1[4][i] - m1[5][i];
+    m2[6][i] = m1[6][i] + m1[7][i];
+    m2[7][i] = m1[6][i] - m1[7][i];
+  }
+
+  for (i = 0; i < 8; i++)
+  {
+    for (j = 0; j < 8; j++)
+    {
+      iSumHad += abs(m2[i][j]);
+    }
+  }
+  iSumHad -= abs(m2[0][0]);
+  iSumHad =(iSumHad+2)>>2;
+  return(iSumHad);
+}
+
+Int  TEncCu::updateCtuDataISlice(TComDataCU* pCtu, Int width, Int height)
+{
+  Int  xBl, yBl;
+  const Int iBlkSize = 8;
+
+  Pel* pOrgInit   = pCtu->getPic()->getPicYuvOrg()->getAddr(COMPONENT_Y, pCtu->getCtuRsAddr(), 0);
+  Int  iStrideOrig = pCtu->getPic()->getPicYuvOrg()->getStride(COMPONENT_Y);
+  Pel  *pOrg;
+
+  Int iSumHad = 0;
+  for ( yBl=0; (yBl+iBlkSize)<=height; yBl+= iBlkSize)
+  {
+    for ( xBl=0; (xBl+iBlkSize)<=width; xBl+= iBlkSize)
+    {
+      pOrg = pOrgInit + iStrideOrig*yBl + xBl;
+      iSumHad += xCalcHADs8x8_ISlice(pOrg, iStrideOrig);
+    }
+  }
+  return(iSumHad);
+}
+
+/** check RD costs for a CU block encoded with merge
+ * \param rpcBestCU
+ * \param rpcTempCU
+ * \param earlyDetectionSkipMode
+ */
+Void TEncCu::xCheckRDCostMerge2Nx2N( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU DEBUG_STRING_FN_DECLARE(sDebug), Bool *earlyDetectionSkipMode )
+{
+  assert( rpcTempCU->getSlice()->getSliceType() != I_SLICE );
+  if(getFastDeltaQp())
+  {
+    return;   // never check merge in fast deltaqp mode
+  }
+  TComMvField  cMvFieldNeighbours[2 * MRG_MAX_NUM_CANDS]; // double length for mv of both lists
+  UChar uhInterDirNeighbours[MRG_MAX_NUM_CANDS];
+  Int numValidMergeCand = 0;
+  const Bool bTransquantBypassFlag = rpcTempCU->getCUTransquantBypass(0);
+
+  for( UInt ui = 0; ui < rpcTempCU->getSlice()->getMaxNumMergeCand(); ++ui )
+  {
+    uhInterDirNeighbours[ui] = 0;
+  }
+  UChar uhDepth = rpcTempCU->getDepth( 0 );
+  rpcTempCU->setPartSizeSubParts( SIZE_2Nx2N, 0, uhDepth ); // interprets depth relative to CTU level
+#if MCTS_ENC_CHECK
+  UInt numSpatialMergeCandidates = 0;
+  rpcTempCU->getInterMergeCandidates( 0, 0, cMvFieldNeighbours, uhInterDirNeighbours, numValidMergeCand, numSpatialMergeCandidates );
+#else
