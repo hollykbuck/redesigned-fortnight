@@ -1598,3 +1598,103 @@ Void TEncCu::xCheckRDCostMerge2Nx2N( TComDataCU*& rpcBestCU, TComDataCU*& rpcTem
         }
         else if(m_pcEncCfg->getMotionEstimationSearchMethod() != MESEARCH_SELECTIVE)
         {
+          Int absoulte_MV=0;
+          for ( UInt uiRefListIdx = 0; uiRefListIdx < 2; uiRefListIdx++ )
+          {
+            if ( rpcBestCU->getSlice()->getNumRefIdx( RefPicList( uiRefListIdx ) ) > 0 )
+            {
+              TComCUMvField* pcCUMvField = rpcBestCU->getCUMvField(RefPicList( uiRefListIdx ));
+              Int iHor = pcCUMvField->getMvd( 0 ).getAbsHor();
+              Int iVer = pcCUMvField->getMvd( 0 ).getAbsVer();
+              absoulte_MV+=iHor+iVer;
+            }
+          }
+
+          if(absoulte_MV == 0)
+          {
+            *earlyDetectionSkipMode = true;
+          }
+        }
+      }
+    }
+  }
+  DEBUG_STRING_APPEND(sDebug, bestStr)
+}
+
+
+#if AMP_MRG
+Void TEncCu::xCheckRDCostInter( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, PartSize ePartSize DEBUG_STRING_FN_DECLARE(sDebug), Bool bUseMRG)
+#else
+Void TEncCu::xCheckRDCostInter( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU, PartSize ePartSize )
+#endif
+{
+  DEBUG_STRING_NEW(sTest)
+
+  if(getFastDeltaQp())
+  {
+    const TComSPS &sps=*(rpcTempCU->getSlice()->getSPS());
+    const UInt fastDeltaQPCuMaxSize = Clip3(sps.getMaxCUHeight()>>(sps.getLog2DiffMaxMinCodingBlockSize()), sps.getMaxCUHeight(), 32u);
+    if(ePartSize != SIZE_2Nx2N || rpcTempCU->getWidth( 0 ) > fastDeltaQPCuMaxSize)
+    {
+      return; // only check necessary 2Nx2N Inter in fast deltaqp mode
+    }
+  }
+
+  // prior to this, rpcTempCU will have just been reset using rpcTempCU->initEstData( uiDepth, iQP, bIsLosslessMode );
+  UChar uhDepth = rpcTempCU->getDepth( 0 );
+
+  rpcTempCU->setPartSizeSubParts  ( ePartSize,  0, uhDepth );
+  rpcTempCU->setPredModeSubParts  ( MODE_INTER, 0, uhDepth );
+  rpcTempCU->setChromaQpAdjSubParts( rpcTempCU->getCUTransquantBypass(0) ? 0 : m_cuChromaQpOffsetIdxPlus1, 0, uhDepth );
+
+#if MCTS_ENC_CHECK
+  rpcTempCU->setTMctsMvpIsValid(true);
+#endif
+
+#if AMP_MRG
+  rpcTempCU->setMergeAMP (true);
+  m_pcPredSearch->predInterSearch ( rpcTempCU, m_ppcOrigYuv[uhDepth], m_ppcPredYuvTemp[uhDepth], m_ppcResiYuvTemp[uhDepth], m_ppcRecoYuvTemp[uhDepth] DEBUG_STRING_PASS_INTO(sTest), false, bUseMRG );
+#else
+  m_pcPredSearch->predInterSearch ( rpcTempCU, m_ppcOrigYuv[uhDepth], m_ppcPredYuvTemp[uhDepth], m_ppcResiYuvTemp[uhDepth], m_ppcRecoYuvTemp[uhDepth] );
+#endif
+
+#if AMP_MRG
+  if ( !rpcTempCU->getMergeAMP() )
+  {
+    return;
+  }
+#endif
+
+#if MCTS_ENC_CHECK
+  if (m_pcEncCfg->getTMCTSSEITileConstraint() && (!rpcTempCU->getTMctsMvpIsValid()))
+  {
+    return;
+  }
+#endif
+
+  m_pcPredSearch->encodeResAndCalcRdInterCU( rpcTempCU, m_ppcOrigYuv[uhDepth], m_ppcPredYuvTemp[uhDepth], m_ppcResiYuvTemp[uhDepth], m_ppcResiYuvBest[uhDepth], m_ppcRecoYuvTemp[uhDepth], false DEBUG_STRING_PASS_INTO(sTest) );
+  rpcTempCU->getTotalCost()  = m_pcRdCost->calcRdCost( rpcTempCU->getTotalBits(), rpcTempCU->getTotalDistortion() );
+
+#if DEBUG_STRING
+  DebugInterPredResiReco(sTest, *(m_ppcPredYuvTemp[uhDepth]), *(m_ppcResiYuvBest[uhDepth]), *(m_ppcRecoYuvTemp[uhDepth]), DebugStringGetPredModeMask(rpcTempCU->getPredictionMode(0)));
+#endif
+
+  xCheckDQP( rpcTempCU );
+  xCheckBestMode(rpcBestCU, rpcTempCU, uhDepth DEBUG_STRING_PASS_INTO(sDebug) DEBUG_STRING_PASS_INTO(sTest));
+}
+
+Void TEncCu::xCheckRDCostIntra( TComDataCU *&rpcBestCU,
+                                TComDataCU *&rpcTempCU,
+                                PartSize     eSize
+                                DEBUG_STRING_FN_DECLARE(sDebug) )
+{
+  DEBUG_STRING_NEW(sTest)
+
+  if(getFastDeltaQp())
+  {
+    const TComSPS &sps=*(rpcTempCU->getSlice()->getSPS());
+    const UInt fastDeltaQPCuMaxSize = Clip3(sps.getMaxCUHeight()>>(sps.getLog2DiffMaxMinCodingBlockSize()), sps.getMaxCUHeight(), 32u);
+    if(rpcTempCU->getWidth( 0 ) > fastDeltaQPCuMaxSize)
+    {
+      return; // only check necessary 2Nx2N Intra in fast deltaqp mode
+    }
