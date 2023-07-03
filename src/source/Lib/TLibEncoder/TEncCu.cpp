@@ -1698,3 +1698,103 @@ Void TEncCu::xCheckRDCostIntra( TComDataCU *&rpcBestCU,
     {
       return; // only check necessary 2Nx2N Intra in fast deltaqp mode
     }
+  }
+
+  UInt uiDepth = rpcTempCU->getDepth( 0 );
+
+  rpcTempCU->setSkipFlagSubParts( false, 0, uiDepth );
+
+  rpcTempCU->setPartSizeSubParts( eSize, 0, uiDepth );
+  rpcTempCU->setPredModeSubParts( MODE_INTRA, 0, uiDepth );
+  rpcTempCU->setChromaQpAdjSubParts( rpcTempCU->getCUTransquantBypass(0) ? 0 : m_cuChromaQpOffsetIdxPlus1, 0, uiDepth );
+
+  Pel resiLuma[NUMBER_OF_STORED_RESIDUAL_TYPES][MAX_CU_SIZE * MAX_CU_SIZE];
+
+  m_pcPredSearch->estIntraPredLumaQT( rpcTempCU, m_ppcOrigYuv[uiDepth], m_ppcPredYuvTemp[uiDepth], m_ppcResiYuvTemp[uiDepth], m_ppcRecoYuvTemp[uiDepth], resiLuma DEBUG_STRING_PASS_INTO(sTest) );
+
+  m_ppcRecoYuvTemp[uiDepth]->copyToPicComponent(COMPONENT_Y, rpcTempCU->getPic()->getPicYuvRec(), rpcTempCU->getCtuRsAddr(), rpcTempCU->getZorderIdxInCtu() );
+
+  if (rpcBestCU->getPic()->getChromaFormat()!=CHROMA_400)
+  {
+    m_pcPredSearch->estIntraPredChromaQT( rpcTempCU, m_ppcOrigYuv[uiDepth], m_ppcPredYuvTemp[uiDepth], m_ppcResiYuvTemp[uiDepth], m_ppcRecoYuvTemp[uiDepth], resiLuma DEBUG_STRING_PASS_INTO(sTest) );
+  }
+
+  m_pcEntropyCoder->resetBits();
+
+  if ( rpcTempCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+  {
+    m_pcEntropyCoder->encodeCUTransquantBypassFlag( rpcTempCU, 0,          true );
+  }
+
+  m_pcEntropyCoder->encodeSkipFlag ( rpcTempCU, 0,          true );
+  m_pcEntropyCoder->encodePredMode( rpcTempCU, 0,          true );
+  m_pcEntropyCoder->encodePartSize( rpcTempCU, 0, uiDepth, true );
+  m_pcEntropyCoder->encodePredInfo( rpcTempCU, 0 );
+  m_pcEntropyCoder->encodeIPCMInfo(rpcTempCU, 0, true );
+
+  // Encode Coefficients
+  Bool bCodeDQP = getdQPFlag();
+  Bool codeChromaQpAdjFlag = getCodeChromaQpAdjFlag();
+  m_pcEntropyCoder->encodeCoeff( rpcTempCU, 0, uiDepth, bCodeDQP, codeChromaQpAdjFlag );
+  setCodeChromaQpAdjFlag( codeChromaQpAdjFlag );
+  setdQPFlag( bCodeDQP );
+
+  m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[uiDepth][CI_TEMP_BEST]);
+
+  rpcTempCU->getTotalBits() = m_pcEntropyCoder->getNumberOfWrittenBits();
+  rpcTempCU->getTotalBins() = ((TEncBinCABAC *)((TEncSbac*)m_pcEntropyCoder->m_pcEntropyCoderIf)->getEncBinIf())->getBinsCoded();
+  rpcTempCU->getTotalCost() = m_pcRdCost->calcRdCost( rpcTempCU->getTotalBits(), rpcTempCU->getTotalDistortion() );
+
+  xCheckDQP( rpcTempCU );
+
+  xCheckBestMode(rpcBestCU, rpcTempCU, uiDepth DEBUG_STRING_PASS_INTO(sDebug) DEBUG_STRING_PASS_INTO(sTest));
+}
+
+
+/** Check R-D costs for a CU with PCM mode.
+ * \param rpcBestCU pointer to best mode CU data structure
+ * \param rpcTempCU pointer to testing mode CU data structure
+ * \returns Void
+ *
+ * \note Current PCM implementation encodes sample values in a lossless way. The distortion of PCM mode CUs are zero. PCM mode is selected if the best mode yields bits greater than that of PCM mode.
+ */
+Void TEncCu::xCheckIntraPCM( TComDataCU*& rpcBestCU, TComDataCU*& rpcTempCU )
+{
+  if(getFastDeltaQp())
+  {
+    const TComSPS &sps=*(rpcTempCU->getSlice()->getSPS());
+    const UInt fastDeltaQPCuMaxPCMSize = Clip3((UInt)1<<sps.getPCMLog2MinSize(), (UInt)1<<sps.getPCMLog2MaxSize(), 32u);
+    if (rpcTempCU->getWidth( 0 ) > fastDeltaQPCuMaxPCMSize)
+    {
+      return;   // only check necessary PCM in fast deltaqp mode
+    }
+  }
+  
+  UInt uiDepth = rpcTempCU->getDepth( 0 );
+
+  rpcTempCU->setSkipFlagSubParts( false, 0, uiDepth );
+
+  rpcTempCU->setIPCMFlag(0, true);
+  rpcTempCU->setIPCMFlagSubParts (true, 0, rpcTempCU->getDepth(0));
+  rpcTempCU->setPartSizeSubParts( SIZE_2Nx2N, 0, uiDepth );
+  rpcTempCU->setPredModeSubParts( MODE_INTRA, 0, uiDepth );
+  rpcTempCU->setTrIdxSubParts ( 0, 0, uiDepth );
+  rpcTempCU->setChromaQpAdjSubParts( rpcTempCU->getCUTransquantBypass(0) ? 0 : m_cuChromaQpOffsetIdxPlus1, 0, uiDepth );
+
+  m_pcPredSearch->IPCMSearch( rpcTempCU, m_ppcOrigYuv[uiDepth], m_ppcPredYuvTemp[uiDepth], m_ppcResiYuvTemp[uiDepth], m_ppcRecoYuvTemp[uiDepth]);
+
+  m_pcRDGoOnSbacCoder->load(m_pppcRDSbacCoder[uiDepth][CI_CURR_BEST]);
+
+  m_pcEntropyCoder->resetBits();
+
+  if ( rpcTempCU->getSlice()->getPPS()->getTransquantBypassEnabledFlag())
+  {
+    m_pcEntropyCoder->encodeCUTransquantBypassFlag( rpcTempCU, 0,          true );
+  }
+
+  m_pcEntropyCoder->encodeSkipFlag ( rpcTempCU, 0,          true );
+  m_pcEntropyCoder->encodePredMode ( rpcTempCU, 0,          true );
+  m_pcEntropyCoder->encodePartSize ( rpcTempCU, 0, uiDepth, true );
+  m_pcEntropyCoder->encodeIPCMInfo ( rpcTempCU, 0, true );
+
+  m_pcRDGoOnSbacCoder->store(m_pppcRDSbacCoder[uiDepth][CI_TEMP_BEST]);
